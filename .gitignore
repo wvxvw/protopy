@@ -1,0 +1,10 @@
+*~
+*.egg-info
+/pip-selfcheck.json
+/dist
+/build
+.venv
+.pytest_cache
+__pycache__
+*.o
+*.output

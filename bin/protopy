@@ -1,0 +1,22 @@
+#!/usr/bin env python3.6
+# -*- mode: python -*-
+
+import asyncio 
+
+from protopy.wrapped import proto_parse, proto_def_parse
+from protopy.parser import DefParser
+from argparse import ArgumentParser
+
+parser = ArgumentParser('Parse Google Protobuf')
+parser.add_argument(
+    '--root',
+    nargs='+',
+    help='Path to definitions used by proto file you want to parse',
+)
+parser.add_argument('proto', help='Proto file to parse')
+
+args = parser.parse_args()
+
+# loop = asyncio.get_event_loop()
+# loop.run_until_complete(proto_parse(None, None))
+print(DefParser(args.root).parse(args.proto))

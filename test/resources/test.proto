@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+import "foo/bar.proto";
+
+message Test {
+    int32 test = 2;
+}
+
+message Test1 {
+    boo.bar.Baz test = 2;
+}
+
+message Test2 {
+    int64 test = 2;
+}
