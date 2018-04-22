@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdbool.h>
 #include <inttypes.h>
 #include <Python.h>
 #include <alloca.h>
@@ -17,6 +18,12 @@ const char* state_read(parse_state* state, size_t n) {
     const char* begin = &state->in[0];
     state->in += n;
     return begin;
+}
+
+vt_type_t state_get_value_type(parse_state* state) {
+    // TODO(olegs): This should return the type of the value being red
+    // based on the description for the object being parsed.
+    return vt_int32;
 }
 
 size_t parse_varint_impl(parse_state* state, int64_t value[2]) {
@@ -38,9 +45,34 @@ size_t parse_varint_impl(parse_state* state, int64_t value[2]) {
     return 0;
 }
 
+size_t parse_zig_zag(parse_state* state, int64_t value[2], bool* is_neg) {
+    size_t parsed = parse_varint_impl(state, value);
+    *is_neg = (value[0] & 1) == 1;
+    int64_t high = value[1];
+    int64_t low = value[0];
+    low = ((high & 1) << 63) | (low >> 1);
+    high >>= 1;
+    value[0] = low;
+    value[1] = high;
+    return parsed;
+}
+
+bool is_signed_vt(vt_type_t vt) {
+    return vt == vt_sing32 || vt == vt_sing64;
+}
+
 size_t parse_varint(parse_state* state) {
     int64_t value[2] = { 0, 0 };
-    size_t parsed = parse_varint_impl(state, value);
+    vt_type_t vt = state_get_value_type(state);
+    bool sign = false;
+    size_t parsed;
+    
+    if (is_signed_vt(vt)) {
+        parsed = parse_zig_zag(state, value, &sign);
+    } else {
+        parsed = parse_varint_impl(state, value);
+    }
+    
     PyObject* low = PyLong_FromLong(value[0]);
 
     if (value[1] > 0) {
@@ -50,6 +82,9 @@ size_t parse_varint(parse_state* state) {
         state->out = PyNumber_Or(low, high_shifted);
     } else {
         state->out = low;
+    }
+    if (sign) {
+        state->out = PyNumber_Negative(state->out);
     }
     PyObject_Print(state->out, stdout, 0);
     return parsed;

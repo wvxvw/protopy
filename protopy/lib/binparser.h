@@ -3,6 +3,31 @@
 
 #include <Python.h>
 
+typedef enum type {
+    // varint
+    vt_int32  = 0,
+    vt_int64  = 1,
+    vt_uint32 = 2,
+    vt_uint64 = 3,
+    vt_sing32 = 4,
+    vt_sing64 = 5,
+    vt_bool   = 6,
+    vt_enum   = 7,
+    // 64 bit
+    vt_fixed64  = 8,
+    vt_sfixed64 = 9,
+    vt_double   = 10,
+    // length-delimited
+    vt_string   = 11,
+    vt_bytes    = 12,
+    vt_message  = 13,
+    vt_repeated = 14,
+    // 32 bit
+    vt_fixed32  = 15,
+    vt_sfixed32 = 16
+} vt_type_t;
+
+
 typedef struct {
     int64_t pos;
     const char* in;
@@ -14,6 +39,8 @@ typedef struct {
 typedef size_t (*parse_handler)(parse_state*);
 
 int64_t state_get_available(parse_state*);
+
+vt_type_t state_get_value_type(parse_state*);
 
 const char* state_read(parse_state*, size_t);
 
