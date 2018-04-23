@@ -34,14 +34,18 @@ program: $(YACC_GENERATED) $(LEX_GENERATED) $(OBJECTS)
 	-I$(APR_INCLUDES) -o $(PROGRAM)
 
 clean:
-	-rm -f $(OBJECTS)
-	-rm -f $(PROGRAM)
-	-rm -f *.tab.*
-	-rm -f *.lex.*
-	-rm -f test_list
+	rm -f $(OBJECTS)
+	rm -f $(PROGRAM)
+	rm -f *.tab.*
+	rm -f *.lex.*
+	rm -f test_list
 
 check-syntax:
 	$(CC) -o nul -S $(SOURCES)
 
-test_list: list.o
+clean_test_list:
+	rm -f test_list
+	rm -f list.o
+
+test_list: clean_test_list list.o
 	$(CC) $(CFLAGS) list.o test_list.c -lm -o test_list

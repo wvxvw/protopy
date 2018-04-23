@@ -104,6 +104,8 @@ size_t len(list elts) {
     return result;
 }
 
+// TODO(olegs): Examine the possibility of also nulling the memory
+// so that we can repeatedly deallocate these pointers.
 void del(list elts) {
     void* val;
     list prev;
@@ -256,8 +258,6 @@ char* str(list elts) {
     size_t es = 0;
     size_t total = 0;
     char* schunks;
-    list original = elts;
-    printf("original: %p\n", original);
 
     while (!null(elts)) {
         val = car(elts);
@@ -269,21 +269,17 @@ char* str(list elts) {
     }
 
     if (total == 0) {
-        printf("early exit original: %p\n", original);
         return strdup("nil");
     }
 
     chunks = nreverse(chunks);
 
     schunks = malloc(sizeof(char) * (total + 2));
-    printf("allocated total of: %zu\n", total + 2);
     schunks[0] = '(';
     total = 1;
 
     while (!null(chunks)) {
         val = car(chunks);
-        printf("writing to: %zu\n", total);
-        printf("writing number of bytes: %zu\n", strlen((char*)val));
         strcpy(schunks + total, (char*)val);
         total += strlen((char*)val);
         schunks[total] = ' ';
@@ -292,8 +288,6 @@ char* str(list elts) {
     }
     schunks[total - 1] = ')';
     schunks[total] = '\0';
-    printf("last byte written to: %zu\n", total);
-    printf("what happened to original: %p\n", original);
     return schunks;
 }
 
@@ -361,4 +355,97 @@ bool intp(list val) {
 
 bool strp(list val) {
     return val->t == tstr;
+}
+
+size_t rope_length(list elts) {
+    size_t result = 0;
+
+    if (null(elts)) {
+        return 0;
+    }
+    if (elts->t == tstr) {
+        result = strlen((char*)car(elts));
+    } else {
+        result = rope_length((list)car(elts));
+    }
+    return result + rope_length(cdr(elts));
+}
+
+size_t rope_peek(list elts, char* buf, size_t buff_size) {
+    size_t fill = 0;
+    size_t chunk_size = 0;
+    char* chunk;
+
+    if (null(elts)) {
+        return 0;
+    }
+    
+    if (elts->t == tstr) {
+        chunk = (char*)car(elts);
+        chunk_size = strlen(chunk);
+        if (chunk_size < buff_size) {
+            strcpy(buf, chunk);
+            fill = chunk_size + rope_peek(
+                cdr(elts),
+                buf + chunk_size,
+                buff_size - chunk_size);
+        } else {
+            strncpy(buf, chunk, buff_size);
+            fill = buff_size;
+        }
+    } else {
+        fill = rope_peek((list)car(elts), buf, buff_size);
+        if (fill < buff_size) {
+            fill += rope_peek(cdr(elts), buf + fill, buff_size - fill);
+        }
+    }
+    buf[fill] = '\0';
+    return fill;
+}
+
+// TODO(olegs): Add rope_nread(...) which reuses some conses from the
+// given list.
+size_t rope_read(list elts, char* buf, size_t buff_size, list* rest) {
+    size_t fill = 0;
+    size_t chunk_size = 0;
+    char* chunk;
+
+    if (null(elts)) {
+        *rest = nil;
+        return 0;
+    }
+    
+    if (elts->t == tstr) {
+        chunk = (char*)car(elts);
+        chunk_size = strlen(chunk);
+        if (chunk_size <= buff_size) {
+            strcpy(buf, chunk);
+            fill = chunk_size + rope_read(
+                cdr(elts),
+                buf + chunk_size,
+                buff_size - chunk_size,
+                rest);
+            if (fill == buff_size) {
+                *rest = nil;
+            }
+        } else {
+            strncpy(buf, chunk, buff_size);
+            fill = buff_size;
+            char* remaineder = strdup(chunk + buff_size);
+            *rest = cons(remaineder, tstr, duplicate(cdr(elts)));
+        }
+    } else {
+        fill = rope_read((list)car(elts), buf, buff_size, rest);
+        if (fill < buff_size) {
+            fill += rope_read(cdr(elts), buf + fill, buff_size - fill, rest);
+        } else {
+            if (!null(*rest)) {
+                *rest = cons(*rest, tlist, duplicate(cdr(elts)));
+            } else {
+                *rest = duplicate(cdr(elts));
+            }
+        }
+    }
+    buf[fill] = '\0';
+    return fill;
 }

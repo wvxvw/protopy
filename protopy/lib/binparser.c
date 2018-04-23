@@ -7,17 +7,15 @@
 
 
 int64_t state_get_available(parse_state* state) {
-    // TODO(olegs): This will become more sophisticated once state can
-    // buffer unparsed input.
-    return state->available;
+    return (int64_t)rope_length(state->in);
 }
 
-const char* state_read(parse_state* state, size_t n) {
-    // TODO(olegs): This need to account for previously unparsed
-    // buffers.
-    const char* begin = &state->in[0];
-    state->in += n;
-    return begin;
+size_t state_read(parse_state* state, char* buf, size_t n) {
+    list into;
+    size_t result = rope_read(state->in, buf, n, &into);
+    del(state->in);
+    state->in = into;
+    return result;
 }
 
 vt_type_t state_get_value_type(parse_state* state) {
@@ -27,12 +25,20 @@ vt_type_t state_get_value_type(parse_state* state) {
 }
 
 size_t parse_varint_impl(parse_state* state, int64_t value[2]) {
+    // TODO(olegs): This can be made more efficient if we try to
+    // pre-read more bytes.
+    char* buf = alloca(sizeof(char) * 2);
     char current;
+    size_t bytes_read = 0;
     size_t read = 0;
     size_t index = 0;
 
     while (state_get_available(state) > 0 && read < 16) {
-        current = state_read(state, 1)[0];
+        bytes_read = state_read(state, buf, 1);
+        if (bytes_read == 0) {
+            return read;
+        }
+        current = buf[0];
         if (read == 7) {
             index = 1;
         }
@@ -99,21 +105,22 @@ size_t parse_length_delimited(parse_state* state) {
     size_t parsed = parse_varint_impl(state, value);
     // No reason to care for high bits, we aren't expecting strings of
     // that length anyways.
-    int64_t length = value[0];
+    size_t length = (size_t)value[0];
     PyObject* str;
-    const char* bytes;
+    // TODO(olegs): Figure out what's the safe value to allocate on
+    // stack and allocate on heap, if above the threshold.
+    char* bytes = alloca(sizeof(char) * length);
+    size_t read = 0;
 
-    while (state_get_available(state) > 0 && length > 0) {
-        if (state_get_available(state) > length) {
-            bytes = state_read(state, (size_t)length);
-            str = PyBytes_FromStringAndSize(bytes, (Py_ssize_t)length);
-            length = 0;
-            state->out = str;
-        } else {
-            // We don't have enough bytes available to read the whole thing
-        }
+    while (read < length) {
+        read += state_read(state, bytes + read, (size_t)length - read);
+        // TODO(olegs): Maybe the interface to reading objects from
+        // stream should be flexible enough to not block here until
+        // the entire object is received.
     }
-    return parsed;
+    str = PyBytes_FromStringAndSize(bytes, (Py_ssize_t)length);
+    state->out = str;
+    return parsed + read;
 }
 
 size_t parse_start_group(parse_state* state) {

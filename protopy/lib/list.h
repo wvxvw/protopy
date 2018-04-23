@@ -101,4 +101,10 @@ char* mapconcat(mapconcat_fn_t, list, char*);
 
 char* to_str(list);
 
+size_t rope_length(list);
+
+size_t rope_peek(list, char*, size_t);
+
+size_t rope_read(list, char*, size_t, list*);
+
 #endif // LIST_H_

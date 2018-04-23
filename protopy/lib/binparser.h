@@ -2,8 +2,9 @@
 #define BINPARSER_H_
 
 #include <Python.h>
+#include "list.h"
 
-typedef enum type {
+typedef enum vt_type_t {
     // varint
     vt_int32  = 0,
     vt_int64  = 1,
@@ -30,10 +31,9 @@ typedef enum type {
 
 typedef struct {
     int64_t pos;
-    const char* in;
-    int64_t available;
-    PyObject* out;
     size_t field;
+    list in;
+    PyObject* out;
 } parse_state;
 
 typedef size_t (*parse_handler)(parse_state*);
@@ -42,7 +42,7 @@ int64_t state_get_available(parse_state*);
 
 vt_type_t state_get_value_type(parse_state*);
 
-const char* state_read(parse_state*, size_t);
+size_t state_read(parse_state*, char*, size_t);
 
 size_t parse(parse_state*);
 

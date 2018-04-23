@@ -43,5 +43,42 @@ int main(int argc, char** argv) {
     printf("lists: %s\n", str(lists));
 
     printf("append(ints, strings): %s\n", str(append(ints, strings)));
+
+    list rope = nil;
+    i = 10;
+
+    char* test_strings[10] = {
+        "quick",
+        "brown",
+        "fox",
+        "jumped",
+        "over",
+        "the",
+        "very",
+        "lazy",
+        "dog",
+        ".",
+    };
+    
+    while (i--) {
+        rope = cons(rope, tlist, cons(strdup(test_strings[9 - i]), tstr, nil));
+    }
+    printf("rope created: %s\n", str(rope));
+    printf("rope_length(rope): %zu\n", rope_length(rope));
+
+    char* buf = malloc(20 * sizeof(char));
+    size_t read = rope_peek(rope, buf, 15);
+    printf("rope_peek(rope): %zu, %s\n", read, buf);
+
+    list rest_rope;
+    read = rope_read(rope, buf, 15, &rest_rope);
+    printf("rope_read(rope): %zu, %s, %s\n", read, buf, str(rest_rope));
+    del(rope);
+    printf("del(rope): %s\n", str(rest_rope));
+    read = rope_read(rest_rope, buf, 15, &rope);
+    printf("rope_read(rest_rope): %zu, %s, %s\n", read, buf, str(rope));
+    del(rest_rope);
+    read = rope_read(rope, buf, 15, &rest_rope);
+    printf("rope_read(rope): %zu, %s, %s\n", read, buf, str(rest_rope));
     return 0;
 }
