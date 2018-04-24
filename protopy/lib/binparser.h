@@ -34,6 +34,8 @@ typedef struct {
     size_t field;
     list in;
     PyObject* out;
+    PyObject* description;  // dict
+    PyObject* current_description;  // function(x: bytes) -> object
 } parse_state;
 
 typedef size_t (*parse_handler)(parse_state*);

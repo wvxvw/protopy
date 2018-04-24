@@ -78,11 +78,10 @@ size_t parse_varint(parse_state* state) {
     } else {
         parsed = parse_varint_impl(state, value);
     }
+    PyObject* low = PyLong_FromUnsignedLongLong(value[0]);
     
-    PyObject* low = PyLong_FromLong(value[0]);
-
     if (value[1] > 0) {
-        PyObject* high = PyLong_FromLong(value[1]);
+        PyObject* high = PyLong_FromUnsignedLongLong(value[1]);
         PyObject* shift = PyLong_FromLong(64L);
         PyObject* high_shifted = PyNumber_Lshift(high, shift);
         state->out = PyNumber_Or(low, high_shifted);
@@ -93,11 +92,31 @@ size_t parse_varint(parse_state* state) {
         state->out = PyNumber_Negative(state->out);
     }
     PyObject_Print(state->out, stdout, 0);
+    if (vt == vt_enum) {
+        // TODO(olegs): We'd need to find an enum instance for
+        // corresponding to this number.
+    }
     return parsed;
 }
 
 size_t parse_fixed_64(parse_state* state) {
-    return 0;
+#define FIXED_LENGTH 8
+    char* buf = alloca(FIXED_LENGTH * sizeof(char));
+    size_t read = 0;
+
+    // TODO(olegs): Same as other reads: this must know how to give up
+    // once the reading is no longer possible
+    while (read < FIXED_LENGTH) {
+        read += state_read(state, buf, FIXED_LENGTH);
+    }
+    if (state_get_value_type(state) == vt_fixed64) {
+        // TODO(olegs): I'm not sure about the endiannes.
+        state->out = PyLong_FromUnsignedLongLong((uint64_t)(*buf));
+    } else {
+        state->out = PyLong_FromLongLong((int64_t)(*buf));
+    }
+    return FIXED_LENGTH;
+#undef FIXED_LENGTH
 }
 
 size_t parse_length_delimited(parse_state* state) {
@@ -106,7 +125,7 @@ size_t parse_length_delimited(parse_state* state) {
     // No reason to care for high bits, we aren't expecting strings of
     // that length anyways.
     size_t length = (size_t)value[0];
-    PyObject* str;
+    PyObject* str = NULL;
     // TODO(olegs): Figure out what's the safe value to allocate on
     // stack and allocate on heap, if above the threshold.
     char* bytes = alloca(sizeof(char) * length);
@@ -117,8 +136,31 @@ size_t parse_length_delimited(parse_state* state) {
         // TODO(olegs): Maybe the interface to reading objects from
         // stream should be flexible enough to not block here until
         // the entire object is received.
+        // TODO(olegs): This is a dangerous place because it may hang
+        // if the socket closes in the of receiving a message.
     }
-    str = PyBytes_FromStringAndSize(bytes, (Py_ssize_t)length);
+    switch (state_get_value_type(state)) {
+        case vt_string:
+            str = PyBytes_FromStringAndSize(bytes, (Py_ssize_t)length);
+            break;
+        case vt_bytes:
+            str = PyUnicode_FromStringAndSize(bytes, (Py_ssize_t)length);
+            break;
+        case vt_message:
+            // TODO(olegs): I think this can also be a oneof, will
+            // need to handle that separately.
+            if (state->current_description != NULL) {
+                str = PyBytes_FromStringAndSize(bytes, (Py_ssize_t)length);
+                str = Py_BuildValue("(y)", str);
+                str = PyObject_CallObject(state->current_description, str);
+            }
+            break;
+        case vt_repeated:
+            // TODO(olegs): I think this will read the same type in a loop
+            break;
+        default:
+            PyErr_SetString(PyExc_NotImplementedError, "Unknown length delimited type");
+    }
     state->out = str;
     return parsed + read;
 }
@@ -134,7 +176,23 @@ size_t parse_end_group(parse_state* state) {
 }
 
 size_t parse_fixed_32(parse_state* state) {
-    return 0;
+    #define FIXED_LENGTH 4
+    char* buf = alloca(FIXED_LENGTH * sizeof(char));
+    size_t read = 0;
+
+    // TODO(olegs): Same as other reads: this must know how to give up
+    // once the reading is no longer possible
+    while (read < FIXED_LENGTH) {
+        read += state_read(state, buf, FIXED_LENGTH);
+    }
+    if (state_get_value_type(state) == vt_fixed32) {
+        // TODO(olegs): I'm not sure about the endiannes.
+        state->out = PyLong_FromUnsignedLong((uint64_t)(*buf));
+    } else {
+        state->out = PyLong_FromLong((int64_t)(*buf));
+    }
+    return FIXED_LENGTH;
+#undef FIXED_LENGTH
 }
 
 size_t backtrack(parse_state* state) { return 0; }
