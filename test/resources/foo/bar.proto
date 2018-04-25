@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package foo;
+
+message Baz {
+    oneof oo_test {
+        int32 choice_1 = 2;
+        sint32 choice_2 = 3;
+    }
+}

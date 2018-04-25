@@ -13,21 +13,31 @@
 #include "lib/protopy.tab.h"
 #include "lib/binparser.h"
 #include "lib/defparser.h"
+#include "lib/list.h"
 
 
 static char module_docstring[] = "Protobuf decoder and encoder.";
 static char parse_docstring[] = "Parse binary Protobuf message.";
 static char parse_def_docstring[] = "Parse Protobuf definition.";
 static char apr_cleanup_docstring[] = "Calls apr_terminate().";
+static char make_state_docstring[] = "Creates state capsule.";
+static char state_ready_docstring[] = "Returns True when state finished parsing.";
+static char state_result_docstring[] = "The object that was deserialized.";
 
 static PyObject* proto_parse(PyObject* self, PyObject* args);
 static PyObject* proto_def_parse(PyObject* self, PyObject* args);
 static PyObject* apr_cleanup(PyObject* self, PyObject* args);
+static PyObject* make_state(PyObject* self, PyObject* args);
+static PyObject* state_ready(PyObject* self, PyObject* args);
+static PyObject* state_result(PyObject* self, PyObject* args);
 
 static PyMethodDef module_methods[] = {
     {"proto_parse", proto_parse, METH_VARARGS, parse_docstring},
     {"proto_def_parse", proto_def_parse, METH_VARARGS, parse_def_docstring},
     {"apr_cleanup", apr_cleanup, METH_VARARGS, apr_cleanup_docstring},
+    {"make_state", make_state, METH_VARARGS, make_state_docstring},
+    {"state_ready", state_ready, METH_VARARGS, state_ready_docstring},
+    {"state_result", state_result, METH_VARARGS, state_result_docstring},
     {NULL, NULL, 0, NULL}
 };
 
@@ -51,25 +61,74 @@ static PyObject* apr_cleanup(PyObject* self, PyObject* args) {
     return Py_None;
 }
 
+static void free_state(PyObject* capsule) {
+    if (capsule == Py_None) {
+        return;
+    }
+    parse_state* state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
+    del(state->in);
+    printf("freeing the state %p\n", state);
+    free(state);
+    printf("state freed\n");
+}
+
+static PyObject* state_ready(PyObject* self, PyObject* args) {
+    PyObject* capsule;
+    if (!PyArg_ParseTuple(args, "O", &capsule)) {
+        return NULL;
+    }
+    parse_state* state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+    if (state->out == Py_None) {
+        return Py_False;
+    }
+    return Py_True;
+}
+
+static PyObject* state_result(PyObject* self, PyObject* args) {
+    PyObject* capsule;
+    if (!PyArg_ParseTuple(args, "O", &capsule)) {
+        return NULL;
+    }
+    parse_state* state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+    return state->out;
+}
+
+static PyObject* make_state(PyObject* self, PyObject* args) {
+    parse_state* state = malloc(sizeof(parse_state));
+    state->in = nil;
+    state->pos = 0;
+    state->out = Py_None;
+    printf("allocating new state %p\n", state);
+    return PyCapsule_New(state, NULL, free_state);
+}
+
 static PyObject* proto_parse(PyObject* self, PyObject* args) {
-    parse_state state;
+    parse_state* state;
     char* in;
     size_t available;
+    PyObject* capsule;
     
-    if (!PyArg_ParseTuple(args, "s#", &in, &available)) {
+    if (!PyArg_ParseTuple(args, "s#O", &in, &available, &capsule)) {
         PyErr_SetString(PyExc_TypeError, "Invalid arguments");
         return NULL;
     }
-    state.in = in;
-    state.available = available;
-    state.pos = 0;
-    state.out = Py_None;
-    size_t parsed = parse(&state);
+    state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
+    if (state == NULL) {
+        return NULL;
+    }
+    state->in = cons(strdup(in), tstr, state->in);
+    size_t parsed = parse(state);
     printf("parsed bytes: %zu\n", parsed);
-    printf("produced result: %p\n", state.out);
-    PyObject_Print(state.out, stdout, 0);
+    printf("produced result: %p\n", state->out);
+    PyObject_Print(state->out, stdout, 0);
     printf("\n");
-    return state.out;
+    return state->out;
 }
 
 static PyObject* proto_def_parse(PyObject* self, PyObject* args) {

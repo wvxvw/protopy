@@ -91,7 +91,9 @@ size_t parse_varint(parse_state* state) {
     if (sign) {
         state->out = PyNumber_Negative(state->out);
     }
+    printf("parsed varint ");
     PyObject_Print(state->out, stdout, 0);
+    printf("\n");
     if (vt == vt_enum) {
         // TODO(olegs): We'd need to find an enum instance for
         // corresponding to this number.
@@ -150,9 +152,11 @@ size_t parse_length_delimited(parse_state* state) {
             // TODO(olegs): I think this can also be a oneof, will
             // need to handle that separately.
             if (state->current_description != NULL) {
-                str = PyBytes_FromStringAndSize(bytes, (Py_ssize_t)length);
-                str = Py_BuildValue("(y)", str);
-                str = PyObject_CallObject(state->current_description, str);
+                str = PyObject_CallFunction(
+                    state->current_description,
+                    "(y#)",
+                    bytes,
+                    (int)length);
             }
             break;
         case vt_repeated:
@@ -176,7 +180,7 @@ size_t parse_end_group(parse_state* state) {
 }
 
 size_t parse_fixed_32(parse_state* state) {
-    #define FIXED_LENGTH 4
+#define FIXED_LENGTH 4
     char* buf = alloca(FIXED_LENGTH * sizeof(char));
     size_t read = 0;
 

@@ -7,7 +7,7 @@ message Test {
 }
 
 message Test1 {
-    boo.bar.Baz test = 2;
+    foo.Baz test = 2;
 }
 
 message Test2 {
