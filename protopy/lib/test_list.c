@@ -2,6 +2,12 @@
 #include <stdlib.h>
 #include "list.h"
 
+int int_cmp(list a, list b) {
+    int ai = *(int*)car(a);
+    int bi = *(int*)car(b);
+
+    return (ai > bi) - (ai < bi);
+}
 
 int main(int argc, char** argv) {
     int foo = 1234567;
@@ -80,5 +86,15 @@ int main(int argc, char** argv) {
     del(rest_rope);
     read = rope_read(rope, buf, 15, &rest_rope);
     printf("rope_read(rope): %zu, %s, %s\n", read, buf, str(rest_rope));
+
+    list repeated_fives = from_ints(5, 5, 5, 5, 5, 5);
+    list repeated_nines = from_ints(5, 9, 9, 9, 9, 9);
+    list sorted_ints = from_ints(5, 1, 2, 4, 3, 5);
+    list sorted = sort_unique(append(sorted_ints, append(repeated_fives, repeated_nines)), int_cmp);
+    printf("sort_unique(append(repeated_fives, repeated_nines)): %s\n", str(sorted));
+    del(repeated_fives);
+    del(repeated_nines);
+    del(sorted_ints);
+    printf("sorted after deleting sources: %s\n", str(sorted));
     return 0;
 }

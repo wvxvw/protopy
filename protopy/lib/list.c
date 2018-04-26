@@ -449,3 +449,49 @@ size_t rope_read(list elts, char* buf, size_t buff_size, list* rest) {
     buf[fill] = '\0';
     return fill;
 }
+
+list merge_unique(list ia, list ib, list_cmp_f cmp) {
+    list result = nil;
+    list a = sort_unique(ia, cmp);
+    list b = sort_unique(ib, cmp);
+
+    while (!null(a) && !null(b)) {
+        switch (cmp(a, b)) {
+            case -1:
+                result = cons(car(a), a->t, result);
+                a = cdr(a);
+                break;
+            case 1:
+                result = cons(car(b), b->t, result);
+                b = cdr(b);
+                break;
+            default:
+                a = cdr(a);
+        }
+    }
+    if (null(a)) {
+        result = nappend(nreverse(result), b);
+    } else if (null(b)) {
+        result = nappend(nreverse(result), a);
+    }
+    return result;
+}
+
+list sort_unique(list elts, list_cmp_f cmp) {
+    size_t length = len(elts);
+
+    if (length < 2) {
+        return duplicate(elts);
+    }
+    list a = nil;
+    list b = nil;
+    size_t i = 0;
+
+    while (i < length / 2) {
+        a = cons(copier_of(elts)(car(elts)), elts->t, a);
+        elts = cdr(elts);
+        i++;
+    }
+    b = duplicate(elts);
+    return merge_unique(a, b, cmp);
+}

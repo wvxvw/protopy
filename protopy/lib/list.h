@@ -97,6 +97,8 @@ bool strp(list);
 
 typedef char* (*mapconcat_fn_t) (list);
 
+typedef int (*list_cmp_f) (list, list);
+
 char* mapconcat(mapconcat_fn_t, list, char*);
 
 char* to_str(list);
@@ -106,5 +108,7 @@ size_t rope_length(list);
 size_t rope_peek(list, char*, size_t);
 
 size_t rope_read(list, char*, size_t, list*);
+
+list sort_unique(list, list_cmp_f);
 
 #endif // LIST_H_
