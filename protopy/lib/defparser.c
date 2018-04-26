@@ -7,19 +7,103 @@
 #include "protopy.lex.h"
 #include "protopy.tab.h"
 
-list dependencies(list ast) {
+void unescape_x(char* input, size_t i, size_t j) {
+    char first = input[i + 2];
+    char second = input[i + 3];
+
+    if (first > 70) {
+        first -= 32;
+    }
+    first -= 48;
+    if (first > 9) {
+        first -= 7;
+    }
+
+    if (second > 70) {
+        second -= 32;
+    }
+    second -= 48;
+    if (second > 9) {
+        second -= 7;
+    }
+    input[j] = first * 16 + second;
+}
+
+void unescape_oct(char* input, size_t i, size_t j) {
+    char first = input[i + 1] - 48;
+    char second = input[i + 2] - 48;
+    char third = input[i + 3] - 48;
+
+    input[j] = first * 64 + second * 8 + third;
+}
+
+// TODO(olegs): One day this will support unicode...
+char* unquote(char* input) {
+    size_t i = 1;
+    size_t j = 0;
+    bool seen_escape = false;
+
+    while (input[i] != '\0') {
+        if (input[i] == '"' && !seen_escape) {
+            input[j] = '\0';
+            break;
+        } else if (input[i] == '\\' && seen_escape) {
+            seen_escape = false;
+            switch (input[i + 1]) {
+                case 'x':
+                case 'X':
+                    unescape_x(input, i, j);
+                    i += 2;
+                    break;
+                case '0':
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
+                    unescape_oct(input, i, j);
+                    i += 2;
+                    break;
+                case 'n':
+                    input[j] = '\n';
+                    break;
+                case 'r':
+                    input[j] = '\r';
+                    break;
+                case 't':
+                    input[j] = '\t';
+                    break;
+                case 'v':
+                    input[j] = '\v';
+                    break;
+                default:
+                    input[j] = input[i + 1];
+            }
+            j++;
+        } else if (input[i] == '\\') {
+            seen_escape = true;
+        } else {
+            input[j] = input[i];
+            j++;
+        }
+        i++;
+    }
+    return input;
+}
+
+list imports(list ast) {
     list elt;
-    char* kind;
     list result = nil;
 
     while (!null(ast)) {
         if (listp(ast)) {
             elt = (list)car(ast);
-            if (strp(elt)) {
-                kind = (char*)car(elt);
-                if (strcmp(kind, "import")) {
-                    result = cons(car(cdr(elt)), tstr, result);
-                }
+            if (!null(elt) && (ast_type_t)(*(int*)car(elt)) == ast_import_t) {
+                result = cons(unquote(strdup(car(cdr(elt)))), tstr, result);
             }
         }
         ast = cdr(ast);

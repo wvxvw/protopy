@@ -226,6 +226,8 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
         } else {
             printf("parsed raw result: %p\n", thd_args[i].result);
             printf("parsed raw result: %s\n", str(thd_args[i].result));
+            list maybe_unparsed = imports(thd_args[i].result);
+            printf("maybe_unparsed: %s\n", str(maybe_unparsed));
             print_obj("parsed AST: %s\n", list_to_pylist(thd_args[i].result));
         }
     }
