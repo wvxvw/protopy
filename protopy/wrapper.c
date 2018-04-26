@@ -219,19 +219,46 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
 
     printf("all arp threads finished\n");
 
+    list all_imports = nil;
+    list merged_imports = nil;
     for (i = 0; i < nthreads; i++) {
         if (strcmp(thd_args[i].error, "")) {
             PyErr_SetString(PyExc_TypeError, thd_args[i].error);
             return NULL;
         } else {
+            PyObject* key = Py_BuildValue("y", source);
+            PyDict_SetItem(parsed_files, key, Py_True);
             printf("parsed raw result: %p\n", thd_args[i].result);
             printf("parsed raw result: %s\n", str(thd_args[i].result));
-            list maybe_unparsed = imports(thd_args[i].result);
-            printf("maybe_unparsed: %s\n", str(maybe_unparsed));
+            del(merged_imports);
+            merged_imports = append(imports(thd_args[i].result), all_imports);
+            del(all_imports);
+            all_imports = merged_imports;
             print_obj("parsed AST: %s\n", list_to_pylist(thd_args[i].result));
         }
     }
+    printf("maybe_unparsed: %s\n", str(all_imports));
 
+    PyObject* key;
+    while (!null(all_imports)) {
+        key = Py_BuildValue("y", (char*)car(all_imports));
+        switch (PyDict_Contains(parsed_files, key)) {
+            case 1:
+                break;
+            case 0:
+                PyDict_SetItem(parsed_files, key, Py_True);
+                break;
+            case -1:
+                free(thd_args);
+                del(merged_imports);
+                return NULL;
+        }
+        all_imports = cdr(all_imports);
+    }
+
+    print_obj("known imports: %s\n", parsed_files);
+
+    del(merged_imports);
     if (thd_args != NULL) {
         free(thd_args);
     }
