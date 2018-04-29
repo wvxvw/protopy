@@ -2,10 +2,12 @@
 #include <string.h>
 #include <alloca.h>
 #include <assert.h>
+#include <unistd.h>
 
 #include <Python.h>
 #include <apr_general.h>
 #include <apr_thread_proc.h>
+#include <apr_thread_mutex.h>
 
 #include "lib/helpers.h"
 #include "lib/pyhelpers.h"
@@ -131,6 +133,133 @@ static PyObject* proto_parse(PyObject* self, PyObject* args) {
     return state->out;
 }
 
+size_t available_thread_pos(parsing_progress_t* progress) {
+    size_t i = 0;
+    while (i < progress->nthreads) {
+        if (!progress->thds_statuses[i]) {
+            break;
+        }
+        i++;
+    }
+    return i;
+}
+
+size_t finished_thread(parsing_progress_t* progress) {
+    size_t i = 0;
+    while (i < progress->nthreads) {
+        if (!progress->thds_statuses[i] && progress->thds[i] != NULL) {
+            break;
+        }
+        i++;
+    }
+    return i;
+}
+
+void start_progress(parsing_progress_t* progress, size_t nthreads, apr_pool_t* mp) {
+    size_t i = 0;
+
+    progress->nthreads = nthreads;
+    progress->thds_statuses = malloc(sizeof(bool) * nthreads);
+    progress->thds = malloc(sizeof(void*) * nthreads);
+    
+    while (i < nthreads) {
+        progress->thds_statuses[i] = false;
+        progress->thds[i] = NULL;
+        i++;
+    }
+    apr_thread_mutex_create(&progress->mtx, APR_THREAD_MUTEX_UNNESTED, mp);
+}
+
+void finish_progress(parsing_progress_t* progress) {
+    free(progress->thds_statuses);
+    free(progress->thds);
+}
+
+bool all_threads_finished(parsing_progress_t* progress) {
+    size_t i = 0;
+    while (i < progress->nthreads) {
+        if (progress->thds_statuses[i] || progress->thds[i] != NULL) {
+            return false;
+        }
+        i++;
+    }
+    return true;
+}
+
+bool all_threads_busy(parsing_progress_t* progress) {
+    return available_thread_pos(progress) < progress->nthreads;
+}
+
+static list
+proto_def_parse_produce(list sources, list roots, size_t nthreads, apr_pool_t* mp) {
+    parsing_progress_t progress;
+    size_t i = 0;
+    parse_def_args_t** thds_args = alloca(sizeof(parse_def_args_t*) * nthreads);
+
+    while (i < nthreads) {
+        thds_args[i] = malloc(sizeof(parse_def_args_t));
+        i++;
+    }
+
+    start_progress(&progress, nthreads, mp);
+
+    while (!null(sources) || !all_threads_finished(&progress)) {
+
+        i = available_thread_pos(&progress);
+
+        if (i < progress.nthreads && !null(sources)) {
+            parse_def_args_t* def_args = thds_args[i];
+
+            def_args->roots = roots;
+            def_args->source = (char*)car(sources);
+            def_args->error = "";
+            def_args->result = NULL;
+            def_args->thread_id = i;
+            def_args->progress = &progress;
+            thds_args[i] = def_args;
+            printf("creating thread: %zu: %s\n", i, def_args->source);
+            progress.thds_statuses[i] = true;
+            apr_thread_create(&progress.thds[i], NULL, parse_one_def, def_args, mp);
+
+            sources = cdr(sources);
+            printf("sources: %s\n", str(sources));
+        } else {
+            i = finished_thread(&progress);
+            if (i < progress.nthreads) {
+                // TODO(olegs): Do something if the thread reported an error.
+                if (strcmp(thds_args[i]->error, "")) {
+                    printf("Encountered error reading sources: %s\n", thds_args[i]->error);
+                    // TODO(olegs): We cannot throw here because we don't hold GIL
+                    // PyErr_Format(PyExc_TypeError, "%s", thds_args[i]->error);
+                    del(sources);
+                    sources = nil;
+                    // TODO(olegs): We still need to join all remaining threads
+                    // before we can clean up.
+                    break;
+                }
+                apr_status_t rv;
+                apr_thread_join(&rv, progress.thds[i]);
+                progress.thds[i] = NULL;
+                list deps = imports(thds_args[i]->result);
+                printf("deps: %s\n", str(deps));
+                list new_sources = append(sources, deps);
+                del(sources);
+                del(deps);
+                sources = new_sources;
+                printf("new sources: %s\n", str(sources));
+            } else if (null(sources) || all_threads_busy(&progress)) {
+                sleep(1);
+            }
+        }
+    }
+
+    printf("all sources parsed\n");
+    finish_progress(&progress);
+    printf("progress finished\n");
+
+    return nil;
+}
+
 static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     PyObject* source_roots;
     PyObject* parsed_files;
@@ -151,65 +280,26 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     }
 
     PyObject* multiprocessing = PyImport_ImportModule("multiprocessing");
-    print_obj("imported multiprocessing: %s\n", multiprocessing);
     PyObject* ncores = PyObject_CallMethod(multiprocessing, "cpu_count", "");
-    print_obj("multiprocessing.cpu_count: %s\n", ncores);
     int nthreads;
     PyArg_Parse(ncores, "i", &nthreads);
     if (nthreads < 1) {
         nthreads = 1;
     }
-    nthreads = 1;
-    printf("nthreads: %d\n", nthreads);
-    apr_status_t rv;
+    list roots = pylist_to_list(source_roots);
     apr_pool_t* mp = NULL;
-    apr_thread_t** thd_arr = alloca(nthreads * sizeof(void*));
-    parse_def_args* thd_args = malloc(nthreads * sizeof(parse_def_args));
-    apr_threadattr_t* thd_attr;
-    int i, errors = 0;
-
-    Py_BEGIN_ALLOW_THREADS;
 
     if (apr_pool_create(&mp, NULL) != APR_SUCCESS) {
         PyErr_SetString(PyExc_TypeError, "Couldn't create memory pool");
-        errors = 1;
+        return NULL;
     }
 
-    if (errors == 0 && apr_threadattr_create(&thd_attr, mp) != APR_SUCCESS) {
-        PyErr_SetString(PyExc_TypeError, "Couldn't create thread attribute");
-        errors = 1;
-    }
+    Py_BEGIN_ALLOW_THREADS;
 
-    if (errors == 0) {
-        for (i = 0; i < nthreads; i++) {
-            thd_args[i].source = source;
-            thd_args[i].error = "";
-            thd_args[i].result = NULL;
-            rv = apr_thread_create(
-                &thd_arr[i],
-                thd_attr,
-                parse_one_def,
-                &thd_args[i],
-                mp);
-            if (rv != APR_SUCCESS) {
-                errors = 1;
-                nthreads = i;
-                break;
-            }
-        }
-    } else {
-        nthreads = 0;
-    }
+    list parsed_files = proto_def_parse_produce(cons(source, tstr, nil), roots, (size_t)nthreads, mp);
+    printf("parsed_files: %s\n", str(parsed_files));
 
-    for (i = 0; i < nthreads; i++) {
-        rv = apr_thread_join(&rv, thd_arr[i]);
-        if (rv != APR_SUCCESS) {
-            errors++;
-        }
-    }
-    if (errors > 0) {
-        PyErr_SetString(PyExc_TypeError, "Error running threads");
-    }
+    del(roots);
 
     if (mp != NULL) {
         apr_pool_destroy(mp);
@@ -218,50 +308,6 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     Py_END_ALLOW_THREADS;
 
     printf("all arp threads finished\n");
-
-    list all_imports = nil;
-    list merged_imports = nil;
-    for (i = 0; i < nthreads; i++) {
-        if (strcmp(thd_args[i].error, "")) {
-            PyErr_SetString(PyExc_TypeError, thd_args[i].error);
-            return NULL;
-        } else {
-            PyObject* key = Py_BuildValue("y", source);
-            PyDict_SetItem(parsed_files, key, Py_True);
-            printf("parsed raw result: %p\n", thd_args[i].result);
-            printf("parsed raw result: %s\n", str(thd_args[i].result));
-            del(merged_imports);
-            merged_imports = append(imports(thd_args[i].result), all_imports);
-            del(all_imports);
-            all_imports = merged_imports;
-            print_obj("parsed AST: %s\n", list_to_pylist(thd_args[i].result));
-        }
-    }
-    printf("maybe_unparsed: %s\n", str(all_imports));
-
-    PyObject* key;
-    while (!null(all_imports)) {
-        key = Py_BuildValue("y", (char*)car(all_imports));
-        switch (PyDict_Contains(parsed_files, key)) {
-            case 1:
-                break;
-            case 0:
-                PyDict_SetItem(parsed_files, key, Py_True);
-                break;
-            case -1:
-                free(thd_args);
-                del(merged_imports);
-                return NULL;
-        }
-        all_imports = cdr(all_imports);
-    }
-
-    print_obj("known imports: %s\n", parsed_files);
-
-    del(merged_imports);
-    if (thd_args != NULL) {
-        free(thd_args);
-    }
 
     return Py_None;
 }

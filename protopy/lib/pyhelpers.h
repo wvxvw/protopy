@@ -32,4 +32,6 @@ PyObject* int_to_pyint(int*);
 
 PyObject* list_to_pylist(list);
 
+list pylist_to_list(PyObject*);
+
 #endif // PYHELPERS_H_

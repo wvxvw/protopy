@@ -1,5 +1,6 @@
 #include <sys/stat.h>
 #include <errno.h>
+#include <apr_thread_mutex.h>
 
 #include "defparser.h"
 #include "helpers.h"
@@ -111,33 +112,35 @@ list imports(list ast) {
     return result;
 }
 
-void* APR_THREAD_FUNC parse_one_def(apr_thread_t *thd, void* iargs) {
-    parse_def_args* args = (parse_def_args*)iargs;
+void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
+    parse_def_args_t* args = iargs;
+    parsing_progress_t* progress = args->progress;
+
     yyscan_t yyscanner;
     int res = yylex_init(&yyscanner);
     /* res = yylex_init_extra(&memory, &yyscanner); */
     if (res != 0) {
         args->error = "Couldn't initialize scanner";
-        return NULL;
+        goto cleanup;
     }
     struct stat source_stat;
     res = stat(args->source, &source_stat);
     if (res) {
         // TODO(olegs): fprintf
         args->error = "Couldn't find '%s', %d";  // source res
-        return NULL;
+        goto cleanup;
     }
     if (!S_ISREG(source_stat.st_mode)) {
         // TODO(olegs): fprintf
         args->error = "'%s' must be a regular file";  // source
-        return NULL;
+        goto cleanup;
     }
     
     FILE* h = fopen(args->source, "rb");
     if (h == NULL) {
         // TODO(olegs): fprintf
         args->error = "Couldn't find '%s', %d";  // source res
-        return NULL;
+        goto cleanup;
     }
     
     yydebug = 1;
@@ -152,7 +155,7 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t *thd, void* iargs) {
     fprintf(stderr, "Scanner set\n");
 
     int status;
-    yypstate *ps = yypstate_new();
+    yypstate* ps = yypstate_new();
     do {
         status = yypush_parse(
             ps,
@@ -162,9 +165,8 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t *thd, void* iargs) {
             yyscanner,
             &args->result);
     } while (status == YYPUSH_MORE);
+    
     yypstate_delete(ps);
-
-    fprintf(stderr, "Parsed\n");
     yylex_destroy(yyscanner);
 
     if (status != 0) {
@@ -172,5 +174,11 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t *thd, void* iargs) {
         args->error = "Parser failed";
         return NULL;
     }
+
+cleanup:
+    progress->thds_statuses[args->thread_id] = false;
+    printf("Parsed: %s, %p\n", str(args->result), args);
+    apr_thread_exit(thd, APR_SUCCESS);
+
     return NULL;
 }

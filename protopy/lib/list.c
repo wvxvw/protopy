@@ -42,7 +42,7 @@ list nappend(list a, list b) {
 }
 
 list append(list a, list b) {
-    return nappend(duplicate(a), b);
+    return nappend(duplicate(a), duplicate(b));
 }
 
 bool null(list elts) {

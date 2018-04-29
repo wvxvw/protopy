@@ -165,3 +165,20 @@ PyObject* list_to_pylist(list elts) {
     Py_INCREF(result);
     return result;
 }
+
+list pylist_to_list(PyObject* obj) {
+    Py_ssize_t len = PyList_Size(obj);
+    Py_ssize_t i = 0;
+    list result = nil;
+    char* val;
+    PyObject* item;
+
+    while (i < len) {
+        item = PyList_GetItem(obj, i);
+        PyArg_Parse(item, "y", &val);
+        result = cons(strdup(val), tstr, result);
+        i++;
+    }
+
+    return result;
+}
