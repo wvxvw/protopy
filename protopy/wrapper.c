@@ -7,7 +7,7 @@
 #include <Python.h>
 #include <apr_general.h>
 #include <apr_thread_proc.h>
-#include <apr_thread_mutex.h>
+#include <apr_time.h>
 
 #include "lib/helpers.h"
 #include "lib/pyhelpers.h"
@@ -167,7 +167,6 @@ void start_progress(parsing_progress_t* progress, size_t nthreads, apr_pool_t* m
         progress->thds[i] = NULL;
         i++;
     }
-    apr_thread_mutex_create(&progress->mtx, APR_THREAD_MUTEX_UNNESTED, mp);
 }
 
 void finish_progress(parsing_progress_t* progress) {
@@ -248,7 +247,7 @@ proto_def_parse_produce(list sources, list roots, size_t nthreads, apr_pool_t* m
                 sources = new_sources;
                 printf("new sources: %s\n", str(sources));
             } else if (null(sources) || all_threads_busy(&progress)) {
-                sleep(1);
+                apr_sleep(100);
             }
         }
     }

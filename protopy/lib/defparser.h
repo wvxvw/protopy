@@ -4,7 +4,6 @@
 #include <stdbool.h>
 #include <apr_general.h>
 #include <apr_thread_proc.h>
-#include <apr_thread_mutex.h>
 
 #include "list.h"
 
@@ -12,7 +11,6 @@ typedef struct parsing_progress_t {
     size_t nthreads;
     bool* thds_statuses;
     apr_thread_t** thds;
-    apr_thread_mutex_t* mtx;
 } parsing_progress_t;
 
 typedef struct parse_def_args_t {
