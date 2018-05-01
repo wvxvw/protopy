@@ -14,7 +14,7 @@ from protopy.wrapped import (
 class DefParser:
 
     def __init__(self, roots):
-        self.roots = [str(r).encode('utf-8') for r in roots]
+        self.roots = list(set([str(r).encode('utf-8') for r in roots]))
         self.files = {}
 
     def parse(self, source):

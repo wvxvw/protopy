@@ -4,7 +4,9 @@ import pkg_resources
 
 
 def test_load_file():
-    roots = []
+    roots = [
+        pkg_resources.resource_filename(__name__, './resources')
+    ]
     test_proto = pkg_resources.resource_filename(
         __name__,
         './resources/test.proto',

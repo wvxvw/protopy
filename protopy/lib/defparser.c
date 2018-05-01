@@ -112,31 +112,69 @@ list imports(list ast) {
     return result;
 }
 
+int resolved_source(const char* path, list roots, char** result) {
+    struct stat source_stat;
+    int res = stat(path, &source_stat);
+
+    if (!res) {
+        if (!S_ISREG(source_stat.st_mode)) {
+            return 2;
+        }
+        *result = strdup(path);
+        return 0;
+    }
+
+    char* combined = NULL;
+    char* root;
+    size_t path_len = strlen(path);
+    size_t root_len;
+
+    while (!null(roots)) {
+        free(combined);
+        root = (char*)car(roots);
+        root_len = strlen(root);
+        combined = malloc(path_len + root_len + 2);
+        strcpy(combined, root);
+        combined[root_len] = '/';
+        strcpy(combined + root_len + 1, path);
+        combined[path_len + root_len + 1] = '\0';
+        printf("probing: %s\n", combined);
+        res = stat(combined, &source_stat);
+        if (!res) {
+            if (!S_ISREG(source_stat.st_mode)) {
+                free(combined);
+                return 2;
+            }
+            *result = combined;
+            return 0;
+        }
+        roots = cdr(roots);
+    }
+    return 1;
+}
+
 void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     parse_def_args_t* args = iargs;
     parsing_progress_t* progress = args->progress;
 
     yyscan_t yyscanner;
     int res = yylex_init(&yyscanner);
-    /* res = yylex_init_extra(&memory, &yyscanner); */
-    if (res != 0) {
+    if (res) {
         args->error = "Couldn't initialize scanner";
         goto cleanup;
     }
-    struct stat source_stat;
-    res = stat(args->source, &source_stat);
-    if (res) {
-        // TODO(olegs): fprintf
-        args->error = "Couldn't find '%s', %d";  // source res
-        goto cleanup;
-    }
-    if (!S_ISREG(source_stat.st_mode)) {
-        // TODO(olegs): fprintf
-        args->error = "'%s' must be a regular file";  // source
-        goto cleanup;
+    char* source;
+    // TODO(olegs): fprintf
+    switch (resolved_source(args->source, args->roots, &source)) {
+        case 2:
+            args->error = "Must be regular file '%s', %d";  // source res
+            goto cleanup;
+        case 1:
+            args->error = "Couldn't find '%s', %d";  // source res
+            goto cleanup;
     }
     
-    FILE* h = fopen(args->source, "rb");
+    FILE* h = fopen(source, "rb");
     if (h == NULL) {
         // TODO(olegs): fprintf
         args->error = "Couldn't find '%s', %d";  // source res
@@ -165,14 +203,13 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
             yyscanner,
             &args->result);
     } while (status == YYPUSH_MORE);
-    
+
     yypstate_delete(ps);
     yylex_destroy(yyscanner);
 
     if (status != 0) {
         // TODO(olegs): Line info, cleanup
         args->error = "Parser failed";
-        return NULL;
     }
 
 cleanup:
