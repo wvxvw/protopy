@@ -118,13 +118,16 @@ char* package_of(list ast) {
     while (!null(ast)) {
         if (listp(ast)) {
             elt = (list)car(ast);
+            printf("package_of looks at: %s\n", str(elt));
             if (!null(elt) && (ast_type_t)(*(int*)car(elt)) == ast_package_t) {
+                printf("package_of found def: %s\n", str(cdr(elt)));
                 return strdup((char*)car(cdr(elt)));
             }
         }
         ast = cdr(ast);
     }
-    return NULL;
+    printf("package_of didn't find any defs\n");
+    return "";
 }
 
 void qualify_name(list elt, size_t plen, char* package) {
@@ -132,19 +135,21 @@ void qualify_name(list elt, size_t plen, char* package) {
     char* new_name = malloc(plen + 2 + strlen(cell->value));
     strcpy(new_name, package);
     new_name[plen] = ':';
-    strcpy(new_name + plen, cell->value);
+    strcpy(new_name + plen + 1, cell->value);
     size_t vlen = strlen(cell->value);
-    new_name[vlen] = '\0';
+    new_name[vlen + plen + 1] = '\0';
     free(cell->value);
     cell->value = new_name;
 }
 
 list normalize_types(list ast) {
+    printf("normalize_types: %s\n", str(ast));
     char* package = package_of(ast);
     size_t plen = strlen(package);
     list elt;
     list result = ast;
 
+    printf("found package: %s\n", package);
     if (!plen) {
         return result;
     }
@@ -154,14 +159,17 @@ list normalize_types(list ast) {
             if (!null(elt)) {
                 switch ((ast_type_t)(*(int*)car(elt))) {
                     case ast_enum_t:
+                        printf("processing enum: %s\n", str(elt));
                         qualify_name(elt, plen, package);
                         break;
                     case ast_message_t:
+                        printf("processing message: %s\n", str(elt));
                         qualify_name(elt, plen, package);
                         // TODO(olegs): qualify embedded enums and messages
                         // TODO(olegs): resolve custom types
                         break;
                     default:
+                        printf("processing non-def: %s\n", str(elt));
                         break;
                 }
             }

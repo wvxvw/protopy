@@ -96,13 +96,11 @@ do {                                            \
                top_level s boolean literal message_block service_body
                service_body_part rpc top_levels enum_field enum_fields
                option_name_parts option_name type user_type rpc_type
-               import field;
+               import field package_name package oneof_field oneof_fields;
 
 %type <nothing> syntax option_def field_options_body assignment
-                oneof_field oneof_fields map_field range_end range
-                ranges reserved_strings reserved_body reserved 
-                enum_value_option extensions rpc_options package
-                package_name;
+                map_field range_end range ranges reserved_strings
+                reserved_body reserved enum_value_option extensions rpc_options;
 
 %type <index> import_kind field_label key_type positive_int;
 
@@ -120,10 +118,15 @@ import : IMPORT import_kind string_literal ';' { MAYBE_ABORT; $$ = $3; } ;
 
 package_name : identifier { MAYBE_ABORT; $$ = from_strings(1, $1); }
              | package_name '.' identifier {
-    MAYBE_ABORT; $$ = cons($3, tstr, $1);
+    MAYBE_ABORT;
+    $$ = cons($3, tstr, $1);
 } ;
 
-package : PACKAGE package_name ';' { MAYBE_ABORT; $$ = NULL; } ;
+package : PACKAGE package_name ';' {
+    MAYBE_ABORT;
+    $$ = cons(mapconcat(to_str, $2, "."), tstr, nil);
+    del($2);
+} ;
 
 
 syntax : SYNTAX '=' string_literal ';' { MAYBE_ABORT; $$ = NULL; } ;
@@ -214,19 +217,27 @@ field : field_label type identifier '=' positive_int field_options ';' {
     MAYBE_ABORT;
     $$ = tag((int)$5, from_strings(2, mapconcat(to_str, $2, "."), $3));
     printf("parsed field: %s, %s\n", str($$), str($2));
+    del($2);
 } ;
 
 oneof_field : type identifier '=' positive_int field_options ';' {
     MAYBE_ABORT;
-    $$ = NULL;
-}
-            | ';' { MAYBE_ABORT; $$ = NULL; } ;
+    $$ = tag((int)$4, from_strings(2, mapconcat(to_str, $1, "."), $2));
+    del($1);
+} ;
 
 
-oneof_fields : oneof_field | oneof_fields oneof_field ;
+oneof_fields : oneof_field {
+    MAYBE_ABORT;
+    printf("parsed oneof field: %s\n", str($1));
+    $$ = cons($1, tlist, nil);
+}            | oneof_fields oneof_field {
+    MAYBE_ABORT;
+    $$ = cons($2, tlist, $1);
+} ;
 
 
-oneof : ONEOF identifier '{' oneof_fields '}' { MAYBE_ABORT; $$ = nil; } ;
+oneof : ONEOF identifier '{' oneof_fields '}' { MAYBE_ABORT; $$ = $4; } ;
 
 
 key_type : INT32    { MAYBE_ABORT; $$ = 0;  }

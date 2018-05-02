@@ -276,7 +276,7 @@ proto_def_parse_produce(list sources, list roots, size_t nthreads, apr_pool_t* m
                     result,
                     thds_args[i]->source,
                     strlen(thds_args[i]->source),
-                    thds_args[i]->result);
+                    normalize_types(thds_args[i]->result));
             } else if (null(sources) || all_threads_busy(&progress)) {
                 apr_sleep(100);
             }

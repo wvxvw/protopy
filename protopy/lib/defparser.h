@@ -38,4 +38,6 @@ list imports(list);
 
 char* unqote(char*);
 
+list normalize_types(list);
+
 #endif // DEFPARSER_H_
