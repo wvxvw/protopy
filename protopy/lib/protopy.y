@@ -215,14 +215,18 @@ field_label : REQUIRED { MAYBE_ABORT; $$ = 1; }
 
 field : field_label type identifier '=' positive_int field_options ';' {
     MAYBE_ABORT;
-    $$ = tag((int)$5, from_strings(2, mapconcat(to_str, $2, "."), $3));
+    char* tname = mapconcat(to_str, $2, ".");
+    list pos = from_ints(1, $5);
+    $$ = tag(7, cons(tname, tstr, cons($3, tstr, pos)));
     printf("parsed field: %s, %s\n", str($$), str($2));
     del($2);
 } ;
 
 oneof_field : type identifier '=' positive_int field_options ';' {
     MAYBE_ABORT;
-    $$ = tag((int)$4, from_strings(2, mapconcat(to_str, $1, "."), $2));
+    char* tname = mapconcat(to_str, $1, ".");
+    list pos = from_ints(1, $4);
+    $$ = tag(7, cons(tname, tstr, cons($2, tstr, pos)));
     del($1);
 } ;
 
@@ -237,7 +241,7 @@ oneof_fields : oneof_field {
 } ;
 
 
-oneof : ONEOF identifier '{' oneof_fields '}' { MAYBE_ABORT; $$ = $4; } ;
+oneof : ONEOF identifier '{' oneof_fields '}' { MAYBE_ABORT; $$ = tag(6, cons($2, tstr, $4)); } ;
 
 
 key_type : INT32    { MAYBE_ABORT; $$ = 0;  }
@@ -339,7 +343,7 @@ message_block : message_field {
 }
               | message_block message_field {
     MAYBE_ABORT;
-    $$ = cons($2, tstr, $1);
+    $$ = cons($2, tlist, $1);
 } ;
 
 
