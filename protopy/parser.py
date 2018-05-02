@@ -16,9 +16,17 @@ class DefParser:
     def __init__(self, roots):
         self.roots = list(set([str(r).encode('utf-8') for r in roots]))
         self.files = {}
+        self.defs = {}
 
-    def parse(self, source):
-        proto_def_parse(str(source).encode('utf-8'), self.roots, self.files)
+    def parse(self, source, force=False):
+        if source not in self.files or force:
+            self.defs.update(
+                proto_def_parse(
+                    str(source).encode('utf-8'),
+                    self.roots,
+                    self.files,
+                ),
+            )
 
 
 class BinParser:
@@ -34,8 +42,11 @@ class BinParser:
         print('read chunk {}'.format(len(chunk)))
         proto_parse(chunk, self.state)
 
-    async def parse(self, reader):
+    async def parse(self, source, message, reader):
+        self.def_parser.parse(source)
+        message_factory = self.def_parser.defs['message']
         self.state = make_state()
+        state_set_factory(self.state, message_factory, self.def_parser.defs)
         try:
             while not state_ready(self.state):
                 print('state not ready')

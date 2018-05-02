@@ -112,6 +112,65 @@ list imports(list ast) {
     return result;
 }
 
+char* package_of(list ast) {
+    list elt;
+
+    while (!null(ast)) {
+        if (listp(ast)) {
+            elt = (list)car(ast);
+            if (!null(elt) && (ast_type_t)(*(int*)car(elt)) == ast_package_t) {
+                return strdup((char*)car(cdr(elt)));
+            }
+        }
+        ast = cdr(ast);
+    }
+    return NULL;
+}
+
+void qualify_name(list elt, size_t plen, char* package) {
+    list cell = cdr(elt);
+    char* new_name = malloc(plen + 2 + strlen(cell->value));
+    strcpy(new_name, package);
+    new_name[plen] = ':';
+    strcpy(new_name + plen, cell->value);
+    size_t vlen = strlen(cell->value);
+    new_name[vlen] = '\0';
+    free(cell->value);
+    cell->value = new_name;
+}
+
+list normalize_types(list ast) {
+    char* package = package_of(ast);
+    size_t plen = strlen(package);
+    list elt;
+    list result = ast;
+
+    if (!plen) {
+        return result;
+    }
+    while (!null(ast)) {
+        if (listp(ast)) {
+            elt = (list)car(ast);
+            if (!null(elt)) {
+                switch ((ast_type_t)(*(int*)car(elt))) {
+                    case ast_enum_t:
+                        qualify_name(elt, plen, package);
+                        break;
+                    case ast_message_t:
+                        qualify_name(elt, plen, package);
+                        // TODO(olegs): qualify embedded enums and messages
+                        // TODO(olegs): resolve custom types
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+        ast = cdr(ast);
+    }
+    return result;
+}
+
 int resolved_source(const char* path, list roots, char** result) {
     struct stat source_stat;
     int res = stat(path, &source_stat);

@@ -1,6 +1,8 @@
-#include <Python.h>
 #include <alloca.h>
 #include <stdio.h>
+
+#include <Python.h>
+
 #include "pyhelpers.h"
 #include "list.h"
 
@@ -19,7 +21,6 @@ void print_obj(const char* template, PyObject* obj) {
 PyObject* py_string(char* val) {
     printf("py_string: %s\n", val);
     PyObject* result = PyBytes_FromStringAndSize(val, strlen(val));
-    Py_INCREF(result);
     printf("py_string returns: %s\n", PyBytes_AsString(result));
     return result;
 }
@@ -28,6 +29,7 @@ PyObject* py_string_append(PyObject* to, char* part) {
     printf("py_string_append: %s\n", part);
     PyObject* add = PyBytes_FromStringAndSize(part, strlen(part));
     PyBytes_Concat(&to, add);
+    Py_DECREF(add);
     return to;
 }
 
@@ -162,7 +164,6 @@ PyObject* list_to_pylist(list elts) {
         size++;
         elts = cdr(elts);
     }
-    Py_INCREF(result);
     return result;
 }
 

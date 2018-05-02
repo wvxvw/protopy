@@ -8,6 +8,7 @@
 #include <apr_general.h>
 #include <apr_thread_proc.h>
 #include <apr_time.h>
+#include <apr_hash.h>
 
 #include "lib/helpers.h"
 #include "lib/pyhelpers.h"
@@ -25,6 +26,9 @@ static char apr_cleanup_docstring[] = "Calls apr_terminate().";
 static char make_state_docstring[] = "Creates state capsule.";
 static char state_ready_docstring[] = "Returns True when state finished parsing.";
 static char state_result_docstring[] = "The object that was deserialized.";
+static char state_set_factory_docstring[] = "Specify the message class and dict "\
+                                            "of definitions to use when parsing "\
+                                            "binary messages stream.";
 
 static PyObject* proto_parse(PyObject* self, PyObject* args);
 static PyObject* proto_def_parse(PyObject* self, PyObject* args);
@@ -32,6 +36,7 @@ static PyObject* apr_cleanup(PyObject* self, PyObject* args);
 static PyObject* make_state(PyObject* self, PyObject* args);
 static PyObject* state_ready(PyObject* self, PyObject* args);
 static PyObject* state_result(PyObject* self, PyObject* args);
+static PyObject* state_set_factory(PyObject* self, PyObject* args);
 
 static PyMethodDef module_methods[] = {
     {"proto_parse", proto_parse, METH_VARARGS, parse_docstring},
@@ -40,6 +45,7 @@ static PyMethodDef module_methods[] = {
     {"make_state", make_state, METH_VARARGS, make_state_docstring},
     {"state_ready", state_ready, METH_VARARGS, state_ready_docstring},
     {"state_result", state_result, METH_VARARGS, state_result_docstring},
+    {"state_set_factory", state_set_factory, METH_VARARGS, state_set_factory_docstring},
     {NULL, NULL, 0, NULL}
 };
 
@@ -110,6 +116,26 @@ static PyObject* make_state(PyObject* self, PyObject* args) {
     return PyCapsule_New(state, NULL, free_state);
 }
 
+static PyObject* state_set_factory(PyObject* self, PyObject* args) {
+    parse_state* state;
+    PyObject* capsule;
+    PyObject* message_factory;
+    PyObject* defs;
+
+    if (!PyArg_ParseTuple(args, "OOO", &capsule, &message_factory, &defs)) {
+        return NULL;
+    }
+
+    state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
+    if (state == NULL) {
+        return NULL;
+    }
+    state->description = defs;
+    state->current_description = message_factory;
+
+    return Py_None;
+}
+
 static PyObject* proto_parse(PyObject* self, PyObject* args) {
     parse_state* state;
     char* in;
@@ -117,7 +143,6 @@ static PyObject* proto_parse(PyObject* self, PyObject* args) {
     PyObject* capsule;
     
     if (!PyArg_ParseTuple(args, "s#O", &in, &available, &capsule)) {
-        PyErr_SetString(PyExc_TypeError, "Invalid arguments");
         return NULL;
     }
     state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
@@ -189,11 +214,12 @@ bool all_threads_busy(parsing_progress_t* progress) {
     return available_thread_pos(progress) < progress->nthreads;
 }
 
-static list
+static apr_hash_t*
 proto_def_parse_produce(list sources, list roots, size_t nthreads, apr_pool_t* mp) {
     parsing_progress_t progress;
     size_t i = 0;
     parse_def_args_t** thds_args = alloca(sizeof(parse_def_args_t*) * nthreads);
+    apr_hash_t* result = apr_hash_make(mp);
 
     while (i < nthreads) {
         thds_args[i] = malloc(sizeof(parse_def_args_t));
@@ -246,6 +272,11 @@ proto_def_parse_produce(list sources, list roots, size_t nthreads, apr_pool_t* m
                 del(deps);
                 sources = new_sources;
                 printf("new sources: %s\n", str(sources));
+                apr_hash_set(
+                    result,
+                    thds_args[i]->source,
+                    strlen(thds_args[i]->source),
+                    thds_args[i]->result);
             } else if (null(sources) || all_threads_busy(&progress)) {
                 apr_sleep(100);
             }
@@ -256,7 +287,21 @@ proto_def_parse_produce(list sources, list roots, size_t nthreads, apr_pool_t* m
     finish_progress(&progress);
     printf("progress finished\n");
 
-    return nil;
+    return result;
+}
+
+PyObject* aprdict_to_pydict(apr_pool_t* mp, apr_hash_t* ht) {
+    PyObject* result = PyDict_New();
+    apr_hash_index_t* hi;
+    void* val;
+    const void* key;
+
+    for (hi = apr_hash_first(mp, ht); hi; hi = apr_hash_next(hi)) {
+        apr_hash_this(hi, &key, NULL, &val);
+        PyObject* pykey = Py_BuildValue("y", (char*)key);
+        PyDict_SetItem(result, pykey, list_to_pylist((list)val));
+    }
+    return result;
 }
 
 static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
@@ -287,6 +332,7 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     }
     list roots = pylist_to_list(source_roots);
     apr_pool_t* mp = NULL;
+    apr_hash_t* parsed_defs;
 
     if (apr_pool_create(&mp, NULL) != APR_SUCCESS) {
         PyErr_SetString(PyExc_TypeError, "Couldn't create memory pool");
@@ -295,18 +341,23 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
 
     Py_BEGIN_ALLOW_THREADS;
 
-    list parsed_files = proto_def_parse_produce(cons(source, tstr, nil), roots, (size_t)nthreads, mp);
-    printf("parsed_files: %s\n", str(parsed_files));
+    parsed_defs = proto_def_parse_produce(
+        cons(source, tstr, nil),
+        roots,
+        (size_t)nthreads,
+        mp);
 
     del(roots);
 
-    if (mp != NULL) {
-        apr_pool_destroy(mp);
-    }
-    
     Py_END_ALLOW_THREADS;
 
     printf("all arp threads finished\n");
 
-    return Py_None;
+    PyObject* result = aprdict_to_pydict(mp, parsed_defs);
+
+    print_obj("parsed defs: %s\n", result);
+
+    apr_pool_destroy(mp);
+
+    return result;
 }

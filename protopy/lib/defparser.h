@@ -2,6 +2,7 @@
 #define DEFPARSER_H_
 
 #include <stdbool.h>
+
 #include <apr_general.h>
 #include <apr_thread_proc.h>
 
