@@ -353,7 +353,14 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
 
     printf("all arp threads finished\n");
 
-    PyObject* result = aprdict_to_pydict(mp, parsed_defs);
+    PyObject* types = PyImport_ImportModule("protopy.types");
+    PyObject* description = aprdict_to_pydict(mp, parsed_defs);
+    PyObject* result = PyObject_CallMethod(
+        types,
+        "create_descriptors",
+        "O",
+        description);
+    Py_DECREF(description);
 
     print_obj("parsed defs: %s\n", result);
 
