@@ -1,6 +1,5 @@
-#include <sys/stat.h>
-#include <errno.h>
 #include <apr_thread_mutex.h>
+#include <apr_file_info.h>
 
 #include "defparser.h"
 #include "helpers.h"
@@ -179,18 +178,34 @@ list normalize_types(list ast) {
     return result;
 }
 
-int resolved_source(const char* path, list roots, char** result) {
-    struct stat source_stat;
-    int res = stat(path, &source_stat);
-
-    if (!res) {
-        if (!S_ISREG(source_stat.st_mode)) {
-            return 2;
-        }
-        *result = strdup(path);
-        return 0;
+int exists_and_is_regular(apr_finfo_t* finfo, const char* path, apr_pool_t* mp) {
+    if (apr_stat(finfo, path, APR_FINFO_TYPE, mp) != APR_SUCCESS) {
+        return 1;
     }
+    if (finfo->filetype != APR_REG) {
+        return 2;
+    }
+    return 0;
+}
 
+int resolved_source(const char* path, list roots, char** result) {
+    apr_finfo_t finfo;
+    apr_pool_t* mp = NULL;
+    int retcode = 0;
+
+    if (apr_pool_create(&mp, NULL) != APR_SUCCESS) {
+        return 3;
+    }
+    
+    switch (exists_and_is_regular(&finfo, path, mp)) {
+        case 2:
+            retcode = 2;
+            goto cleanup;
+        case 0:
+            *result = strdup(path);
+            goto cleanup;
+    }
+    
     char* combined = NULL;
     char* root;
     size_t path_len = strlen(path);
@@ -206,18 +221,20 @@ int resolved_source(const char* path, list roots, char** result) {
         strcpy(combined + root_len + 1, path);
         combined[path_len + root_len + 1] = '\0';
         printf("probing: %s\n", combined);
-        res = stat(combined, &source_stat);
-        if (!res) {
-            if (!S_ISREG(source_stat.st_mode)) {
-                free(combined);
-                return 2;
-            }
-            *result = combined;
-            return 0;
+        switch (exists_and_is_regular(&finfo, combined, mp)) {
+            case 2:
+                retcode = 2;
+                goto cleanup;
+            case 0:
+                *result = combined;
+                goto cleanup;
         }
         roots = cdr(roots);
     }
-    return 1;
+
+cleanup:
+    apr_pool_destroy(mp);
+    return retcode;
 }
 
 void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
