@@ -4,7 +4,7 @@ import "foo/bar.proto";
 
 message Test {
     int32 test = 2;
-    string test_whatever = 2;
+    string test_whatever = 3;
 }
 
 message Test1 {

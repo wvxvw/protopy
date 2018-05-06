@@ -7,11 +7,11 @@ import asyncio
 
 
 def test_gen_load_file():
-    roots = []
     proto_roots = pkg_resources.resource_filename(
         __name__,
         './resources',
     )
+    roots = [proto_roots]
     test_proto = pkg_resources.resource_filename(
         __name__,
         './resources/test.proto',
@@ -29,7 +29,9 @@ def test_gen_load_file():
         stderr=PIPE,
         stdin=PIPE,
     )
-    stdout, stderr = protoc.communicate(input=b'test: 123')
+    stdout, stderr = protoc.communicate(
+        input=b'test: 123\ntest_whatever: "123456"',
+    )
     if protoc.returncode:
         print(stderr)
         assert False, stderr.decode('utf-8')
@@ -44,7 +46,9 @@ def test_gen_load_file():
         reader.feed_eof()
 
     async def gather_results():
-        asyncio.gather(BinParser(roots).parse(reader), finish())
+        parse_bin = BinParser(roots).parse(test_proto, 'Test', reader)
+        return await asyncio.gather(parse_bin, finish())
 
-    loop.run_until_complete(gather_results())
+    result = loop.run_until_complete(gather_results())[0]
+    assert result.test == 123
     assert False

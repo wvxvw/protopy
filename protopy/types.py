@@ -2,6 +2,7 @@
 
 from collections import namedtuple
 from functools import partial
+from enum import Enum
 
 
 _builtin_types = {
@@ -21,6 +22,37 @@ _builtin_types = {
     b'string',
     b'bytes',
 }
+
+_pb_types = {
+    b'int32': 0,
+    b'int64': 1,
+    b'uint32': 2,
+    b'uint64': 3,
+    b'sing32': 4,
+    b'sing64': 5,
+    b'bool': 6,
+    # 'enum': 7,
+    b'fixed64': 8,
+    b'sfixed64': 9,
+    b'double': 10,
+    b'string': 11,
+    b'bytes': 12,
+    # 'message': 13,
+    # 'repeated': 14,
+    b'fixed32': 15,
+    b'sfixed32': 16,
+}
+
+
+def value_type(pbtype, factory):
+    result = _pb_types.get(pbtype, None)
+    if result is None:
+        if factory[0] == tuple_from_dict:
+            return 13
+        if factory[0] == enum_from_dict:
+            return 7
+        return 14
+    return result
 
 
 def normalize_fields(fields):
@@ -46,16 +78,29 @@ def find_desc(name, descriptions):
     raise ValueError("Cannot find definition of: {}".format(name))
 
 
-def tuple_from_dict(ttype, fmapping, tmapping, parser, values):
+def tuple_from_dict(ftype, factories, descriptions, values):
+    _, ttype, fmapping, tmapping = factories[ftype]
+    print('tuple_from_dict: {}, {}'.format(ttype, fmapping))
     args = [None] * len(fmapping)
+
     for k, v in values.items():
         t = tmapping[k]
-        if t:
-            args[fmapping[k]] = parser.parse(t, len(v), v)
-        else:
+        if t in _builtin_types:
             args[fmapping[k]] = v
+        else:
+            # TODO(olegs): This could be an enum or a list
+            args[fmapping[k]] = tuple_from_dict(
+                descriptions[t],
+                factories,
+                descriptions,
+                v,
+            )
 
     return ttype(*args)
+
+
+def enum_from_dict(ttype, mmaping, parser, value):
+    return ttype(mmaping[value])
 
 
 def extract_type_name(tname):
@@ -65,6 +110,25 @@ def extract_type_name(tname):
         if tname[i] in b'.:':
             return tname[:i].decode('utf-8'), tname[i + 1:].decode('utf-8')
     return '', tname.decode('utf-8')
+
+
+def enum_desc(ftype, desc, factories, descriptions):
+    if ftype in factories:
+        return
+
+    members = []
+    mmapping = {}
+
+    for i, field in enumerate(desc):
+        print('field description: {}'.format(field))
+        name = field[0].decode('utf-8')
+        num = field[1]
+
+        members.append(name)
+        mmapping[num] = i
+
+    result = Enum(ftype.decode('utf-8'), members)
+    factories[ftype] = tuple([enum_from_dict, result, mmapping])
 
 
 def message_desc(ftype, desc, factories, descriptions):
@@ -90,6 +154,7 @@ def message_desc(ftype, desc, factories, descriptions):
 
         fields[field_name] = field_type, field_num
         fields_list.append(field_name)
+        tmapping[field_num] = field_type
         fmapping[field_num] = i
 
     module, name = extract_type_name(ftype)
@@ -105,11 +170,7 @@ def message_desc(ftype, desc, factories, descriptions):
             descriptions,
         )
 
-    for field_name, (field_type, field_num) in fields.items():
-        if field_type not in _builtin_types:
-            tmapping[fmapping[field_num]] = factories[field_type]
-
-    factories[ftype] = partial(tuple_from_dict, ftype, fmapping, tmapping)
+    factories[ftype] = tuple([tuple_from_dict, result, fmapping, tmapping])
 
 
 def create_descriptors(descriptions):

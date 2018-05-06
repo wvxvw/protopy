@@ -237,32 +237,52 @@ cleanup:
     return retcode;
 }
 
+void* parse_one_def_cleanup(
+    FILE* h,
+    apr_thread_t* thd,
+    char* source,
+    parsing_progress_t* progress,
+    parse_def_args_t* args,
+    apr_status_t rv) {
+
+    if (h) {
+        fclose(h);
+    }
+    free(source);
+    progress->thds_statuses[args->thread_id] = false;
+    printf("Parsed: %s, %p\n", str(args->result), args);
+    apr_thread_exit(thd, APR_SUCCESS);
+    return NULL;
+}
+
 void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     parse_def_args_t* args = iargs;
     parsing_progress_t* progress = args->progress;
+    FILE* h = NULL;
+    char* source = NULL;
 
     yyscan_t yyscanner;
     int res = yylex_init(&yyscanner);
     if (res) {
         args->error = "Couldn't initialize scanner";
-        goto cleanup;
+        return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
-    char* source;
+    printf("looking for source: %s in %s\n", args->source, str(args->roots));
     // TODO(olegs): fprintf
     switch (resolved_source(args->source, args->roots, &source)) {
         case 2:
             args->error = "Must be regular file '%s', %d";  // source res
-            goto cleanup;
+            return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
         case 1:
             args->error = "Couldn't find '%s', %d";  // source res
-            goto cleanup;
+            return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
     
-    FILE* h = fopen(source, "rb");
+    h = fopen(source, "rb");
     if (h == NULL) {
         // TODO(olegs): fprintf
         args->error = "Couldn't find '%s', %d";  // source res
-        goto cleanup;
+        return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
     
     yydebug = 1;
@@ -274,7 +294,7 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     YYSTYPE value;
         
     yyset_in(h, yyscanner);
-    fprintf(stderr, "Scanner set\n");
+    printf("Scanner set for %s\n", source);
 
     int status;
     yypstate* ps = yypstate_new();
@@ -294,12 +314,8 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     if (status != 0) {
         // TODO(olegs): Line info, cleanup
         args->error = "Parser failed";
+        return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
 
-cleanup:
-    progress->thds_statuses[args->thread_id] = false;
-    printf("Parsed: %s, %p\n", str(args->result), args);
-    apr_thread_exit(thd, APR_SUCCESS);
-
-    return NULL;
+    return parse_one_def_cleanup(h, thd, source, progress, args, APR_SUCCESS);
 }

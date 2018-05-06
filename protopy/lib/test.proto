@@ -1,5 +1,6 @@
 syntax = "proto3";
 
 message Test {
-    int32 test = 2;
+    int32 foo = 2;
+    string bar = 3;
 }

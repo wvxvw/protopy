@@ -33,10 +33,6 @@ static char state_set_factory_docstring[] = "Specify the message class and dict 
 static PyObject* proto_parse(PyObject* self, PyObject* args);
 static PyObject* proto_def_parse(PyObject* self, PyObject* args);
 static PyObject* apr_cleanup(PyObject* self, PyObject* args);
-static PyObject* make_state(PyObject* self, PyObject* args);
-static PyObject* state_ready(PyObject* self, PyObject* args);
-static PyObject* state_result(PyObject* self, PyObject* args);
-static PyObject* state_set_factory(PyObject* self, PyObject* args);
 
 static PyMethodDef module_methods[] = {
     {"proto_parse", proto_parse, METH_VARARGS, parse_docstring},
@@ -69,77 +65,10 @@ static PyObject* apr_cleanup(PyObject* self, PyObject* args) {
     return Py_None;
 }
 
-static void free_state(PyObject* capsule) {
-    if (capsule == Py_None) {
-        return;
-    }
-    parse_state* state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
-    del(state->in);
-    printf("freeing the state %p\n", state);
-    free(state);
-    printf("state freed\n");
-}
-
-static PyObject* state_ready(PyObject* self, PyObject* args) {
-    PyObject* capsule;
-    if (!PyArg_ParseTuple(args, "O", &capsule)) {
-        return NULL;
-    }
-    parse_state* state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
-    if (state->out == Py_None) {
-        return Py_False;
-    }
-    return Py_True;
-}
-
-static PyObject* state_result(PyObject* self, PyObject* args) {
-    PyObject* capsule;
-    if (!PyArg_ParseTuple(args, "O", &capsule)) {
-        return NULL;
-    }
-    parse_state* state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
-    return state->out;
-}
-
-static PyObject* make_state(PyObject* self, PyObject* args) {
-    parse_state* state = malloc(sizeof(parse_state));
-    state->in = nil;
-    state->pos = 0;
-    state->out = Py_None;
-    printf("allocating new state %p\n", state);
-    return PyCapsule_New(state, NULL, free_state);
-}
-
-static PyObject* state_set_factory(PyObject* self, PyObject* args) {
-    parse_state* state;
-    PyObject* capsule;
-    PyObject* message_factory;
-    PyObject* defs;
-
-    if (!PyArg_ParseTuple(args, "OOO", &capsule, &message_factory, &defs)) {
-        return NULL;
-    }
-
-    state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
-    if (state == NULL) {
-        return NULL;
-    }
-    state->description = defs;
-    state->current_description = message_factory;
-
-    return Py_None;
-}
-
 static PyObject* proto_parse(PyObject* self, PyObject* args) {
     parse_state* state;
     char* in;
-    size_t available;
+    int available;
     PyObject* capsule;
     
     if (!PyArg_ParseTuple(args, "s#O", &in, &available, &capsule)) {
@@ -149,13 +78,10 @@ static PyObject* proto_parse(PyObject* self, PyObject* args) {
     if (state == NULL) {
         return NULL;
     }
-    state->in = cons(strdup(in), tstr, state->in);
-    size_t parsed = parse(state);
-    printf("parsed bytes: %zu\n", parsed);
-    printf("produced result: %p\n", state->out);
-    PyObject_Print(state->out, stdout, 0);
-    printf("\n");
-    return state->out;
+    printf("about to parse %d bytes\n", available);
+    PyObject* parsed = parse_message(state, in, (size_t)available);
+    print_obj("parsed message: %s\n", parsed);
+    return parsed;
 }
 
 size_t available_thread_pos(parsing_progress_t* progress) {
@@ -258,6 +184,9 @@ proto_def_parse_produce(list sources, list roots, size_t nthreads, apr_pool_t* m
                     // PyErr_Format(PyExc_TypeError, "%s", thds_args[i]->error);
                     del(sources);
                     sources = nil;
+                    apr_status_t rv;
+                    apr_thread_join(&rv, progress.thds[i]);
+                    progress.thds[i] = NULL;
                     // TODO(olegs): We still need to join all remaining threads
                     // before we can clean up.
                     break;
@@ -360,6 +289,14 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
         "create_descriptors",
         "O",
         description);
+    PyObject* keys = PyDict_Keys(description);
+    Py_ssize_t length = PyList_Size(keys);
+    Py_ssize_t i = 0;
+
+    while (i < length) {
+        PyDict_SetItem(parsed_files, PyList_GetItem(keys, i), Py_True);
+        i++;
+    }
     Py_DECREF(description);
 
     print_obj("parsed defs: %s\n", result);

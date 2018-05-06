@@ -2,6 +2,7 @@
 #define BINPARSER_H_
 
 #include <Python.h>
+
 #include "list.h"
 
 typedef enum vt_type_t {
@@ -25,8 +26,22 @@ typedef enum vt_type_t {
     vt_repeated = 14,
     // 32 bit
     vt_fixed32  = 15,
-    vt_sfixed32 = 16
+    vt_sfixed32 = 16,
+    // not exposed to user
+    vt_error   = 17,
+    vt_default = 18
 } vt_type_t;
+
+typedef enum wiretype_t {
+    wt_varint = 0,
+    wt_fixed32 = 1,
+    wt_fixed64 = 2,
+    wt_string = 3
+} wiretype_t;
+
+wiretype_t wiretype_of(vt_type_t);
+
+bool is_scalar(vt_type_t);
 
 
 typedef struct {
@@ -34,15 +49,18 @@ typedef struct {
     size_t field;
     list in;
     PyObject* out;
-    PyObject* description;  // dict
-    PyObject* current_description;  // function(x: bytes) -> object
+    PyObject* description;
+    PyObject* factories;
+    PyObject* pytype;
 } parse_state;
 
 typedef size_t (*parse_handler)(parse_state*);
 
 int64_t state_get_available(parse_state*);
 
-vt_type_t state_get_value_type(parse_state*);
+vt_type_t state_get_repeated_type(parse_state*);
+
+vt_type_t state_get_field_type(parse_state*);
 
 size_t state_read(parse_state*, char*, size_t);
 
@@ -59,5 +77,17 @@ size_t parse_start_group(parse_state*);
 size_t parse_end_group(parse_state*);
 
 size_t parse_fixed_32(parse_state*);
+
+PyObject* parse_message(parse_state*, char*, size_t);
+
+PyObject* parse_repeated(parse_state*, char*, size_t);
+
+PyObject* make_state(PyObject*, PyObject*);
+
+PyObject* state_ready(PyObject*, PyObject*);
+
+PyObject* state_result(PyObject*, PyObject*);
+
+PyObject* state_set_factory(PyObject*, PyObject*);
 
 #endif // BINPARSER_H_
