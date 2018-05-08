@@ -39,20 +39,16 @@ class BinParser:
         self.state = None
 
     def clone(self):
-        print('BinParser.clone')
         result = BinParser(self.roots, self.loop)
         result.def_parser = self.def_parser
         return result
 
     async def parse_chunk(self, reader):
         chunk = await reader.read()
-        print('read chunk {}'.format(len(chunk)))
         proto_parse(chunk, self.state)
 
     async def parse(self, source, message, reader):
-        print('source: {!r}'.format(source))
         self.def_parser.parse(source)
-        print('files: {!r}'.format(self.def_parser.files))
         if not isinstance(message, bytes):
             message = str(message).encode('utf-8')
         self.state = make_state()
@@ -67,7 +63,6 @@ class BinParser:
 
         try:
             while not state_ready(self.state):
-                print('state not ready')
                 await self.parse_chunk(reader)
             result = state_result(self.state)
         finally:

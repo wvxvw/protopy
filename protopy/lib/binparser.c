@@ -15,24 +15,18 @@ void free_state(PyObject* capsule) {
     }
     parse_state* state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
     del(state->in);
-    printf("freeing the state %p\n", state);
     free(state);
-    printf("state freed\n");
 }
 
 PyObject* state_ready(PyObject* self, PyObject* args) {
-    printf("testing if state is ready\n");
     PyObject* capsule;
     if (!PyArg_ParseTuple(args, "O", &capsule)) {
         return NULL;
     }
-    printf("state_ready: all arguments parsed\n");
     parse_state* state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
     if (PyErr_Occurred()) {
         return NULL;
     }
-    printf("state_ready: capsule extracted\n");
-    print_obj("state->out was: %s\n", state->out);
     if (state->out == Py_None) {
         return Py_False;
     }
@@ -56,7 +50,6 @@ PyObject* make_state(PyObject* self, PyObject* args) {
     state->in = nil;
     state->pos = 0;
     state->out = Py_None;
-    printf("allocating new state %p\n", state);
     return PyCapsule_New(state, NULL, free_state);
 }
 
@@ -96,24 +89,15 @@ size_t state_read(parse_state* state, char* buf, size_t n) {
 
 vt_type_t state_get_field_type(parse_state* state) {
     PyObject* key = Py_BuildValue("i", (int)state->field);
-    print_obj("1. state_get_field_type: %s\n", key);
     PyObject* container_factory = PyDict_GetItem(state->factories, state->pytype);
-    print_obj("2. state_get_field_type: %s\n", container_factory);
-    print_obj("3. state_get_field_type: %s\n", state->factories);
-    print_obj("4. state_get_field_type: %s\n", state->pytype);
     PyObject* tmap = PyTuple_GetItem(container_factory, 3);
-    print_obj("5. state_get_field_type: %s\n", tmap);
     PyObject* field_type = PyDict_GetItem(tmap, key);
-    print_obj("6. state_get_field_type: %s\n", field_type);
     PyObject* factory = PyDict_GetItem(state->factories, field_type);
-    print_obj("7. state_get_field_type: %s\n", factory);
     if (factory == NULL) {
         factory = Py_None;
     }
     PyObject* types = PyImport_ImportModule("protopy.types");
     PyObject* result = PyObject_CallMethod(types, "value_type", "OO", field_type, factory);
-    print_obj("8. state_get_field_type: %s\n", result);
-    PyErr_Print();
     return (vt_type_t)PyLong_AsLong(result);
 }
 
@@ -184,9 +168,6 @@ size_t parse_varint(parse_state* state) {
     if (sign) {
         state->out = PyNumber_Negative(state->out);
     }
-    printf("parsed varint ");
-    PyObject_Print(state->out, stdout, 0);
-    printf("\n");
     if (vt == vt_enum) {
         // TODO(olegs): We'd need to find an enum instance for
         // corresponding to this number.
@@ -220,7 +201,6 @@ size_t parse_length_delimited(parse_state* state) {
     // No reason to care for high bits, we aren't expecting strings of
     // that length anyways.
     size_t length = (size_t)value[0];
-    printf("parse_length_delimited length(%zu)\n", length);
     // TODO(olegs): Figure out what's the safe value to allocate on
     // stack and allocate on heap, if above the threshold.
     char* bytes = alloca(sizeof(char) * length);
@@ -234,18 +214,15 @@ size_t parse_length_delimited(parse_state* state) {
         // TODO(olegs): This is a dangerous place because it may hang
         // if the socket closes in the of receiving a message.
     }
-    printf("parse_length_delimited type(%d)\n", (int)state_get_field_type(state));
     switch (state_get_field_type(state)) {
         case vt_default:
         case vt_string:
-            printf("creating python string\n");
             state->out = PyBytes_FromStringAndSize(bytes, (Py_ssize_t)length);
             break;
         case vt_bytes:
             state->out = PyUnicode_FromStringAndSize(bytes, (Py_ssize_t)length);
             break;
         case vt_message:
-            printf("encountered inner message: %zu\n", length);
             state->out = parse_message(
                 state,
                 bytes,
@@ -331,7 +308,6 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
     state->in = cons(strdup(bytes), tstr, nil);
 
     while (i < len) {
-        printf("parsing new field: %zu < %zu\n", i, len);
         j = parse(state);
         if (j == 0) {
             // TODO(olegs): We finished earlier than expected, need to
@@ -341,14 +317,8 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
         i += j;
         PyDict_SetItem(dict, PyLong_FromLong((long)state->field), state->out);
     }
-    print_obj("Parsed message fields: %s\n", dict);
-    // PyErr_Print();
     PyObject* factory = PyDict_GetItem(state->factories, state->pytype);
     PyObject* ctor = PyTuple_GetItem(factory, 0);
-    print_obj("ctor: %s\n", ctor);
-    print_obj("state->pytype: %s\n", state->pytype);
-    print_obj("state->factories: %s\n", state->factories);
-    print_obj("state->description: %s\n", state->description);
     PyObject* result = PyObject_CallFunction(
         ctor,
         "OOOO",
@@ -356,7 +326,10 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
         state->factories,
         state->description,
         dict);
-    PyErr_Print();
+    if (result == NULL) {
+        del(state->in);
+        return NULL;
+    }
     state->out = result;
     Py_INCREF(state->out);
     del(state->in);
@@ -410,8 +383,6 @@ size_t select_handler(parse_state* state, parse_handler* handler) {
     size_t wire_type = (size_t)(value[0] & 7);
 
     state->field = (size_t)(value[0] >> 3);
-    printf("varint: %"PRId64"_%"PRId64"\n", value[0], value[1]);
-    printf("wire_type: %zu, field: %zu\n", wire_type, state->field);
 
     switch (wire_type) {
         case 0:
@@ -445,6 +416,5 @@ size_t select_handler(parse_state* state, parse_handler* handler) {
 size_t parse(parse_state* state) {
     parse_handler handler = alloca(0);
     size_t parsed = select_handler(state, &handler);
-    printf("left to parse: %s\n", str(state->in));
     return parsed + (*handler)(state);
 }

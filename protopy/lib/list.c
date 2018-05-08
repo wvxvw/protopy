@@ -205,7 +205,6 @@ char* mapconcat(mapconcat_fn_t fn, list elts, char* sep) {
 
     while (!null(elts)) {
         chunk = fn(elts);
-        printf("mapconcat chunk: %s\n", chunk);
         es = strlen(chunk);
         total += es + sep_len;
         chunks = cons(chunk, tstr, chunks);

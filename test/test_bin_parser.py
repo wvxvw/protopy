@@ -50,5 +50,6 @@ def test_gen_load_file():
         return await asyncio.gather(parse_bin, finish())
 
     result = loop.run_until_complete(gather_results())[0]
+    print('result: {}'.format(result))
     assert result.test == 123
     assert False

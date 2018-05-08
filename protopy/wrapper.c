@@ -78,9 +78,7 @@ static PyObject* proto_parse(PyObject* self, PyObject* args) {
     if (state == NULL) {
         return NULL;
     }
-    printf("about to parse %d bytes\n", available);
     PyObject* parsed = parse_message(state, in, (size_t)available);
-    print_obj("parsed message: %s\n", parsed);
     return parsed;
 }
 
@@ -168,12 +166,10 @@ proto_def_parse_produce(list sources, list roots, size_t nthreads, apr_pool_t* m
             def_args->thread_id = i;
             def_args->progress = &progress;
             thds_args[i] = def_args;
-            printf("creating thread: %zu: %s\n", i, def_args->source);
             progress.thds_statuses[i] = true;
             apr_thread_create(&progress.thds[i], NULL, parse_one_def, def_args, mp);
 
             sources = cdr(sources);
-            printf("sources: %s\n", str(sources));
         } else {
             i = finished_thread(&progress);
             if (i < progress.nthreads) {
@@ -195,12 +191,10 @@ proto_def_parse_produce(list sources, list roots, size_t nthreads, apr_pool_t* m
                 apr_thread_join(&rv, progress.thds[i]);
                 progress.thds[i] = NULL;
                 list deps = imports(thds_args[i]->result);
-                printf("deps: %s\n", str(deps));
                 list new_sources = append(sources, deps);
                 del(sources);
                 del(deps);
                 sources = new_sources;
-                printf("new sources: %s\n", str(sources));
                 apr_hash_set(
                     result,
                     thds_args[i]->source,
@@ -212,9 +206,7 @@ proto_def_parse_produce(list sources, list roots, size_t nthreads, apr_pool_t* m
         }
     }
 
-    printf("all sources parsed\n");
     finish_progress(&progress);
-    printf("progress finished\n");
 
     return result;
 }
@@ -280,8 +272,6 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
 
     Py_END_ALLOW_THREADS;
 
-    printf("all arp threads finished\n");
-
     PyObject* types = PyImport_ImportModule("protopy.types");
     PyObject* description = aprdict_to_pydict(mp, parsed_defs);
     PyObject* result = PyObject_CallMethod(
@@ -298,8 +288,6 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
         i++;
     }
     Py_DECREF(description);
-
-    print_obj("parsed defs: %s\n", result);
 
     apr_pool_destroy(mp);
 

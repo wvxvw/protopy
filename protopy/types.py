@@ -67,7 +67,6 @@ def normalize_fields(fields):
 
 def find_desc(name, descriptions):
     for file, desc in descriptions.items():
-        print('searching in description: {}'.format(desc))
         for d in desc:
             if d and d[0] == 0:
                 tname = d[1]
@@ -80,7 +79,6 @@ def find_desc(name, descriptions):
 
 def tuple_from_dict(ftype, factories, descriptions, values):
     _, ttype, fmapping, tmapping = factories[ftype]
-    print('tuple_from_dict: {}, {}'.format(ttype, fmapping))
     args = [None] * len(fmapping)
 
     for k, v in values.items():
@@ -120,7 +118,6 @@ def enum_desc(ftype, desc, factories, descriptions):
     mmapping = {}
 
     for i, field in enumerate(desc):
-        print('field description: {}'.format(field))
         name = field[0].decode('utf-8')
         num = field[1]
 
@@ -142,12 +139,10 @@ def message_desc(ftype, desc, factories, descriptions):
     fmapping = {}
 
     for i, field in enumerate(desc):
-        print('field description: {}'.format(field))
         field_name = field[2].decode('utf-8')
         field_type = field[1]
         field_num = field[3]
         if field_type not in _builtin_types:
-            print('{} not a built-in'.format(field_type))
             field_desc = factories.get(field_type, None)
             if not field_desc:
                 unresolved[field_name] = field_type, field_num
@@ -176,15 +171,10 @@ def message_desc(ftype, desc, factories, descriptions):
 def create_descriptors(descriptions):
     factories = {}
 
-    print('creating descrtiptions from: {}'.format(descriptions))
     for file, desc in descriptions.items():
-        print('processing file: {}'.format(file))
         for d in desc:
             if d:
                 rtype, tname, *fields = d
-                print('processing description: {}'.format(
-                    (rtype, tname, fields),
-                ))
                 if rtype == 0:
                     message_desc(
                         tname,

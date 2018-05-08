@@ -218,7 +218,6 @@ field : field_label type identifier '=' positive_int field_options ';' {
     char* tname = mapconcat(to_str, $2, ".");
     list pos = from_ints(1, $5);
     $$ = tag(7, cons(tname, tstr, cons($3, tstr, pos)));
-    printf("parsed field: %s, %s\n", str($$), str($2));
     del($2);
 } ;
 
@@ -233,7 +232,6 @@ oneof_field : type identifier '=' positive_int field_options ';' {
 
 oneof_fields : oneof_field {
     MAYBE_ABORT;
-    printf("parsed oneof field: %s\n", str($1));
     $$ = cons($1, tlist, nil);
 }            | oneof_fields oneof_field {
     MAYBE_ABORT;
@@ -312,7 +310,7 @@ enum_field : identifier '=' positive_int '[' enum_value_options ']' {
            | OPTION option_name '=' literal { MAYBE_ABORT; $$ = NULL; } ;
 
 
-enum_fields : enum_field { MAYBE_ABORT; printf("enum_fileds\n"); $$ = from_lists(1, $1); }
+enum_fields : enum_field { MAYBE_ABORT; $$ = from_lists(1, $1); }
             | enum_fields ';' enum_field { MAYBE_ABORT; $$ = cons($3, tlist, $1); } ;
 
 
@@ -330,16 +328,15 @@ message_field : enum
               | oneof
               | OPTION option_def { MAYBE_ABORT; $$ = nil; }
               | map_field         { MAYBE_ABORT; $$ = nil; }
-              | field             { MAYBE_ABORT; $$ = $1; printf("message field: %s\n", str($$)); }
+              | field             { MAYBE_ABORT; $$ = $1; }
               | reserved          { MAYBE_ABORT; $$ = nil; }
               | extensions        { MAYBE_ABORT; $$ = nil; }
-              | ';'               { MAYBE_ABORT; $$ = nil; printf("message field end: %s\n", str($$)); } ;
+              | ';'               { MAYBE_ABORT; $$ = nil; } ;
 
 
 message_block : message_field {
     MAYBE_ABORT;
     $$ = from_lists(1, $1);
-    printf("message_block: %s\n", str($$));
 }
               | message_block message_field {
     MAYBE_ABORT;
@@ -386,7 +383,7 @@ service : SERVICE identifier '{' service_body '}' {
 } ;
 
 
-top_level : message    { MAYBE_ABORT; $$ = tag(0, $1); printf("message: %s car(%d)\n", str($$), *(int*)car($$)); }
+top_level : message    { MAYBE_ABORT; $$ = tag(0, $1); }
           | enum       { MAYBE_ABORT; $$ = tag(1, $1); }
           | service    { MAYBE_ABORT; $$ = tag(3, $1); }
           | import     { MAYBE_ABORT; $$ = tag(4, $1); }
@@ -397,12 +394,10 @@ top_level : message    { MAYBE_ABORT; $$ = tag(0, $1); printf("message: %s car(%
 
 top_levels : %empty {
     MAYBE_ABORT;
-    printf("top_levels\n");
     $$ = from_lists(1, nil);
 }
            | top_levels top_level {
     MAYBE_ABORT;
-    printf("top_levels: %s + %s\n", str($1), str($2));
     $$ = cons($2, tlist, $1);
 } ;
 
@@ -411,7 +406,6 @@ s : syntax top_levels {
     MAYBE_ABORT;
     $$ = $2;
     *result = $$;
-    printf("final result: %s = %p\n", str($$), $$);
 } ;
 
 %%

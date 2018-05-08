@@ -117,15 +117,12 @@ char* package_of(list ast) {
     while (!null(ast)) {
         if (listp(ast)) {
             elt = (list)car(ast);
-            printf("package_of looks at: %s\n", str(elt));
             if (!null(elt) && (ast_type_t)(*(int*)car(elt)) == ast_package_t) {
-                printf("package_of found def: %s\n", str(cdr(elt)));
                 return strdup((char*)car(cdr(elt)));
             }
         }
         ast = cdr(ast);
     }
-    printf("package_of didn't find any defs\n");
     return "";
 }
 
@@ -142,13 +139,11 @@ void qualify_name(list elt, size_t plen, char* package) {
 }
 
 list normalize_types(list ast) {
-    printf("normalize_types: %s\n", str(ast));
     char* package = package_of(ast);
     size_t plen = strlen(package);
     list elt;
     list result = ast;
 
-    printf("found package: %s\n", package);
     if (!plen) {
         return result;
     }
@@ -158,17 +153,14 @@ list normalize_types(list ast) {
             if (!null(elt)) {
                 switch ((ast_type_t)(*(int*)car(elt))) {
                     case ast_enum_t:
-                        printf("processing enum: %s\n", str(elt));
                         qualify_name(elt, plen, package);
                         break;
                     case ast_message_t:
-                        printf("processing message: %s\n", str(elt));
                         qualify_name(elt, plen, package);
                         // TODO(olegs): qualify embedded enums and messages
                         // TODO(olegs): resolve custom types
                         break;
                     default:
-                        printf("processing non-def: %s\n", str(elt));
                         break;
                 }
             }
@@ -220,7 +212,6 @@ int resolved_source(const char* path, list roots, char** result) {
         combined[root_len] = '/';
         strcpy(combined + root_len + 1, path);
         combined[path_len + root_len + 1] = '\0';
-        printf("probing: %s\n", combined);
         switch (exists_and_is_regular(&finfo, combined, mp)) {
             case 2:
                 retcode = 2;
@@ -250,7 +241,6 @@ void* parse_one_def_cleanup(
     }
     free(source);
     progress->thds_statuses[args->thread_id] = false;
-    printf("Parsed: %s, %p\n", str(args->result), args);
     apr_thread_exit(thd, APR_SUCCESS);
     return NULL;
 }
@@ -267,7 +257,6 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
         args->error = "Couldn't initialize scanner";
         return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
-    printf("looking for source: %s in %s\n", args->source, str(args->roots));
     // TODO(olegs): fprintf
     switch (resolved_source(args->source, args->roots, &source)) {
         case 2:
@@ -285,7 +274,7 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
         return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
     
-    yydebug = 1;
+    // yydebug = 1;
     YYLTYPE location;
     location.first_line = 0;
     location.last_line = 0;
@@ -294,7 +283,6 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     YYSTYPE value;
         
     yyset_in(h, yyscanner);
-    printf("Scanner set for %s\n", source);
 
     int status;
     yypstate* ps = yypstate_new();
