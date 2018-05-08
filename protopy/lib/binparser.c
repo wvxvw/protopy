@@ -215,12 +215,11 @@ size_t parse_length_delimited(parse_state* state) {
         // if the socket closes in the of receiving a message.
     }
     switch (state_get_field_type(state)) {
-        case vt_default:
         case vt_string:
-            state->out = PyBytes_FromStringAndSize(bytes, (Py_ssize_t)length);
+            state->out = PyUnicode_FromStringAndSize(bytes, (Py_ssize_t)length);
             break;
         case vt_bytes:
-            state->out = PyUnicode_FromStringAndSize(bytes, (Py_ssize_t)length);
+            state->out = PyBytes_FromStringAndSize(bytes, (Py_ssize_t)length);
             break;
         case vt_message:
             state->out = parse_message(

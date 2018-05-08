@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+import "foo/bar.proto";
+
+message Test {
+    int32 test = 2;
+
+    message InnerTest {
+        fixed64 test_fixed = 1;
+        message InnerInnerTest {
+            int64 test_long = 1;
+            int32 test_short = 20;
+        }
+    }
+
+    Test.InnerTest first_inner = 4;
+    Test.InnerTest.InnerInnerTest second_inner = 5;
+}
+
+message Test1 {
+    foo.Baz test = 2;
+}
+
+message Test2 {
+    int64 test = 2;
+}
