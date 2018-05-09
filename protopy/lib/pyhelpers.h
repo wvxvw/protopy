@@ -26,7 +26,7 @@ PyObject* py_method(char*);
 
 void print_obj(const char*, PyObject*);
 
-PyObject* str_to_pystr(char*);
+PyObject* str_to_pystr(char*, size_t);
 
 PyObject* int_to_pyint(int*);
 

@@ -132,7 +132,7 @@ extern int yydebug;
 
 union YYSTYPE
 {
-#line 37 "protopy.y" /* yacc.c:1909  */
+#line 35 "protopy.y" /* yacc.c:1909  */
 
     size_t keyword;
     int64_t index;

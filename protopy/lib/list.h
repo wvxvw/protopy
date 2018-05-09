@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <string.h>
 
+typedef unsigned char byte;
+
 typedef enum type {
     tint = 0,
     tstr = 1,
@@ -73,7 +75,11 @@ char* list_str(void*);
 
 size_t int_size(void*);
 
+size_t str_size(void*);
+
 void* int_dup(void*);
+
+void* str_dup(void*);
 
 extern list nil;
 
@@ -110,5 +116,13 @@ size_t rope_peek(list, char*, size_t);
 size_t rope_read(list, char*, size_t, list*);
 
 list sort_unique(list, list_cmp_f);
+
+byte* cstr_bytes(char*);
+
+list cons_str(char*, size_t, list);
+
+list cons_int(int, size_t, list);
+
+extern byte empty[2];
 
 #endif // LIST_H_

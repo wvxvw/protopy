@@ -9,7 +9,7 @@ list nil = NULL;
 
 elt_type types[] = {
     {"int",  int_str,  (size)int_size, free,         int_dup},
-    {"str",  str_str,  (size)strlen,   free,         (copier)strdup},
+    {"str",  str_str,  (size)str_size, free,         (copier)str_dup},
     {"list", list_str, (size)len,      (deleter)del, (copier)duplicate},
 };
 
@@ -19,6 +19,26 @@ list cons(void* elt, type_t elt_type, list old) {
     result->next = old;
     result->value = elt;
     return result;
+}
+
+list cons_int(int val, size_t s, list old) {
+    int* ival = malloc(int_size((void*)((long)val)));
+    *ival = val;
+    return cons(ival, tint, old);
+}
+
+list cons_str(char* val, size_t s, list old) {
+    byte* bval = malloc((s + 2) * sizeof(byte));
+    bval[0] = (byte)(s >> 8);
+    bval[1] = (byte)(s & 0xFF);
+    size_t i = 0;
+
+    while (i < s) {
+        bval[i + 2] = val[i];
+        i++;
+    }
+
+    return cons(bval, tstr, old);
 }
 
 void* car(list elts) {
@@ -50,8 +70,31 @@ bool null(list elts) {
 }
 
 void* int_dup(void* val) {
-    int* result = malloc(sizeof(int));
+    int* result = malloc(int_size(val));
     *result = *(int*)val;
+    return result;
+}
+
+// TODO(olegs): This should be const char*
+byte* cstr_bytes(char* cstr) {
+    size_t len = strlen(cstr);
+    byte* result = malloc((len + 2) * sizeof(byte));
+    result[0] = (byte)(len >> 8);
+    result[1] = (byte)(len & 0xFF);
+    memcpy(result + 2, cstr, len);
+    return result;
+}
+
+void* str_dup(void* val) {
+    size_t len = str_size(val);
+    byte* result = malloc((len + 2) * sizeof(byte));
+    byte* bval = (byte*)val;
+    size_t i = 0;
+
+    while (i < len + 2) {
+        result[i] = bval[i];
+        i++;
+    }
     return result;
 }
 
@@ -167,7 +210,7 @@ list from_strings(size_t n, ...) {
 
     for (i = 0; i < n; i++) {
         pval = va_arg(args, char*);
-        result = cons(strdup(pval), tstr, result);
+        result = cons_str(pval, strlen(pval), result);
     }
     va_end(args);
     
@@ -195,6 +238,11 @@ size_t int_size(void* val) {
     return sizeof(int);
 }
 
+size_t str_size(void* val) {
+    byte* buf = (byte*)val;
+    return (((size_t)buf[0]) << 8) | (size_t)buf[1];
+}
+
 char* mapconcat(mapconcat_fn_t fn, list elts, char* sep) {
     list chunks = nil;
     char* chunk;
@@ -207,7 +255,8 @@ char* mapconcat(mapconcat_fn_t fn, list elts, char* sep) {
         chunk = fn(elts);
         es = strlen(chunk);
         total += es + sep_len;
-        chunks = cons(chunk, tstr, chunks);
+        chunks = cons_str(chunk, es, chunks);
+        free(chunk);
         elts = cdr(elts);
     }
 
@@ -224,8 +273,8 @@ char* mapconcat(mapconcat_fn_t fn, list elts, char* sep) {
 
     while (!null(chunks)) {
         val = car(chunks);
-        strcpy(schunks + total, (char*)val);
-        total += strlen((char*)val);
+        strcpy(schunks + total, (char*)(val + 2));
+        total += str_size((byte*)val);
         strcpy(schunks + total, sep);
         total += sep_len;
         chunks = cdr(chunks);
@@ -238,9 +287,16 @@ char* to_str(list elts) {
     if (null(elts)) {
         return "nil";
     }
+    char* result;
+    size_t len;
+    
     switch (elts->t) {
         case tstr:
-            return (char*)car(elts);
+            len = str_size((byte*)car(elts));
+            result = malloc((len + 1) * sizeof(char));
+            memcpy(result, car(elts) + 2, len);
+            result[len] = '\0';
+            return result;
         case tint:
             return int_str(car(elts));
         case tlist:
@@ -290,13 +346,14 @@ char* str(list elts) {
     return schunks;
 }
 
-char* str_str(void* str) {
+char* str_str(void* bstr) {
     static const char alphabet[] = "0123456789abcdef";
-    size_t len = strlen((char*)str);
+    size_t len = str_size((byte*)bstr);
     size_t i, extras = 0;
-    char c;
+    unsigned char c;
     char* result;
     char* presult;
+    byte* str = ((byte*)bstr) + 2;
 
     for (i = len; i > 0; i--) {
         c = ((char*)str)[i - 1];
@@ -308,7 +365,7 @@ char* str_str(void* str) {
     presult = result = malloc(sizeof(char) * (len + extras + 3));
     *(presult++) = '"';
     for (i = 0; i < len; i++) {
-        c = ((char*)str)[i];
+        c = str[i];
         if (c < 32 || c > 126 || c == '"' || c == '\\') {
             *(presult++) = '\\';
             *(presult++) = 'x';
@@ -363,7 +420,7 @@ size_t rope_length(list elts) {
         return 0;
     }
     if (elts->t == tstr) {
-        result = strlen((char*)car(elts));
+        result = str_size((byte*)car(elts));
     } else {
         result = rope_length((list)car(elts));
     }
@@ -373,23 +430,23 @@ size_t rope_length(list elts) {
 size_t rope_peek(list elts, char* buf, size_t buff_size) {
     size_t fill = 0;
     size_t chunk_size = 0;
-    char* chunk;
+    byte* chunk;
 
     if (null(elts)) {
         return 0;
     }
     
     if (elts->t == tstr) {
-        chunk = (char*)car(elts);
-        chunk_size = strlen(chunk);
+        chunk = (byte*)car(elts);
+        chunk_size = str_size(chunk);
         if (chunk_size < buff_size) {
-            strcpy(buf, chunk);
+            memcpy(buf, chunk + 2, chunk_size);
             fill = chunk_size + rope_peek(
                 cdr(elts),
                 buf + chunk_size,
                 buff_size - chunk_size);
         } else {
-            strncpy(buf, chunk, buff_size);
+            memcpy(buf, chunk + 2, buff_size);
             fill = buff_size;
         }
     } else {
@@ -407,7 +464,7 @@ size_t rope_peek(list elts, char* buf, size_t buff_size) {
 size_t rope_read(list elts, char* buf, size_t buff_size, list* rest) {
     size_t fill = 0;
     size_t chunk_size = 0;
-    char* chunk;
+    byte* chunk;
 
     if (null(elts)) {
         *rest = nil;
@@ -415,10 +472,10 @@ size_t rope_read(list elts, char* buf, size_t buff_size, list* rest) {
     }
     
     if (elts->t == tstr) {
-        chunk = (char*)car(elts);
-        chunk_size = strlen(chunk);
+        chunk = (byte*)car(elts);
+        chunk_size = str_size(chunk);
         if (chunk_size <= buff_size) {
-            strcpy(buf, chunk);
+            memcpy(buf, chunk + 2, chunk_size);
             fill = chunk_size + rope_read(
                 cdr(elts),
                 buf + chunk_size,
@@ -428,9 +485,9 @@ size_t rope_read(list elts, char* buf, size_t buff_size, list* rest) {
                 *rest = nil;
             }
         } else {
-            strncpy(buf, chunk, buff_size);
+            memcpy(buf, chunk + 2, buff_size);
             fill = buff_size;
-            char* remaineder = strdup(chunk + buff_size);
+            byte* remaineder = cstr_bytes((char*)(chunk + 2 + buff_size));
             *rest = cons(remaineder, tstr, duplicate(cdr(elts)));
         }
     } else {
@@ -494,3 +551,5 @@ list sort_unique(list elts, list_cmp_f cmp) {
     b = duplicate(elts);
     return merge_unique(a, b, cmp);
 }
+
+byte empty[2] = {0, 0};

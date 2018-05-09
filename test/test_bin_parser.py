@@ -6,6 +6,8 @@ import pkg_resources
 import asyncio
 import os
 
+import pytest
+
 
 def generate_proto_binary(source, text):
     proto_roots = pkg_resources.resource_filename(

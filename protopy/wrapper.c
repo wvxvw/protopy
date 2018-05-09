@@ -160,7 +160,8 @@ proto_def_parse_produce(list sources, list roots, size_t nthreads, apr_pool_t* m
             parse_def_args_t* def_args = thds_args[i];
 
             def_args->roots = roots;
-            def_args->source = (char*)car(sources);
+            def_args->source = (char*)((byte*)car(sources) + 2);
+            printf("will look for source: %s\n", def_args->source);
             def_args->error = "";
             def_args->result = NULL;
             def_args->thread_id = i;
@@ -199,7 +200,7 @@ proto_def_parse_produce(list sources, list roots, size_t nthreads, apr_pool_t* m
                     result,
                     thds_args[i]->source,
                     strlen(thds_args[i]->source),
-                    normalize_types(thds_args[i]->result));
+                    normalize_messages(normalize_types(thds_args[i]->result)));
             } else if (null(sources) || all_threads_busy(&progress)) {
                 apr_sleep(100);
             }
@@ -263,7 +264,7 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     Py_BEGIN_ALLOW_THREADS;
 
     parsed_defs = proto_def_parse_produce(
-        cons(source, tstr, nil),
+        cons_str(source, strlen(source), nil),
         roots,
         (size_t)nthreads,
         mp);

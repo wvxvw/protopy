@@ -222,6 +222,7 @@ size_t parse_length_delimited(parse_state* state) {
             state->out = PyBytes_FromStringAndSize(bytes, (Py_ssize_t)length);
             break;
         case vt_message:
+            printf("parsing sub-message\n");
             state->out = parse_message(
                 state,
                 bytes,
@@ -304,9 +305,10 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
     size_t j = 0;
     PyObject* dict = PyDict_New();
     
-    state->in = cons(strdup(bytes), tstr, nil);
+    state->in = cons_str(bytes, len, nil);
 
     while (i < len) {
+        printf("parsing message field: %s\n", str(state->in));
         j = parse(state);
         if (j == 0) {
             // TODO(olegs): We finished earlier than expected, need to

@@ -40,4 +40,6 @@ char* unqote(char*);
 
 list normalize_types(list);
 
+list normalize_messages(list);
+
 #endif // DEFPARSER_H_

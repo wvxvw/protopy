@@ -21,9 +21,7 @@ void yyerror(YYLTYPE *locp, void* scanner, list* result, char const *msg) {
 }
 
 list tag(int t, list body) {
-    int* val = malloc(sizeof(int));
-    *val = t;
-    return cons(val, tint, body);
+    return cons_int(t, 1, body);
 }
 
 #define MAYBE_ABORT                             \
@@ -106,7 +104,7 @@ do {                                            \
 
 %%
 
-string_literal : STRING_LITERAL { MAYBE_ABORT; $$ = from_strings(1, $1); } ;
+string_literal : STRING_LITERAL { MAYBE_ABORT; $$ = cons_str($1, strlen($1), nil); } ;
 
 import_kind : WEAK { MAYBE_ABORT; $$ = 1; }
             | PUBLIC { MAYBE_ABORT; $$ = 2; }
@@ -116,15 +114,21 @@ import_kind : WEAK { MAYBE_ABORT; $$ = 1; }
 import : IMPORT import_kind string_literal ';' { MAYBE_ABORT; $$ = $3; } ;
 
 
-package_name : identifier { MAYBE_ABORT; $$ = from_strings(1, $1); }
+package_name : identifier {
+    MAYBE_ABORT;
+    $$ = cons_str($1, strlen($1), nil);
+    printf("package name: %s\n", str($$));
+}
              | package_name '.' identifier {
     MAYBE_ABORT;
-    $$ = cons($3, tstr, $1);
+    $$ = cons_str($3, strlen($3), $1);
 } ;
 
 package : PACKAGE package_name ';' {
     MAYBE_ABORT;
-    $$ = cons(mapconcat(to_str, $2, "."), tstr, nil);
+    char* pname = mapconcat(to_str, $2, ".");
+    $$ = cons_str(pname, strlen(pname), nil);
+    printf("package name concatenated: %s -> %s -> %s\n", str($2), pname, str($$));
     del($2);
 } ;
 
@@ -132,10 +136,13 @@ package : PACKAGE package_name ';' {
 syntax : SYNTAX '=' string_literal ';' { MAYBE_ABORT; $$ = NULL; } ;
 
 
-user_type : IDENTIFIER { MAYBE_ABORT; $$ = from_strings(1, $1); }
+user_type : IDENTIFIER {
+    MAYBE_ABORT;
+    $$ = cons_str($1, strlen($1), nil);
+}
           | user_type '.' IDENTIFIER  {
     MAYBE_ABORT;
-    $$ = cons($3, tstr, $1);
+    $$ = cons_str($3, strlen($3), $1);
 } ;
 
 
@@ -153,7 +160,10 @@ built_in_type : BOOL     { MAYBE_ABORT; $$ = "bool";       }
               | UINT64   { MAYBE_ABORT; $$ = "uint64";     } ;
 
 
-type : built_in_type { MAYBE_ABORT; $$ = from_strings(1, $1); }
+type : built_in_type {
+     MAYBE_ABORT;
+     $$ = cons_str($1, strlen($1), nil);
+}
      | user_type { $$ = reverse($$); } ;
 
 
@@ -217,7 +227,8 @@ field : field_label type identifier '=' positive_int field_options ';' {
     MAYBE_ABORT;
     char* tname = mapconcat(to_str, $2, ".");
     list pos = from_ints(1, $5);
-    $$ = tag(7, cons(tname, tstr, cons($3, tstr, pos)));
+    list idf = cons_str($3, strlen($3), pos);
+    $$ = tag(7, cons_str(tname, strlen(tname), idf));
     del($2);
 } ;
 
@@ -225,7 +236,8 @@ oneof_field : type identifier '=' positive_int field_options ';' {
     MAYBE_ABORT;
     char* tname = mapconcat(to_str, $1, ".");
     list pos = from_ints(1, $4);
-    $$ = tag(7, cons(tname, tstr, cons($2, tstr, pos)));
+    list idf = cons_str($2, strlen($2), pos);
+    $$ = tag(7, cons_str(tname, strlen(tname), idf));
     del($1);
 } ;
 
@@ -239,7 +251,10 @@ oneof_fields : oneof_field {
 } ;
 
 
-oneof : ONEOF identifier '{' oneof_fields '}' { MAYBE_ABORT; $$ = tag(6, cons($2, tstr, $4)); } ;
+oneof : ONEOF identifier '{' oneof_fields '}' {
+    MAYBE_ABORT;
+    $$ = tag(6, cons_str($2, strlen($2), $4));
+} ;
 
 
 key_type : INT32    { MAYBE_ABORT; $$ = 0;  }
@@ -281,16 +296,16 @@ reserved_body : ranges | reserved_strings ;
 reserved : RESERVED reserved_body { MAYBE_ABORT; $$ = NULL; } ;
 
 
-option_name_parts : identifier { MAYBE_ABORT; $$ = from_strings(1, $1); }
+option_name_parts : identifier { MAYBE_ABORT; $$ = cons_str($1, strlen($1), nil); }
                   | option_name_parts identifier {
     MAYBE_ABORT;
-    $$ = cons($2, tstr, $1);
+    $$ = cons_str($2, strlen($2), $1);
 } ;
 
 
 option_name : '(' option_name_parts ')' '.' option_name_parts {
     MAYBE_ABORT;
-    $$ = cons($5, tstr, $2);
+    $$ = cons($5, tlist, $2);
 }
             | option_name_parts ;
 
@@ -304,9 +319,9 @@ enum_value_options : enum_value_option
 
 enum_field : identifier '=' positive_int '[' enum_value_options ']' {
     MAYBE_ABORT;
-    $$ = from_strings(1, $1);
+    $$ = cons_str($1, strlen($1), nil);
 }
-           | identifier '=' positive_int { MAYBE_ABORT; $$ = from_strings(1, $1); }
+           | identifier '=' positive_int { MAYBE_ABORT; $$ = cons_str($1, strlen($1), nil); }
            | OPTION option_name '=' literal { MAYBE_ABORT; $$ = NULL; } ;
 
 
@@ -316,7 +331,7 @@ enum_fields : enum_field { MAYBE_ABORT; $$ = from_lists(1, $1); }
 
 enum : ENUM identifier '{' enum_fields '}' {
     MAYBE_ABORT;
-    $$ = cons(from_strings(1, $2), tstr, $4);
+    $$ = cons(cons_str($2, strlen($2), nil), tlist, $4);
 } ;
 
 
@@ -324,7 +339,7 @@ extensions : EXTENSIONS range { MAYBE_ABORT; $$ = NULL; } ;
 
 
 message_field : enum
-              | message
+              | message           { MAYBE_ABORT; $$ = tag(0, $1); }
               | oneof
               | OPTION option_def { MAYBE_ABORT; $$ = nil; }
               | map_field         { MAYBE_ABORT; $$ = nil; }
@@ -346,7 +361,7 @@ message_block : message_field {
 
 message : MESSAGE identifier '{' message_block '}' {
     MAYBE_ABORT;
-    $$ = cons($2, tstr, $4);
+    $$ = cons_str($2, strlen($2), $4);
 } ;
 
 
@@ -360,7 +375,7 @@ rpc_options : '{' OPTION option_def '}' { MAYBE_ABORT; $$ = NULL; }
 
 rpc : identifier '(' rpc_type ')' RETURNS '(' rpc_type ')' rpc_options {
     MAYBE_ABORT;
-    $$ = from_strings(1, $1);
+    $$ = cons_str($1, strlen($1), nil);
 } ;
 
 
@@ -379,7 +394,7 @@ service_body : %empty { MAYBE_ABORT; $$ = from_lists(1, nil); }
 
 service : SERVICE identifier '{' service_body '}' {
     MAYBE_ABORT;
-    $$ = cons($2, tstr, $4);
+    $$ = cons_str($2, strlen($2), $4);
 } ;
 
 

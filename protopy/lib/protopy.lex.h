@@ -459,7 +459,7 @@ extern int yylex \
 #undef YY_DECL
 #endif
 
-#line 98 "protopy.l"
+#line 100 "protopy.l"
 
 
 #line 466 "protopy.lex.h"

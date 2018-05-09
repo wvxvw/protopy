@@ -98,12 +98,16 @@ char* unquote(char* input) {
 list imports(list ast) {
     list elt;
     list result = nil;
+    byte* pname;
+    char* pname_unquoted;
 
     while (!null(ast)) {
         if (listp(ast)) {
             elt = (list)car(ast);
             if (!null(elt) && (ast_type_t)(*(int*)car(elt)) == ast_import_t) {
-                result = cons(unquote(strdup(car(cdr(elt)))), tstr, result);
+                pname = str_dup((byte*)car(cdr(elt)));
+                pname_unquoted = unquote((char*)(pname + 2));
+                result = cons_str(pname_unquoted, strlen(pname_unquoted), result);
             }
         }
         ast = cdr(ast);
@@ -111,36 +115,39 @@ list imports(list ast) {
     return result;
 }
 
-char* package_of(list ast) {
+byte* package_of(list ast) {
     list elt;
 
     while (!null(ast)) {
         if (listp(ast)) {
             elt = (list)car(ast);
             if (!null(elt) && (ast_type_t)(*(int*)car(elt)) == ast_package_t) {
-                return strdup((char*)car(cdr(elt)));
+                return str_dup((byte*)car(cdr(elt)));
             }
         }
         ast = cdr(ast);
     }
-    return "";
+    return empty;
 }
 
-void qualify_name(list elt, size_t plen, char* package) {
+void qualify_name(list elt, size_t plen, byte* package) {
     list cell = cdr(elt);
-    char* new_name = malloc(plen + 2 + strlen(cell->value));
-    strcpy(new_name, package);
-    new_name[plen] = ':';
-    strcpy(new_name + plen + 1, cell->value);
-    size_t vlen = strlen(cell->value);
-    new_name[vlen + plen + 1] = '\0';
+    size_t nn_len = plen + 1 + str_size(cell->value);
+    byte* new_name = malloc((nn_len + 2) * sizeof(byte));
+    size_t vlen = str_size(cell->value);
+
+    new_name[0] = (byte)(nn_len >> 8);
+    new_name[1] = (byte)(nn_len & 0xFF);
+    memcpy(new_name + 2, package + 2, plen);
+    new_name[plen + 2] = ':';
+    memcpy(new_name + plen + 3, cell->value + 2, vlen);
     free(cell->value);
     cell->value = new_name;
 }
 
 list normalize_types(list ast) {
-    char* package = package_of(ast);
-    size_t plen = strlen(package);
+    byte* package = package_of(ast);
+    size_t plen = str_size(package);
     list elt;
     list result = ast;
 
@@ -170,6 +177,89 @@ list normalize_types(list ast) {
     return result;
 }
 
+list rename_message(list original, byte* new_name) {
+    list fields = duplicate(cdr(cdr(original)));
+    int* tag = malloc(sizeof(int));
+    *tag = 0;
+    list renamed = cons(tag, tint, cons(new_name, tstr, fields));
+    return renamed;
+}
+
+list inner_messages(list message, list* normalized, byte* prefix) {
+    byte* message_type = (byte*)car(message);
+    size_t mt_len = str_size(message_type);
+    list processed = cons_str((char*)(message_type + 2), mt_len, from_ints(1, 0));
+    list fields = cdr(message);
+    list field;
+    ast_type_t field_type;
+    byte* subtype;
+    byte* subname;
+    size_t sublen;
+    size_t prefix_length = str_size(prefix);
+    size_t new_len;
+    list result = nil;
+
+    while (!null(fields)) {
+        field = (list)car(fields);
+        field_type = *(int*)car(field);
+
+        switch (field_type) {
+            case ast_message_t:
+                subname = (byte*)car(cdr(field));
+                sublen = str_size(subname);
+                new_len = prefix_length + sublen + 1;
+                subtype = malloc((new_len + 2) * sizeof(byte));
+                subtype[0] = (byte)(new_len >> 8);
+                subtype[1] = (byte)(new_len & 0xFF);
+                memcpy(subtype + 2, prefix + 2, prefix_length);
+                subtype[prefix_length + 2] = '.';
+                memcpy(subtype + prefix_length + 3, subname + 2, sublen);
+                result = cons(rename_message(field, subtype), tlist, result);
+                break;
+            default:
+                processed = cons(duplicate(field), tlist, processed);
+        }
+        fields = cdr(fields);
+    }
+    *normalized = nreverse(processed);
+    return result;
+}
+
+list normalize_messages(list ast) {
+    list result = nil;
+    list node;
+    ast_type_t node_type;
+    list normalized;
+    byte* message_type;
+    list inner;
+    list inner_normalized;
+
+    while (!null(ast)) {
+        if (null((list)car(ast))) {
+            ast = cdr(ast);
+            continue;
+        }
+        node = (list)car(ast);
+        node_type = (ast_type_t)(*(int*)car(node));
+        switch (node_type) {
+            case ast_message_t:
+                message_type = (byte*)car(cdr(node));
+                inner = inner_messages(cdr(node), &normalized, message_type);
+                result = cons(normalized, tlist, result);
+                inner_normalized = normalize_messages(inner);
+                while (!null(inner_normalized)) {
+                    result = cons(car(inner_normalized), tlist, result);
+                    inner_normalized = cdr(inner_normalized);
+                }
+                break;
+            default:
+                result = cons(node, tlist, result);
+        }
+        ast = cdr(ast);
+    }
+    return result;
+}
+
 int exists_and_is_regular(apr_finfo_t* finfo, const char* path, apr_pool_t* mp) {
     if (apr_stat(finfo, path, APR_FINFO_TYPE, mp) != APR_SUCCESS) {
         return 1;
@@ -180,7 +270,7 @@ int exists_and_is_regular(apr_finfo_t* finfo, const char* path, apr_pool_t* mp) 
     return 0;
 }
 
-int resolved_source(const char* path, list roots, char** result) {
+int resolved_source(const char* path, list roots, byte** result) {
     apr_finfo_t finfo;
     apr_pool_t* mp = NULL;
     int retcode = 0;
@@ -194,25 +284,27 @@ int resolved_source(const char* path, list roots, char** result) {
             retcode = 2;
             goto cleanup;
         case 0:
-            *result = strdup(path);
+            *result = cstr_bytes((char*)path);
             goto cleanup;
     }
     
-    char* combined = NULL;
-    char* root;
+    byte* combined = NULL;
+    byte* root;
     size_t path_len = strlen(path);
     size_t root_len;
 
     while (!null(roots)) {
         free(combined);
-        root = (char*)car(roots);
-        root_len = strlen(root);
-        combined = malloc(path_len + root_len + 2);
-        strcpy(combined, root);
-        combined[root_len] = '/';
-        strcpy(combined + root_len + 1, path);
-        combined[path_len + root_len + 1] = '\0';
-        switch (exists_and_is_regular(&finfo, combined, mp)) {
+        root = (byte*)car(roots);
+        root_len = str_size(root);
+        combined = malloc(path_len + root_len + 4);
+        memcpy(combined + 2, root + 2, root_len);
+        combined[0] = (byte)((path_len + root_len) >> 8);
+        combined[1] = (byte)((path_len + root_len) & 0xFF);
+        combined[root_len + 2] = '/';
+        memcpy(combined + root_len + 3, path, path_len);
+        combined[path_len + root_len + 3] = '\0';
+        switch (exists_and_is_regular(&finfo, ((char*)combined) + 2, mp)) {
             case 2:
                 retcode = 2;
                 goto cleanup;
@@ -231,7 +323,7 @@ cleanup:
 void* parse_one_def_cleanup(
     FILE* h,
     apr_thread_t* thd,
-    char* source,
+    byte* source,
     parsing_progress_t* progress,
     parse_def_args_t* args,
     apr_status_t rv) {
@@ -249,7 +341,7 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     parse_def_args_t* args = iargs;
     parsing_progress_t* progress = args->progress;
     FILE* h = NULL;
-    char* source = NULL;
+    byte* source = NULL;
 
     yyscan_t yyscanner;
     int res = yylex_init(&yyscanner);
@@ -260,20 +352,20 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     // TODO(olegs): fprintf
     switch (resolved_source(args->source, args->roots, &source)) {
         case 2:
-            args->error = "Must be regular file '%s', %d";  // source res
+            args->error = "Must be regular file '%s'";  // source res
             return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
         case 1:
-            args->error = "Couldn't find '%s', %d";  // source res
+            args->error = "Couldn't find '%s'";  // source res
             return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
-    
-    h = fopen(source, "rb");
+
+    h = fopen((char*)(source + 2), "rb");
     if (h == NULL) {
         // TODO(olegs): fprintf
         args->error = "Couldn't find '%s', %d";  // source res
         return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
-    
+
     // yydebug = 1;
     YYLTYPE location;
     location.first_line = 0;
@@ -295,7 +387,8 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
             yyscanner,
             &args->result);
     } while (status == YYPUSH_MORE);
-
+    
+    printf("parsed def: %s\n", str(args->result));
     yypstate_delete(ps);
     yylex_destroy(yyscanner);
 

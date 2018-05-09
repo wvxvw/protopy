@@ -22,11 +22,12 @@ int main(int argc, char** argv) {
         *elt = i;
         elts = cons(elt, tint, elts);
     }
-    printf("some string: %s\n", str_str("Whatever 123"));
-    printf("some escapes: %s\n", str_str("Whatever\n\x05\r\t 123"));
+    printf("some string: %s\n", str_str(cstr_bytes("Whatever 123")));
+    printf("some escapes: %s\n", str_str(cstr_bytes("Whatever\n\x05\r\t 123")));
     printf("some int: %s\n", int_str(&foo));
     printf("some list: %s\n", str(elts));
     elts2 = from_strings(5, "a", "b", "c", "d", "e"); // duplicate(elts);
+    printf("elts2: %s\n", str(elts2));
     printf("nreversed(elts): %s\n", str(nreverse(elts)));
     printf("reversed(elts2): %s\n", str(reverse(elts2)));
     printf("elts2 after reversed(elts2): %s\n", str(elts2));
@@ -49,7 +50,7 @@ int main(int argc, char** argv) {
     printf("lists: %s\n", str(lists));
 
     printf("append(ints, strings): %s\n", str(append(ints, strings)));
-
+    
     list rope = nil;
     i = 10;
 
@@ -67,7 +68,7 @@ int main(int argc, char** argv) {
     };
     
     while (i--) {
-        rope = cons(rope, tlist, cons(strdup(test_strings[9 - i]), tstr, nil));
+        rope = cons(rope, tlist, cons(cstr_bytes(test_strings[9 - i]), tstr, nil));
     }
     printf("rope created: %s\n", str(rope));
     printf("rope_length(rope): %zu\n", rope_length(rope));
@@ -80,6 +81,7 @@ int main(int argc, char** argv) {
     read = rope_read(rope, buf, 15, &rest_rope);
     printf("rope_read(rope): %zu, %s, %s\n", read, buf, str(rest_rope));
     del(rope);
+
     printf("del(rope): %s\n", str(rest_rope));
     read = rope_read(rest_rope, buf, 15, &rope);
     printf("rope_read(rest_rope): %zu, %s, %s\n", read, buf, str(rope));
@@ -96,5 +98,13 @@ int main(int argc, char** argv) {
     del(repeated_nines);
     del(sorted_ints);
     printf("sorted after deleting sources: %s\n", str(sorted));
+
+    list weird_characters = cons_str(
+        "\x10{\"\t\t\xd7\x11\x00\x00\x00\x00\x00\x00*\x07\x08\x87\x01\xa0\x01\xb1\x05",
+        22,
+        nil);
+
+    weird_characters = cons_str("abc\000abc", 7, weird_characters);
+    printf("weird_characters: %s\n", str(weird_characters));
     return 0;
 }

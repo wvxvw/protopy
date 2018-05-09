@@ -78,9 +78,7 @@ void yyerror(YYLTYPE *locp, void* scanner, list* result, char const *msg) {
 }
 
 list tag(int t, list body) {
-    int* val = malloc(sizeof(int));
-    *val = t;
-    return cons(val, tint, body);
+    return cons_int(t, 1, body);
 }
 
 #define MAYBE_ABORT                             \
@@ -90,7 +88,7 @@ do {                                            \
     }                                           \
 } while (0)
 
-#line 94 "protopy.tab.c" /* yacc.c:339  */
+#line 92 "protopy.tab.c" /* yacc.c:339  */
 
 # ifndef YY_NULLPTR
 #  if defined __cplusplus && 201103L <= __cplusplus
@@ -212,7 +210,7 @@ extern int yydebug;
 
 union YYSTYPE
 {
-#line 37 "protopy.y" /* yacc.c:355  */
+#line 35 "protopy.y" /* yacc.c:355  */
 
     size_t keyword;
     int64_t index;
@@ -220,7 +218,7 @@ union YYSTYPE
     list object;
     void* nothing;
 
-#line 224 "protopy.tab.c" /* yacc.c:355  */
+#line 222 "protopy.tab.c" /* yacc.c:355  */
 };
 
 typedef union YYSTYPE YYSTYPE;
@@ -260,7 +258,7 @@ void yypstate_delete (yypstate *ps);
 
 /* Copy the second part of user declarations.  */
 
-#line 264 "protopy.tab.c" /* yacc.c:358  */
+#line 262 "protopy.tab.c" /* yacc.c:358  */
 
 #ifdef short
 # undef short
@@ -539,21 +537,21 @@ static const yytype_uint8 yytranslate[] =
   /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_uint16 yyrline[] =
 {
-       0,   109,   109,   111,   112,   113,   116,   119,   120,   125,
-     132,   135,   136,   142,   143,   144,   145,   146,   147,   148,
-     149,   150,   151,   152,   153,   156,   157,   160,   161,   162,
-     163,   164,   165,   166,   167,   168,   169,   170,   171,   172,
-     173,   174,   175,   176,   177,   178,   179,   180,   181,   183,
-     183,   186,   187,   190,   192,   193,   194,   195,   198,   201,
-     204,   204,   207,   207,   210,   211,   212,   213,   216,   224,
-     233,   236,   242,   245,   246,   247,   248,   249,   250,   251,
-     252,   253,   254,   255,   256,   259,   263,   264,   267,   268,
-     271,   271,   274,   275,   278,   278,   281,   284,   285,   291,
-     295,   298,   301,   302,   305,   309,   310,   313,   314,   317,
-     323,   326,   327,   328,   329,   330,   331,   332,   333,   334,
-     337,   341,   347,   353,   354,   357,   358,   361,   367,   368,
-     369,   373,   374,   380,   386,   387,   388,   389,   390,   391,
-     392,   395,   399,   405
+       0,   107,   107,   109,   110,   111,   114,   117,   122,   127,
+     136,   139,   143,   149,   150,   151,   152,   153,   154,   155,
+     156,   157,   158,   159,   160,   163,   167,   170,   171,   172,
+     173,   174,   175,   176,   177,   178,   179,   180,   181,   182,
+     183,   184,   185,   186,   187,   188,   189,   190,   191,   193,
+     193,   196,   197,   200,   202,   203,   204,   205,   208,   211,
+     214,   214,   217,   217,   220,   221,   222,   223,   226,   235,
+     245,   248,   254,   260,   261,   262,   263,   264,   265,   266,
+     267,   268,   269,   270,   271,   274,   278,   279,   282,   283,
+     286,   286,   289,   290,   293,   293,   296,   299,   300,   306,
+     310,   313,   316,   317,   320,   324,   325,   328,   329,   332,
+     338,   341,   342,   343,   344,   345,   346,   347,   348,   349,
+     352,   356,   362,   368,   369,   372,   373,   376,   382,   383,
+     384,   388,   389,   395,   401,   402,   403,   404,   405,   406,
+     407,   410,   414,   420
 };
 #endif
 
@@ -1701,813 +1699,836 @@ yyreduce:
   switch (yyn)
     {
         case 2:
-#line 109 "protopy.y" /* yacc.c:1646  */
-    { MAYBE_ABORT; (yyval.object) = from_strings(1, (yyvsp[0].string)); }
-#line 1707 "protopy.tab.c" /* yacc.c:1646  */
+#line 107 "protopy.y" /* yacc.c:1646  */
+    { MAYBE_ABORT; (yyval.object) = cons_str((yyvsp[0].string), strlen((yyvsp[0].string)), nil); }
+#line 1705 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 3:
-#line 111 "protopy.y" /* yacc.c:1646  */
+#line 109 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = 1; }
-#line 1713 "protopy.tab.c" /* yacc.c:1646  */
+#line 1711 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 4:
-#line 112 "protopy.y" /* yacc.c:1646  */
+#line 110 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = 2; }
-#line 1719 "protopy.tab.c" /* yacc.c:1646  */
+#line 1717 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 5:
-#line 113 "protopy.y" /* yacc.c:1646  */
+#line 111 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = 0; }
-#line 1725 "protopy.tab.c" /* yacc.c:1646  */
+#line 1723 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 6:
-#line 116 "protopy.y" /* yacc.c:1646  */
+#line 114 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = (yyvsp[-1].object); }
-#line 1731 "protopy.tab.c" /* yacc.c:1646  */
+#line 1729 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 7:
-#line 119 "protopy.y" /* yacc.c:1646  */
-    { MAYBE_ABORT; (yyval.object) = from_strings(1, (yyvsp[0].string)); }
-#line 1737 "protopy.tab.c" /* yacc.c:1646  */
+#line 117 "protopy.y" /* yacc.c:1646  */
+    {
+    MAYBE_ABORT;
+    (yyval.object) = cons_str((yyvsp[0].string), strlen((yyvsp[0].string)), nil);
+    printf("package name: %s\n", str((yyval.object)));
+}
+#line 1739 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 8:
-#line 120 "protopy.y" /* yacc.c:1646  */
+#line 122 "protopy.y" /* yacc.c:1646  */
     {
     MAYBE_ABORT;
-    (yyval.object) = cons((yyvsp[0].string), tstr, (yyvsp[-2].object));
+    (yyval.object) = cons_str((yyvsp[0].string), strlen((yyvsp[0].string)), (yyvsp[-2].object));
 }
-#line 1746 "protopy.tab.c" /* yacc.c:1646  */
+#line 1748 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 9:
-#line 125 "protopy.y" /* yacc.c:1646  */
+#line 127 "protopy.y" /* yacc.c:1646  */
     {
     MAYBE_ABORT;
-    (yyval.object) = cons(mapconcat(to_str, (yyvsp[-1].object), "."), tstr, nil);
+    char* pname = mapconcat(to_str, (yyvsp[-1].object), ".");
+    (yyval.object) = cons_str(pname, strlen(pname), nil);
+    printf("package name concatenated: %s -> %s -> %s\n", str((yyvsp[-1].object)), pname, str((yyval.object)));
     del((yyvsp[-1].object));
 }
-#line 1756 "protopy.tab.c" /* yacc.c:1646  */
+#line 1760 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 10:
-#line 132 "protopy.y" /* yacc.c:1646  */
+#line 136 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.nothing) = NULL; }
-#line 1762 "protopy.tab.c" /* yacc.c:1646  */
+#line 1766 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 11:
-#line 135 "protopy.y" /* yacc.c:1646  */
-    { MAYBE_ABORT; (yyval.object) = from_strings(1, (yyvsp[0].string)); }
-#line 1768 "protopy.tab.c" /* yacc.c:1646  */
+#line 139 "protopy.y" /* yacc.c:1646  */
+    {
+    MAYBE_ABORT;
+    (yyval.object) = cons_str((yyvsp[0].string), strlen((yyvsp[0].string)), nil);
+}
+#line 1775 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 12:
-#line 136 "protopy.y" /* yacc.c:1646  */
+#line 143 "protopy.y" /* yacc.c:1646  */
     {
     MAYBE_ABORT;
-    (yyval.object) = cons((yyvsp[0].string), tstr, (yyvsp[-2].object));
+    (yyval.object) = cons_str((yyvsp[0].string), strlen((yyvsp[0].string)), (yyvsp[-2].object));
 }
-#line 1777 "protopy.tab.c" /* yacc.c:1646  */
+#line 1784 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 13:
-#line 142 "protopy.y" /* yacc.c:1646  */
+#line 149 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "bool";       }
-#line 1783 "protopy.tab.c" /* yacc.c:1646  */
+#line 1790 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 14:
-#line 143 "protopy.y" /* yacc.c:1646  */
+#line 150 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "fixed32";    }
-#line 1789 "protopy.tab.c" /* yacc.c:1646  */
+#line 1796 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 15:
-#line 144 "protopy.y" /* yacc.c:1646  */
+#line 151 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "fixed64";    }
-#line 1795 "protopy.tab.c" /* yacc.c:1646  */
+#line 1802 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 16:
-#line 145 "protopy.y" /* yacc.c:1646  */
+#line 152 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "int32";      }
-#line 1801 "protopy.tab.c" /* yacc.c:1646  */
+#line 1808 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 17:
-#line 146 "protopy.y" /* yacc.c:1646  */
+#line 153 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "int64";      }
-#line 1807 "protopy.tab.c" /* yacc.c:1646  */
+#line 1814 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 18:
-#line 147 "protopy.y" /* yacc.c:1646  */
+#line 154 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "sfixed32";   }
-#line 1813 "protopy.tab.c" /* yacc.c:1646  */
+#line 1820 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 19:
-#line 148 "protopy.y" /* yacc.c:1646  */
+#line 155 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "sfixed64";   }
-#line 1819 "protopy.tab.c" /* yacc.c:1646  */
+#line 1826 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 20:
-#line 149 "protopy.y" /* yacc.c:1646  */
+#line 156 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "sint32";     }
-#line 1825 "protopy.tab.c" /* yacc.c:1646  */
+#line 1832 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 21:
-#line 150 "protopy.y" /* yacc.c:1646  */
+#line 157 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "sint64";     }
-#line 1831 "protopy.tab.c" /* yacc.c:1646  */
+#line 1838 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 22:
-#line 151 "protopy.y" /* yacc.c:1646  */
+#line 158 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "string";     }
-#line 1837 "protopy.tab.c" /* yacc.c:1646  */
+#line 1844 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 23:
-#line 152 "protopy.y" /* yacc.c:1646  */
+#line 159 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "uint32";     }
-#line 1843 "protopy.tab.c" /* yacc.c:1646  */
+#line 1850 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 24:
-#line 153 "protopy.y" /* yacc.c:1646  */
+#line 160 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "uint64";     }
-#line 1849 "protopy.tab.c" /* yacc.c:1646  */
+#line 1856 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 25:
-#line 156 "protopy.y" /* yacc.c:1646  */
-    { MAYBE_ABORT; (yyval.object) = from_strings(1, (yyvsp[0].string)); }
-#line 1855 "protopy.tab.c" /* yacc.c:1646  */
+#line 163 "protopy.y" /* yacc.c:1646  */
+    {
+     MAYBE_ABORT;
+     (yyval.object) = cons_str((yyvsp[0].string), strlen((yyvsp[0].string)), nil);
+}
+#line 1865 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 26:
-#line 157 "protopy.y" /* yacc.c:1646  */
+#line 167 "protopy.y" /* yacc.c:1646  */
     { (yyval.object) = reverse((yyval.object)); }
-#line 1861 "protopy.tab.c" /* yacc.c:1646  */
+#line 1871 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 28:
-#line 161 "protopy.y" /* yacc.c:1646  */
+#line 171 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "enum";       }
-#line 1867 "protopy.tab.c" /* yacc.c:1646  */
+#line 1877 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 29:
-#line 162 "protopy.y" /* yacc.c:1646  */
+#line 172 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "extensions"; }
-#line 1873 "protopy.tab.c" /* yacc.c:1646  */
+#line 1883 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 30:
-#line 163 "protopy.y" /* yacc.c:1646  */
+#line 173 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "import";     }
-#line 1879 "protopy.tab.c" /* yacc.c:1646  */
+#line 1889 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 31:
-#line 164 "protopy.y" /* yacc.c:1646  */
+#line 174 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "message";    }
-#line 1885 "protopy.tab.c" /* yacc.c:1646  */
+#line 1895 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 32:
-#line 165 "protopy.y" /* yacc.c:1646  */
+#line 175 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "map";        }
-#line 1891 "protopy.tab.c" /* yacc.c:1646  */
+#line 1901 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 33:
-#line 166 "protopy.y" /* yacc.c:1646  */
+#line 176 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "oneof";      }
-#line 1897 "protopy.tab.c" /* yacc.c:1646  */
+#line 1907 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 34:
-#line 167 "protopy.y" /* yacc.c:1646  */
+#line 177 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "option";     }
-#line 1903 "protopy.tab.c" /* yacc.c:1646  */
+#line 1913 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 35:
-#line 168 "protopy.y" /* yacc.c:1646  */
+#line 178 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "optional";   }
-#line 1909 "protopy.tab.c" /* yacc.c:1646  */
+#line 1919 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 36:
-#line 169 "protopy.y" /* yacc.c:1646  */
+#line 179 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "package";    }
-#line 1915 "protopy.tab.c" /* yacc.c:1646  */
+#line 1925 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 37:
-#line 170 "protopy.y" /* yacc.c:1646  */
+#line 180 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "public";     }
-#line 1921 "protopy.tab.c" /* yacc.c:1646  */
+#line 1931 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 38:
-#line 171 "protopy.y" /* yacc.c:1646  */
+#line 181 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "required";   }
-#line 1927 "protopy.tab.c" /* yacc.c:1646  */
+#line 1937 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 39:
-#line 172 "protopy.y" /* yacc.c:1646  */
+#line 182 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "repeated";   }
-#line 1933 "protopy.tab.c" /* yacc.c:1646  */
+#line 1943 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 40:
-#line 173 "protopy.y" /* yacc.c:1646  */
+#line 183 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "reserved";   }
-#line 1939 "protopy.tab.c" /* yacc.c:1646  */
+#line 1949 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 41:
-#line 174 "protopy.y" /* yacc.c:1646  */
+#line 184 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "returns";    }
-#line 1945 "protopy.tab.c" /* yacc.c:1646  */
+#line 1955 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 42:
-#line 175 "protopy.y" /* yacc.c:1646  */
+#line 185 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "rpc";        }
-#line 1951 "protopy.tab.c" /* yacc.c:1646  */
+#line 1961 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 43:
-#line 176 "protopy.y" /* yacc.c:1646  */
+#line 186 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "service";    }
-#line 1957 "protopy.tab.c" /* yacc.c:1646  */
+#line 1967 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 44:
-#line 177 "protopy.y" /* yacc.c:1646  */
+#line 187 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "stream";     }
-#line 1963 "protopy.tab.c" /* yacc.c:1646  */
+#line 1973 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 45:
-#line 178 "protopy.y" /* yacc.c:1646  */
+#line 188 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "syntax";     }
-#line 1969 "protopy.tab.c" /* yacc.c:1646  */
+#line 1979 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 46:
-#line 179 "protopy.y" /* yacc.c:1646  */
+#line 189 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "to";         }
-#line 1975 "protopy.tab.c" /* yacc.c:1646  */
+#line 1985 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 47:
-#line 180 "protopy.y" /* yacc.c:1646  */
+#line 190 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "weak";       }
-#line 1981 "protopy.tab.c" /* yacc.c:1646  */
+#line 1991 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 48:
-#line 181 "protopy.y" /* yacc.c:1646  */
+#line 191 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.string) = "max";        }
-#line 1987 "protopy.tab.c" /* yacc.c:1646  */
+#line 1997 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 51:
-#line 186 "protopy.y" /* yacc.c:1646  */
+#line 196 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = from_ints(1, 1); }
-#line 1993 "protopy.tab.c" /* yacc.c:1646  */
+#line 2003 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 52:
-#line 187 "protopy.y" /* yacc.c:1646  */
+#line 197 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = from_ints(1, 0); }
-#line 1999 "protopy.tab.c" /* yacc.c:1646  */
+#line 2009 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 53:
-#line 190 "protopy.y" /* yacc.c:1646  */
+#line 200 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = (size_t)atoi((yyvsp[0].string)); }
-#line 2005 "protopy.tab.c" /* yacc.c:1646  */
+#line 2015 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 54:
-#line 192 "protopy.y" /* yacc.c:1646  */
+#line 202 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = from_ints(1, atoi((yyvsp[0].string))); }
-#line 2011 "protopy.tab.c" /* yacc.c:1646  */
+#line 2021 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 55:
-#line 193 "protopy.y" /* yacc.c:1646  */
+#line 203 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = from_ints(1, (yyvsp[0].index)); }
-#line 2017 "protopy.tab.c" /* yacc.c:1646  */
+#line 2027 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 58:
-#line 198 "protopy.y" /* yacc.c:1646  */
+#line 208 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.nothing) = NULL; }
-#line 2023 "protopy.tab.c" /* yacc.c:1646  */
+#line 2033 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 59:
-#line 201 "protopy.y" /* yacc.c:1646  */
+#line 211 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.nothing) = NULL; }
-#line 2029 "protopy.tab.c" /* yacc.c:1646  */
+#line 2039 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 64:
-#line 210 "protopy.y" /* yacc.c:1646  */
+#line 220 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = 1; }
-#line 2035 "protopy.tab.c" /* yacc.c:1646  */
+#line 2045 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 65:
-#line 211 "protopy.y" /* yacc.c:1646  */
+#line 221 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = 2; }
-#line 2041 "protopy.tab.c" /* yacc.c:1646  */
+#line 2051 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 66:
-#line 212 "protopy.y" /* yacc.c:1646  */
+#line 222 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = 3; }
-#line 2047 "protopy.tab.c" /* yacc.c:1646  */
+#line 2057 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 67:
-#line 213 "protopy.y" /* yacc.c:1646  */
+#line 223 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = 0; }
-#line 2053 "protopy.tab.c" /* yacc.c:1646  */
+#line 2063 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 68:
-#line 216 "protopy.y" /* yacc.c:1646  */
+#line 226 "protopy.y" /* yacc.c:1646  */
     {
     MAYBE_ABORT;
     char* tname = mapconcat(to_str, (yyvsp[-5].object), ".");
     list pos = from_ints(1, (yyvsp[-2].index));
-    (yyval.object) = tag(7, cons(tname, tstr, cons((yyvsp[-4].string), tstr, pos)));
+    list idf = cons_str((yyvsp[-4].string), strlen((yyvsp[-4].string)), pos);
+    (yyval.object) = tag(7, cons_str(tname, strlen(tname), idf));
     del((yyvsp[-5].object));
 }
-#line 2065 "protopy.tab.c" /* yacc.c:1646  */
+#line 2076 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 69:
-#line 224 "protopy.y" /* yacc.c:1646  */
+#line 235 "protopy.y" /* yacc.c:1646  */
     {
     MAYBE_ABORT;
     char* tname = mapconcat(to_str, (yyvsp[-5].object), ".");
     list pos = from_ints(1, (yyvsp[-2].index));
-    (yyval.object) = tag(7, cons(tname, tstr, cons((yyvsp[-4].string), tstr, pos)));
+    list idf = cons_str((yyvsp[-4].string), strlen((yyvsp[-4].string)), pos);
+    (yyval.object) = tag(7, cons_str(tname, strlen(tname), idf));
     del((yyvsp[-5].object));
 }
-#line 2077 "protopy.tab.c" /* yacc.c:1646  */
+#line 2089 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 70:
-#line 233 "protopy.y" /* yacc.c:1646  */
+#line 245 "protopy.y" /* yacc.c:1646  */
     {
     MAYBE_ABORT;
     (yyval.object) = cons((yyvsp[0].object), tlist, nil);
 }
-#line 2086 "protopy.tab.c" /* yacc.c:1646  */
+#line 2098 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 71:
-#line 236 "protopy.y" /* yacc.c:1646  */
+#line 248 "protopy.y" /* yacc.c:1646  */
     {
     MAYBE_ABORT;
     (yyval.object) = cons((yyvsp[0].object), tlist, (yyvsp[-1].object));
 }
-#line 2095 "protopy.tab.c" /* yacc.c:1646  */
-    break;
-
-  case 72:
-#line 242 "protopy.y" /* yacc.c:1646  */
-    { MAYBE_ABORT; (yyval.object) = tag(6, cons((yyvsp[-3].string), tstr, (yyvsp[-1].object))); }
-#line 2101 "protopy.tab.c" /* yacc.c:1646  */
-    break;
-
-  case 73:
-#line 245 "protopy.y" /* yacc.c:1646  */
-    { MAYBE_ABORT; (yyval.index) = 0;  }
 #line 2107 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
+  case 72:
+#line 254 "protopy.y" /* yacc.c:1646  */
+    {
+    MAYBE_ABORT;
+    (yyval.object) = tag(6, cons_str((yyvsp[-3].string), strlen((yyvsp[-3].string)), (yyvsp[-1].object)));
+}
+#line 2116 "protopy.tab.c" /* yacc.c:1646  */
+    break;
+
+  case 73:
+#line 260 "protopy.y" /* yacc.c:1646  */
+    { MAYBE_ABORT; (yyval.index) = 0;  }
+#line 2122 "protopy.tab.c" /* yacc.c:1646  */
+    break;
+
   case 74:
-#line 246 "protopy.y" /* yacc.c:1646  */
+#line 261 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = 1;  }
-#line 2113 "protopy.tab.c" /* yacc.c:1646  */
+#line 2128 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 75:
-#line 247 "protopy.y" /* yacc.c:1646  */
+#line 262 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = 2;  }
-#line 2119 "protopy.tab.c" /* yacc.c:1646  */
+#line 2134 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 76:
-#line 248 "protopy.y" /* yacc.c:1646  */
+#line 263 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = 3;  }
-#line 2125 "protopy.tab.c" /* yacc.c:1646  */
+#line 2140 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 77:
-#line 249 "protopy.y" /* yacc.c:1646  */
+#line 264 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = 4;  }
-#line 2131 "protopy.tab.c" /* yacc.c:1646  */
+#line 2146 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 78:
-#line 250 "protopy.y" /* yacc.c:1646  */
+#line 265 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = 5;  }
-#line 2137 "protopy.tab.c" /* yacc.c:1646  */
+#line 2152 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 79:
-#line 251 "protopy.y" /* yacc.c:1646  */
+#line 266 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = 6;  }
-#line 2143 "protopy.tab.c" /* yacc.c:1646  */
+#line 2158 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 80:
-#line 252 "protopy.y" /* yacc.c:1646  */
+#line 267 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = 7;  }
-#line 2149 "protopy.tab.c" /* yacc.c:1646  */
+#line 2164 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 81:
-#line 253 "protopy.y" /* yacc.c:1646  */
+#line 268 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = 8;  }
-#line 2155 "protopy.tab.c" /* yacc.c:1646  */
+#line 2170 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 82:
-#line 254 "protopy.y" /* yacc.c:1646  */
+#line 269 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = 9;  }
-#line 2161 "protopy.tab.c" /* yacc.c:1646  */
+#line 2176 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 83:
-#line 255 "protopy.y" /* yacc.c:1646  */
+#line 270 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = 10; }
-#line 2167 "protopy.tab.c" /* yacc.c:1646  */
+#line 2182 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 84:
-#line 256 "protopy.y" /* yacc.c:1646  */
+#line 271 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.index) = 11; }
-#line 2173 "protopy.tab.c" /* yacc.c:1646  */
+#line 2188 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 85:
-#line 260 "protopy.y" /* yacc.c:1646  */
+#line 275 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.nothing) = NULL; }
-#line 2179 "protopy.tab.c" /* yacc.c:1646  */
+#line 2194 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 86:
-#line 263 "protopy.y" /* yacc.c:1646  */
+#line 278 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.nothing) = NULL; }
-#line 2185 "protopy.tab.c" /* yacc.c:1646  */
+#line 2200 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 87:
-#line 264 "protopy.y" /* yacc.c:1646  */
+#line 279 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.nothing) = NULL; }
-#line 2191 "protopy.tab.c" /* yacc.c:1646  */
+#line 2206 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 88:
-#line 267 "protopy.y" /* yacc.c:1646  */
+#line 282 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.nothing) = NULL; }
-#line 2197 "protopy.tab.c" /* yacc.c:1646  */
+#line 2212 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 89:
-#line 268 "protopy.y" /* yacc.c:1646  */
+#line 283 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.nothing) = NULL; }
-#line 2203 "protopy.tab.c" /* yacc.c:1646  */
+#line 2218 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 91:
-#line 271 "protopy.y" /* yacc.c:1646  */
+#line 286 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.nothing) = NULL; }
-#line 2209 "protopy.tab.c" /* yacc.c:1646  */
+#line 2224 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 92:
-#line 274 "protopy.y" /* yacc.c:1646  */
+#line 289 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.nothing) = NULL; }
-#line 2215 "protopy.tab.c" /* yacc.c:1646  */
+#line 2230 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 93:
-#line 275 "protopy.y" /* yacc.c:1646  */
+#line 290 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.nothing) = NULL; }
-#line 2221 "protopy.tab.c" /* yacc.c:1646  */
+#line 2236 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 96:
-#line 281 "protopy.y" /* yacc.c:1646  */
+#line 296 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.nothing) = NULL; }
-#line 2227 "protopy.tab.c" /* yacc.c:1646  */
-    break;
-
-  case 97:
-#line 284 "protopy.y" /* yacc.c:1646  */
-    { MAYBE_ABORT; (yyval.object) = from_strings(1, (yyvsp[0].string)); }
-#line 2233 "protopy.tab.c" /* yacc.c:1646  */
-    break;
-
-  case 98:
-#line 285 "protopy.y" /* yacc.c:1646  */
-    {
-    MAYBE_ABORT;
-    (yyval.object) = cons((yyvsp[0].string), tstr, (yyvsp[-1].object));
-}
 #line 2242 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
-  case 99:
-#line 291 "protopy.y" /* yacc.c:1646  */
-    {
-    MAYBE_ABORT;
-    (yyval.object) = cons((yyvsp[0].object), tstr, (yyvsp[-3].object));
-}
-#line 2251 "protopy.tab.c" /* yacc.c:1646  */
+  case 97:
+#line 299 "protopy.y" /* yacc.c:1646  */
+    { MAYBE_ABORT; (yyval.object) = cons_str((yyvsp[0].string), strlen((yyvsp[0].string)), nil); }
+#line 2248 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
-  case 101:
-#line 298 "protopy.y" /* yacc.c:1646  */
-    { MAYBE_ABORT; (yyval.nothing) = NULL; }
+  case 98:
+#line 300 "protopy.y" /* yacc.c:1646  */
+    {
+    MAYBE_ABORT;
+    (yyval.object) = cons_str((yyvsp[0].string), strlen((yyvsp[0].string)), (yyvsp[-1].object));
+}
 #line 2257 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
-  case 104:
-#line 305 "protopy.y" /* yacc.c:1646  */
+  case 99:
+#line 306 "protopy.y" /* yacc.c:1646  */
     {
     MAYBE_ABORT;
-    (yyval.object) = from_strings(1, (yyvsp[-5].string));
+    (yyval.object) = cons((yyvsp[0].object), tlist, (yyvsp[-3].object));
 }
 #line 2266 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
-  case 105:
-#line 309 "protopy.y" /* yacc.c:1646  */
-    { MAYBE_ABORT; (yyval.object) = from_strings(1, (yyvsp[-2].string)); }
+  case 101:
+#line 313 "protopy.y" /* yacc.c:1646  */
+    { MAYBE_ABORT; (yyval.nothing) = NULL; }
 #line 2272 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
+  case 104:
+#line 320 "protopy.y" /* yacc.c:1646  */
+    {
+    MAYBE_ABORT;
+    (yyval.object) = cons_str((yyvsp[-5].string), strlen((yyvsp[-5].string)), nil);
+}
+#line 2281 "protopy.tab.c" /* yacc.c:1646  */
+    break;
+
+  case 105:
+#line 324 "protopy.y" /* yacc.c:1646  */
+    { MAYBE_ABORT; (yyval.object) = cons_str((yyvsp[-2].string), strlen((yyvsp[-2].string)), nil); }
+#line 2287 "protopy.tab.c" /* yacc.c:1646  */
+    break;
+
   case 106:
-#line 310 "protopy.y" /* yacc.c:1646  */
+#line 325 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = NULL; }
-#line 2278 "protopy.tab.c" /* yacc.c:1646  */
+#line 2293 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 107:
-#line 313 "protopy.y" /* yacc.c:1646  */
+#line 328 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = from_lists(1, (yyvsp[0].object)); }
-#line 2284 "protopy.tab.c" /* yacc.c:1646  */
-    break;
-
-  case 108:
-#line 314 "protopy.y" /* yacc.c:1646  */
-    { MAYBE_ABORT; (yyval.object) = cons((yyvsp[0].object), tlist, (yyvsp[-2].object)); }
-#line 2290 "protopy.tab.c" /* yacc.c:1646  */
-    break;
-
-  case 109:
-#line 317 "protopy.y" /* yacc.c:1646  */
-    {
-    MAYBE_ABORT;
-    (yyval.object) = cons(from_strings(1, (yyvsp[-3].string)), tstr, (yyvsp[-1].object));
-}
 #line 2299 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
-  case 110:
-#line 323 "protopy.y" /* yacc.c:1646  */
-    { MAYBE_ABORT; (yyval.nothing) = NULL; }
+  case 108:
+#line 329 "protopy.y" /* yacc.c:1646  */
+    { MAYBE_ABORT; (yyval.object) = cons((yyvsp[0].object), tlist, (yyvsp[-2].object)); }
 #line 2305 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
+  case 109:
+#line 332 "protopy.y" /* yacc.c:1646  */
+    {
+    MAYBE_ABORT;
+    (yyval.object) = cons(cons_str((yyvsp[-3].string), strlen((yyvsp[-3].string)), nil), tlist, (yyvsp[-1].object));
+}
+#line 2314 "protopy.tab.c" /* yacc.c:1646  */
+    break;
+
+  case 110:
+#line 338 "protopy.y" /* yacc.c:1646  */
+    { MAYBE_ABORT; (yyval.nothing) = NULL; }
+#line 2320 "protopy.tab.c" /* yacc.c:1646  */
+    break;
+
+  case 112:
+#line 342 "protopy.y" /* yacc.c:1646  */
+    { MAYBE_ABORT; (yyval.object) = tag(0, (yyvsp[0].object)); }
+#line 2326 "protopy.tab.c" /* yacc.c:1646  */
+    break;
+
   case 114:
-#line 329 "protopy.y" /* yacc.c:1646  */
+#line 344 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = nil; }
-#line 2311 "protopy.tab.c" /* yacc.c:1646  */
+#line 2332 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 115:
-#line 330 "protopy.y" /* yacc.c:1646  */
+#line 345 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = nil; }
-#line 2317 "protopy.tab.c" /* yacc.c:1646  */
+#line 2338 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 116:
-#line 331 "protopy.y" /* yacc.c:1646  */
+#line 346 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = (yyvsp[0].object); }
-#line 2323 "protopy.tab.c" /* yacc.c:1646  */
+#line 2344 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 117:
-#line 332 "protopy.y" /* yacc.c:1646  */
+#line 347 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = nil; }
-#line 2329 "protopy.tab.c" /* yacc.c:1646  */
+#line 2350 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 118:
-#line 333 "protopy.y" /* yacc.c:1646  */
+#line 348 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = nil; }
-#line 2335 "protopy.tab.c" /* yacc.c:1646  */
+#line 2356 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 119:
-#line 334 "protopy.y" /* yacc.c:1646  */
+#line 349 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = nil; }
-#line 2341 "protopy.tab.c" /* yacc.c:1646  */
+#line 2362 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 120:
-#line 337 "protopy.y" /* yacc.c:1646  */
+#line 352 "protopy.y" /* yacc.c:1646  */
     {
     MAYBE_ABORT;
     (yyval.object) = from_lists(1, (yyvsp[0].object));
 }
-#line 2350 "protopy.tab.c" /* yacc.c:1646  */
+#line 2371 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 121:
-#line 341 "protopy.y" /* yacc.c:1646  */
+#line 356 "protopy.y" /* yacc.c:1646  */
     {
     MAYBE_ABORT;
     (yyval.object) = cons((yyvsp[0].object), tlist, (yyvsp[-1].object));
 }
-#line 2359 "protopy.tab.c" /* yacc.c:1646  */
-    break;
-
-  case 122:
-#line 347 "protopy.y" /* yacc.c:1646  */
-    {
-    MAYBE_ABORT;
-    (yyval.object) = cons((yyvsp[-3].string), tstr, (yyvsp[-1].object));
-}
-#line 2368 "protopy.tab.c" /* yacc.c:1646  */
-    break;
-
-  case 123:
-#line 353 "protopy.y" /* yacc.c:1646  */
-    { MAYBE_ABORT; (yyval.object) = (yyvsp[0].object); }
-#line 2374 "protopy.tab.c" /* yacc.c:1646  */
-    break;
-
-  case 125:
-#line 357 "protopy.y" /* yacc.c:1646  */
-    { MAYBE_ABORT; (yyval.nothing) = NULL; }
 #line 2380 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
-  case 126:
-#line 358 "protopy.y" /* yacc.c:1646  */
-    { MAYBE_ABORT; (yyval.nothing) = NULL; }
-#line 2386 "protopy.tab.c" /* yacc.c:1646  */
-    break;
-
-  case 127:
-#line 361 "protopy.y" /* yacc.c:1646  */
+  case 122:
+#line 362 "protopy.y" /* yacc.c:1646  */
     {
     MAYBE_ABORT;
-    (yyval.object) = from_strings(1, (yyvsp[-8].string));
+    (yyval.object) = cons_str((yyvsp[-3].string), strlen((yyvsp[-3].string)), (yyvsp[-1].object));
 }
+#line 2389 "protopy.tab.c" /* yacc.c:1646  */
+    break;
+
+  case 123:
+#line 368 "protopy.y" /* yacc.c:1646  */
+    { MAYBE_ABORT; (yyval.object) = (yyvsp[0].object); }
 #line 2395 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
-  case 128:
-#line 367 "protopy.y" /* yacc.c:1646  */
-    { MAYBE_ABORT; (yyval.object) = nil; }
+  case 125:
+#line 372 "protopy.y" /* yacc.c:1646  */
+    { MAYBE_ABORT; (yyval.nothing) = NULL; }
 #line 2401 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
-  case 129:
-#line 368 "protopy.y" /* yacc.c:1646  */
-    { MAYBE_ABORT; (yyval.object) = (yyvsp[0].object); }
+  case 126:
+#line 373 "protopy.y" /* yacc.c:1646  */
+    { MAYBE_ABORT; (yyval.nothing) = NULL; }
 #line 2407 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
-  case 130:
-#line 369 "protopy.y" /* yacc.c:1646  */
+  case 127:
+#line 376 "protopy.y" /* yacc.c:1646  */
+    {
+    MAYBE_ABORT;
+    (yyval.object) = cons_str((yyvsp[-8].string), strlen((yyvsp[-8].string)), nil);
+}
+#line 2416 "protopy.tab.c" /* yacc.c:1646  */
+    break;
+
+  case 128:
+#line 382 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = nil; }
-#line 2413 "protopy.tab.c" /* yacc.c:1646  */
+#line 2422 "protopy.tab.c" /* yacc.c:1646  */
+    break;
+
+  case 129:
+#line 383 "protopy.y" /* yacc.c:1646  */
+    { MAYBE_ABORT; (yyval.object) = (yyvsp[0].object); }
+#line 2428 "protopy.tab.c" /* yacc.c:1646  */
+    break;
+
+  case 130:
+#line 384 "protopy.y" /* yacc.c:1646  */
+    { MAYBE_ABORT; (yyval.object) = nil; }
+#line 2434 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 131:
-#line 373 "protopy.y" /* yacc.c:1646  */
+#line 388 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = from_lists(1, nil); }
-#line 2419 "protopy.tab.c" /* yacc.c:1646  */
+#line 2440 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 132:
-#line 374 "protopy.y" /* yacc.c:1646  */
+#line 389 "protopy.y" /* yacc.c:1646  */
     {
     MAYBE_ABORT; 
     (yyval.object) = cons((yyvsp[0].object), tlist, (yyvsp[-1].object));
 }
-#line 2428 "protopy.tab.c" /* yacc.c:1646  */
-    break;
-
-  case 133:
-#line 380 "protopy.y" /* yacc.c:1646  */
-    {
-    MAYBE_ABORT;
-    (yyval.object) = cons((yyvsp[-3].string), tstr, (yyvsp[-1].object));
-}
-#line 2437 "protopy.tab.c" /* yacc.c:1646  */
-    break;
-
-  case 134:
-#line 386 "protopy.y" /* yacc.c:1646  */
-    { MAYBE_ABORT; (yyval.object) = tag(0, (yyvsp[0].object)); }
-#line 2443 "protopy.tab.c" /* yacc.c:1646  */
-    break;
-
-  case 135:
-#line 387 "protopy.y" /* yacc.c:1646  */
-    { MAYBE_ABORT; (yyval.object) = tag(1, (yyvsp[0].object)); }
 #line 2449 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
+  case 133:
+#line 395 "protopy.y" /* yacc.c:1646  */
+    {
+    MAYBE_ABORT;
+    (yyval.object) = cons_str((yyvsp[-3].string), strlen((yyvsp[-3].string)), (yyvsp[-1].object));
+}
+#line 2458 "protopy.tab.c" /* yacc.c:1646  */
+    break;
+
+  case 134:
+#line 401 "protopy.y" /* yacc.c:1646  */
+    { MAYBE_ABORT; (yyval.object) = tag(0, (yyvsp[0].object)); }
+#line 2464 "protopy.tab.c" /* yacc.c:1646  */
+    break;
+
+  case 135:
+#line 402 "protopy.y" /* yacc.c:1646  */
+    { MAYBE_ABORT; (yyval.object) = tag(1, (yyvsp[0].object)); }
+#line 2470 "protopy.tab.c" /* yacc.c:1646  */
+    break;
+
   case 136:
-#line 388 "protopy.y" /* yacc.c:1646  */
+#line 403 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = tag(3, (yyvsp[0].object)); }
-#line 2455 "protopy.tab.c" /* yacc.c:1646  */
+#line 2476 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 137:
-#line 389 "protopy.y" /* yacc.c:1646  */
+#line 404 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = tag(4, (yyvsp[0].object)); }
-#line 2461 "protopy.tab.c" /* yacc.c:1646  */
+#line 2482 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 138:
-#line 390 "protopy.y" /* yacc.c:1646  */
+#line 405 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = tag(5, (yyvsp[0].object)); }
-#line 2467 "protopy.tab.c" /* yacc.c:1646  */
+#line 2488 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 139:
-#line 391 "protopy.y" /* yacc.c:1646  */
+#line 406 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = nil; }
-#line 2473 "protopy.tab.c" /* yacc.c:1646  */
+#line 2494 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 140:
-#line 392 "protopy.y" /* yacc.c:1646  */
+#line 407 "protopy.y" /* yacc.c:1646  */
     { MAYBE_ABORT; (yyval.object) = nil; }
-#line 2479 "protopy.tab.c" /* yacc.c:1646  */
+#line 2500 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 141:
-#line 395 "protopy.y" /* yacc.c:1646  */
+#line 410 "protopy.y" /* yacc.c:1646  */
     {
     MAYBE_ABORT;
     (yyval.object) = from_lists(1, nil);
 }
-#line 2488 "protopy.tab.c" /* yacc.c:1646  */
+#line 2509 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 142:
-#line 399 "protopy.y" /* yacc.c:1646  */
+#line 414 "protopy.y" /* yacc.c:1646  */
     {
     MAYBE_ABORT;
     (yyval.object) = cons((yyvsp[0].object), tlist, (yyvsp[-1].object));
 }
-#line 2497 "protopy.tab.c" /* yacc.c:1646  */
+#line 2518 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
   case 143:
-#line 405 "protopy.y" /* yacc.c:1646  */
+#line 420 "protopy.y" /* yacc.c:1646  */
     {
     MAYBE_ABORT;
     (yyval.object) = (yyvsp[0].object);
     *result = (yyval.object);
 }
-#line 2507 "protopy.tab.c" /* yacc.c:1646  */
+#line 2528 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
 
-#line 2511 "protopy.tab.c" /* yacc.c:1646  */
+#line 2532 "protopy.tab.c" /* yacc.c:1646  */
       default: break;
     }
   /* User semantic actions sometimes alter yychar, and that requires
@@ -2745,5 +2766,5 @@ yypushreturn:
 #endif
   return yyresult;
 }
-#line 411 "protopy.y" /* yacc.c:1906  */
+#line 426 "protopy.y" /* yacc.c:1906  */
 

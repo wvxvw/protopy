@@ -7,4 +7,5 @@ message Baz {
         int32 choice_1 = 2;
         sint32 choice_2 = 3;
     }
+    int32 foo = 4;
 }
