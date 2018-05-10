@@ -57,10 +57,9 @@ PyObject* state_set_factory(PyObject* self, PyObject* args) {
     parse_state* state;
     PyObject* capsule;
     PyObject* pytype;
-    PyObject* descriptions;
     PyObject* factories;
 
-    if (!PyArg_ParseTuple(args, "OOOO", &capsule, &pytype, &descriptions, &factories)) {
+    if (!PyArg_ParseTuple(args, "OOO", &capsule, &pytype, &factories)) {
         return NULL;
     }
 
@@ -68,7 +67,6 @@ PyObject* state_set_factory(PyObject* self, PyObject* args) {
     if (state == NULL) {
         return NULL;
     }
-    state->description = descriptions;
     state->pytype = pytype;
     state->factories = factories;
 
@@ -81,50 +79,35 @@ int64_t state_get_available(parse_state* state) {
 
 size_t state_read(parse_state* state, char* buf, size_t n) {
     list into;
-    printf("before rope_read: %s\n", str(state->in));
     size_t result = rope_read(state->in, buf, n, &into);
     del(state->in);
     state->in = into;
-    printf("after rope_read: %s\n read: ", str(state->in));
-    size_t i = 0;
-    while (i < result) {
-        printf("%u ", (unsigned char)buf[i]);
-        i++;
-    }
-    printf("\n");
     return result;
 }
 
 PyObject* state_get_field_pytype(parse_state* state) {
     PyObject* key = Py_BuildValue("i", (int)state->field);
-    print_obj("key: %s\n", key);
     PyObject* container_factory = PyDict_GetItem(state->factories, state->pytype);
-    print_obj("container_factory: %s\n", container_factory);
     PyObject* tmap = PyTuple_GetItem(container_factory, 3);
-    print_obj("tmap: %s\n", tmap);
     return PyDict_GetItem(tmap, key);
 }
 
 vt_type_t state_get_field_type(parse_state* state) {
     PyObject* field_type = state_get_field_pytype(state);
-    print_obj("field_type: %s\n", field_type);
     PyObject* factory = PyDict_GetItem(state->factories, field_type);
-    print_obj("factory: %s\n", factory);
     if (factory == NULL) {
         factory = Py_None;
     }
     PyObject* types = PyImport_ImportModule("protopy.types");
-    print_obj("types: %s\n", types);
     PyObject* result = PyObject_CallMethod(types, "value_type", "OO", field_type, factory);
-    print_obj("result: %s\n", result);
     return (vt_type_t)PyLong_AsLong(result);
 }
 
-size_t parse_varint_impl(parse_state* state, int64_t value[2]) {
+size_t parse_varint_impl(parse_state* state, uint64_t value[2]) {
     // TODO(olegs): This can be made more efficient if we try to
     // pre-read more bytes.
     char* buf = alloca(sizeof(char) * 2);
-    char current;
+    unsigned char current;
     size_t bytes_read = 0;
     size_t read = 0;
     size_t index = 0;
@@ -132,15 +115,13 @@ size_t parse_varint_impl(parse_state* state, int64_t value[2]) {
     while (state_get_available(state) > 0 && read < 16) {
         bytes_read = state_read(state, buf, 1);
         if (bytes_read == 0) {
-            printf("parse_varint_impl: couldn't read more\n");
             return read;
         }
-        current = buf[0];
-        printf("parse_varint_impl: %zu, %zu\n", (size_t)current, read);
+        current = (unsigned char)buf[0];
         if (read == 7) {
             index = 1;
         }
-        value[index] |= ((current & 0x7F) << (read * 8));
+        value[index] |= ((current & 0x7F) << (read * 7));
         read++;
         if ((current >> 7) == 0) {
             return read;
@@ -149,11 +130,11 @@ size_t parse_varint_impl(parse_state* state, int64_t value[2]) {
     return 0;
 }
 
-size_t parse_zig_zag(parse_state* state, int64_t value[2], bool* is_neg) {
+size_t parse_zig_zag(parse_state* state, uint64_t value[2], bool* is_neg) {
     size_t parsed = parse_varint_impl(state, value);
     *is_neg = (value[0] & 1) == 1;
-    int64_t high = value[1];
-    int64_t low = value[0];
+    uint64_t high = value[1];
+    uint64_t low = value[0];
     low = ((high & 1) << 63) | (low >> 1);
     high >>= 1;
     value[0] = low;
@@ -166,7 +147,7 @@ bool is_signed_vt(vt_type_t vt) {
 }
 
 size_t parse_varint(parse_state* state) {
-    int64_t value[2] = { 0, 0 };
+    uint64_t value[2] = { 0, 0 };
     vt_type_t vt = state_get_field_type(state);
     bool sign = false;
     size_t parsed;
@@ -224,7 +205,7 @@ size_t parse_fixed_64(parse_state* state) {
 }
 
 size_t parse_length_delimited(parse_state* state) {
-    int64_t value[2] = { 0, 0 };
+    uint64_t value[2] = { 0, 0 };
     size_t parsed = parse_varint_impl(state, value);
     // No reason to care for high bits, we aren't expecting strings of
     // that length anyways.
@@ -233,6 +214,7 @@ size_t parse_length_delimited(parse_state* state) {
     // stack and allocate on heap, if above the threshold.
     char* bytes = alloca(sizeof(char) * length);
     size_t read = 0;
+    parse_state substate;
 
     while (read < length) {
         read += state_read(state, bytes + read, (size_t)length - read);
@@ -250,10 +232,8 @@ size_t parse_length_delimited(parse_state* state) {
             state->out = PyBytes_FromStringAndSize(bytes, (Py_ssize_t)length);
             break;
         case vt_message:
-            printf("parsing sub-message\n");
-            parse_state substate;
             substate.pos = 0;
-            substate.description = state->description;
+            substate.in = nil;
             substate.factories = state->factories;
             substate.pytype = state_get_field_pytype(state);
             
@@ -344,12 +324,10 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
     size_t i = 0;
     size_t j = 0;
     PyObject* dict = PyDict_New();
-    
-    state->in = cons_str(bytes, len, nil);
+
+    state->in = cons_str(bytes, len, state->in);
 
     while (i < len) {
-        printf("parsing message field: %s\n", str(state->in));
-        print_obj("for Python type: %s\n", state->pytype);
         j = parse(state);
         if (j == 0) {
             // TODO(olegs): We finished earlier than expected, need to
@@ -363,17 +341,15 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
     PyObject* ctor = PyTuple_GetItem(factory, 0);
     PyObject* result = PyObject_CallFunction(
         ctor,
-        "OOOO",
+        "OOO",
         state->pytype,
         state->factories,
-        state->description,
         dict);
     if (result == NULL) {
         del(state->in);
         return NULL;
     }
     state->out = result;
-    print_obj("Parsed message: %s\n", state->out);
     Py_INCREF(state->out);
     del(state->in);
     return result;
@@ -421,13 +397,12 @@ size_t select_handler(parse_state* state, parse_handler* handler) {
         *handler = backtrack;
         return 0;
     }
-    int64_t value[2] = { 0, 0 };
+    uint64_t value[2] = { 0, 0 };
     size_t parsed = parse_varint_impl(state, value);
     size_t wire_type = (size_t)(value[0] & 7);
 
     state->field = (size_t)(value[0] >> 3);
 
-    printf("selecting handler: %zu for: %zu\n", wire_type, state->field);
     switch (wire_type) {
         case 0:
             *handler = parse_varint;

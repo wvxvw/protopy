@@ -38,11 +38,6 @@ class BinParser:
         self.def_parser = DefParser(roots)
         self.state = None
 
-    def clone(self):
-        result = BinParser(self.roots, self.loop)
-        result.def_parser = self.def_parser
-        return result
-
     async def parse_chunk(self, reader):
         chunk = await reader.read()
         proto_parse(chunk, self.state)
@@ -55,16 +50,11 @@ class BinParser:
         state_set_factory(
             self.state,
             message,
-            # TODO(olegs): These two are the same, why do I need both of them?
-            self.def_parser.defs,
             self.def_parser.defs,
         )
         result = None
 
-        try:
-            while not state_ready(self.state):
-                await self.parse_chunk(reader)
-            result = state_result(self.state)
-        finally:
-            self.state = None
+        while not state_ready(self.state):
+            await self.parse_chunk(reader)
+        result = state_result(self.state)
         return result

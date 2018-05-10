@@ -49,7 +49,6 @@ typedef struct {
     size_t field;
     list in;
     PyObject* out;
-    PyObject* description;
     PyObject* factories;
     PyObject* pytype;
 } parse_state;

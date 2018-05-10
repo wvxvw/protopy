@@ -77,22 +77,12 @@ def find_desc(name, descriptions):
     raise ValueError("Cannot find definition of: {}".format(name))
 
 
-def tuple_from_dict(ftype, factories, descriptions, values):
+def tuple_from_dict(ftype, factories, values):
     _, ttype, fmapping, tmapping = factories[ftype]
     args = [None] * len(fmapping)
 
     for k, v in values.items():
-        t = tmapping[k]
-        if t in _builtin_types:
-            args[fmapping[k]] = v
-        else:
-            # TODO(olegs): This could be an enum or a list
-            args[fmapping[k]] = tuple_from_dict(
-                descriptions[t],
-                factories,
-                descriptions,
-                v,
-            )
+        args[fmapping[k]] = v
 
     return ttype(*args)
 
