@@ -81,23 +81,42 @@ int64_t state_get_available(parse_state* state) {
 
 size_t state_read(parse_state* state, char* buf, size_t n) {
     list into;
+    printf("before rope_read: %s\n", str(state->in));
     size_t result = rope_read(state->in, buf, n, &into);
     del(state->in);
     state->in = into;
+    printf("after rope_read: %s\n read: ", str(state->in));
+    size_t i = 0;
+    while (i < result) {
+        printf("%u ", (unsigned char)buf[i]);
+        i++;
+    }
+    printf("\n");
     return result;
 }
 
-vt_type_t state_get_field_type(parse_state* state) {
+PyObject* state_get_field_pytype(parse_state* state) {
     PyObject* key = Py_BuildValue("i", (int)state->field);
+    print_obj("key: %s\n", key);
     PyObject* container_factory = PyDict_GetItem(state->factories, state->pytype);
+    print_obj("container_factory: %s\n", container_factory);
     PyObject* tmap = PyTuple_GetItem(container_factory, 3);
-    PyObject* field_type = PyDict_GetItem(tmap, key);
+    print_obj("tmap: %s\n", tmap);
+    return PyDict_GetItem(tmap, key);
+}
+
+vt_type_t state_get_field_type(parse_state* state) {
+    PyObject* field_type = state_get_field_pytype(state);
+    print_obj("field_type: %s\n", field_type);
     PyObject* factory = PyDict_GetItem(state->factories, field_type);
+    print_obj("factory: %s\n", factory);
     if (factory == NULL) {
         factory = Py_None;
     }
     PyObject* types = PyImport_ImportModule("protopy.types");
+    print_obj("types: %s\n", types);
     PyObject* result = PyObject_CallMethod(types, "value_type", "OO", field_type, factory);
+    print_obj("result: %s\n", result);
     return (vt_type_t)PyLong_AsLong(result);
 }
 
@@ -113,9 +132,11 @@ size_t parse_varint_impl(parse_state* state, int64_t value[2]) {
     while (state_get_available(state) > 0 && read < 16) {
         bytes_read = state_read(state, buf, 1);
         if (bytes_read == 0) {
+            printf("parse_varint_impl: couldn't read more\n");
             return read;
         }
         current = buf[0];
+        printf("parse_varint_impl: %zu, %zu\n", (size_t)current, read);
         if (read == 7) {
             index = 1;
         }
@@ -177,7 +198,7 @@ size_t parse_varint(parse_state* state) {
 
 size_t parse_fixed_64(parse_state* state) {
 #define FIXED_LENGTH 8
-    char* buf = alloca(FIXED_LENGTH * sizeof(char));
+    char* buf = alloca((FIXED_LENGTH + 1) * sizeof(char));
     size_t read = 0;
 
     // TODO(olegs): Same as other reads: this must know how to give up
@@ -185,11 +206,18 @@ size_t parse_fixed_64(parse_state* state) {
     while (read < FIXED_LENGTH) {
         read += state_read(state, buf, FIXED_LENGTH);
     }
+    unsigned long long val = 0;
+    read = FIXED_LENGTH + 1;
+    // ntohl only takes up to 32 bits
+    while (read > 0) {
+        read--;
+        val <<= 8;
+        val |= (unsigned long long)(unsigned char)buf[read];
+    }
     if (state_get_field_type(state) == vt_fixed64) {
-        // TODO(olegs): I'm not sure about the endiannes.
-        state->out = PyLong_FromUnsignedLongLong((uint64_t)(*buf));
+        state->out = PyLong_FromUnsignedLongLong(val);
     } else {
-        state->out = PyLong_FromLongLong((int64_t)(*buf));
+        state->out = PyLong_FromLongLong((long long)val);
     }
     return FIXED_LENGTH;
 #undef FIXED_LENGTH
@@ -223,8 +251,14 @@ size_t parse_length_delimited(parse_state* state) {
             break;
         case vt_message:
             printf("parsing sub-message\n");
+            parse_state substate;
+            substate.pos = 0;
+            substate.description = state->description;
+            substate.factories = state->factories;
+            substate.pytype = state_get_field_pytype(state);
+            
             state->out = parse_message(
-                state,
+                &substate,
                 bytes,
                 length);
             break;
@@ -261,11 +295,17 @@ size_t parse_fixed_32(parse_state* state) {
     while (read < FIXED_LENGTH) {
         read += state_read(state, buf, FIXED_LENGTH);
     }
+    unsigned long val = 0;
+    read = FIXED_LENGTH + 1;
+    while (read > 0) {
+        read--;
+        val <<= 8;
+        val |= (unsigned long)(unsigned char)buf[read];
+    }
     if (state_get_field_type(state) == vt_fixed32) {
-        // TODO(olegs): I'm not sure about the endiannes.
-        state->out = PyLong_FromUnsignedLong((uint64_t)(*buf));
+        state->out = PyLong_FromUnsignedLong(val);
     } else {
-        state->out = PyLong_FromLong((int64_t)(*buf));
+        state->out = PyLong_FromLong(val);
     }
     return FIXED_LENGTH;
 #undef FIXED_LENGTH
@@ -309,6 +349,7 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
 
     while (i < len) {
         printf("parsing message field: %s\n", str(state->in));
+        print_obj("for Python type: %s\n", state->pytype);
         j = parse(state);
         if (j == 0) {
             // TODO(olegs): We finished earlier than expected, need to
@@ -332,6 +373,7 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
         return NULL;
     }
     state->out = result;
+    print_obj("Parsed message: %s\n", state->out);
     Py_INCREF(state->out);
     del(state->in);
     return result;
@@ -385,6 +427,7 @@ size_t select_handler(parse_state* state, parse_handler* handler) {
 
     state->field = (size_t)(value[0] >> 3);
 
+    printf("selecting handler: %zu for: %zu\n", wire_type, state->field);
     switch (wire_type) {
         case 0:
             *handler = parse_varint;

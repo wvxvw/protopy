@@ -106,5 +106,13 @@ int main(int argc, char** argv) {
 
     weird_characters = cons_str("abc\000abc", 7, weird_characters);
     printf("weird_characters: %s\n", str(weird_characters));
+
+    list weird_rope = cons_str("abc\000\000\000cba", 9, nil);
+    list weird_remainder;
+    char* abc = malloc(4 * sizeof(char));
+    rope_read(weird_rope, abc, 3, &weird_remainder);
+    abc[3] = '\0';
+    printf("weird_remainder: %s\n", str(weird_remainder));
+    printf("abc: %s\n", abc);
     return 0;
 }

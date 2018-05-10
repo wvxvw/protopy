@@ -487,8 +487,10 @@ size_t rope_read(list elts, char* buf, size_t buff_size, list* rest) {
         } else {
             memcpy(buf, chunk + 2, buff_size);
             fill = buff_size;
-            byte* remaineder = cstr_bytes((char*)(chunk + 2 + buff_size));
-            *rest = cons(remaineder, tstr, duplicate(cdr(elts)));
+            *rest = cons_str(
+                (char*)(chunk + 2 + buff_size),
+                chunk_size - buff_size,
+                duplicate(cdr(elts)));
         }
     } else {
         fill = rope_read((list)car(elts), buf, buff_size, rest);
