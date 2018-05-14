@@ -41,11 +41,11 @@
    return STRING_LITERAL;
 }
 
-[1-9][0-9]* {
+([1-9][0-9]*|0) {
   yylval->string = strdup(yytext);
   return POSINTEGER;
 }
-[-][1-9][0-9]* {
+([-][1-9][0-9]*|0) {
   yylval->string = strdup(yytext);
   return NEGINTEGER;
 }

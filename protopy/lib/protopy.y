@@ -98,7 +98,8 @@ do {                                            \
 
 %type <nothing> syntax option_def field_options_body assignment
                 map_field range_end range ranges reserved_strings
-                reserved_body reserved enum_value_option extensions rpc_options;
+                reserved_body reserved enum_value_option extensions rpc_options
+                enum_value_options_group;
 
 %type <index> import_kind field_label key_type positive_int;
 
@@ -316,29 +317,49 @@ enum_value_option : option_name '=' literal { MAYBE_ABORT; $$ = NULL; } ;
 enum_value_options : enum_value_option
                    | enum_value_options ',' enum_value_option ;
 
+enum_value_options_group : %empty { $$ = NULL; }
+                         | '[' enum_value_options ']' { $$ = NULL; } ;
 
-enum_field : identifier '=' positive_int '[' enum_value_options ']' {
+
+enum_field : identifier '=' positive_int enum_value_options_group {
     MAYBE_ABORT;
-    $$ = cons_str($1, strlen($1), nil);
+    $$ = cons_str($1, strlen($1), cons_int($3, 1, nil));
 }
-           | identifier '=' positive_int { MAYBE_ABORT; $$ = cons_str($1, strlen($1), nil); }
-           | OPTION option_name '=' literal { MAYBE_ABORT; $$ = NULL; } ;
+           | OPTION option_name '=' literal {
+    MAYBE_ABORT;
+    $$ = nil;
+}
+           | ';' { $$ = nil; } ;
 
 
-enum_fields : enum_field { MAYBE_ABORT; $$ = from_lists(1, $1); }
-            | enum_fields ';' enum_field { MAYBE_ABORT; $$ = cons($3, tlist, $1); } ;
+enum_fields : enum_field {
+    MAYBE_ABORT;
+    if (!null($1)) {
+        $$ = from_lists(1, $1);
+    } else {
+        $$ = nil;
+    }
+}
+            | enum_fields enum_field {
+    MAYBE_ABORT;
+    if (!null($2)) {
+        $$ = cons($2, tlist, $1);
+    } else {
+        $$ = $1;
+    }
+} ;
 
 
 enum : ENUM identifier '{' enum_fields '}' {
     MAYBE_ABORT;
-    $$ = cons(cons_str($2, strlen($2), nil), tlist, $4);
+    $$ = cons_str($2, strlen($2), $4);
 } ;
 
 
 extensions : EXTENSIONS range { MAYBE_ABORT; $$ = NULL; } ;
 
 
-message_field : enum
+message_field : enum              { MAYBE_ABORT; $$ = tag(1, $1); }
               | message           { MAYBE_ABORT; $$ = tag(0, $1); }
               | oneof
               | OPTION option_def { MAYBE_ABORT; $$ = nil; }

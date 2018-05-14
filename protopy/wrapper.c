@@ -160,7 +160,12 @@ proto_def_parse_produce(list sources, list roots, size_t nthreads, apr_pool_t* m
             parse_def_args_t* def_args = thds_args[i];
 
             def_args->roots = roots;
-            def_args->source = (char*)((byte*)car(sources) + 2);
+            // TODO(olegs): This should be a separate function
+            size_t tocopy = str_size((byte*)car(sources));
+            char* source = malloc((tocopy + 1) * sizeof(char));
+            memcpy(source, (char*)car(sources) + 2, tocopy);
+            source[tocopy] = '\0';
+            def_args->source = source;
             printf("will look for source: %s\n", def_args->source);
             def_args->error = "";
             def_args->result = NULL;

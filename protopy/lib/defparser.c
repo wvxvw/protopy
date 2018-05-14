@@ -177,10 +177,19 @@ list normalize_types(list ast) {
     return result;
 }
 
-list rename_message(list original, byte* new_name) {
+list rename_message(list original, byte* new_name, ast_type_t field_type) {
     list fields = duplicate(cdr(cdr(original)));
     int* tag = malloc(sizeof(int));
-    *tag = 0;
+    switch (field_type) {
+        case ast_enum_t:
+            *tag = 1;
+            break;
+        case ast_message_t:
+            *tag = 0;
+            break;
+        default:
+            break;
+    }
     list renamed = cons(tag, tint, cons(new_name, tstr, fields));
     return renamed;
 }
@@ -204,6 +213,7 @@ list inner_messages(list message, list* normalized, byte* prefix) {
         field_type = *(int*)car(field);
 
         switch (field_type) {
+            case ast_enum_t:
             case ast_message_t:
                 subname = (byte*)car(cdr(field));
                 sublen = str_size(subname);
@@ -214,7 +224,7 @@ list inner_messages(list message, list* normalized, byte* prefix) {
                 memcpy(subtype + 2, prefix + 2, prefix_length);
                 subtype[prefix_length + 2] = '.';
                 memcpy(subtype + prefix_length + 3, subname + 2, sublen);
-                result = cons(rename_message(field, subtype), tlist, result);
+                result = cons(rename_message(field, subtype, field_type), tlist, result);
                 break;
             default:
                 processed = cons(duplicate(field), tlist, processed);
@@ -366,7 +376,7 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
         return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
 
-    // yydebug = 1;
+    yydebug = 1;
     YYLTYPE location;
     location.first_line = 0;
     location.last_line = 0;

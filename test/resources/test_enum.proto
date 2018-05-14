@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+import "foo/bar_enum.proto";
+
+enum TestEnum {
+    TEST_MEMBER_1 = 0;
+    TEST_MEMBER_2 = 2;
+    TEST_MEMBER_3 = 33;
+}
+
+message Test {
+    TestEnum test_1 = 2;
+    TestEnum test_2 = 3;
+
+    enum TestInnerEnum {
+        FOO = 0;
+        BAR = 11;
+    }
+
+    TestInnerEnum test_3 = 4;
+    foo.TestOuterEnum test_4 = 5;
+    foo.TestEnum.TestInnerEnum test_5 = 6;
+}

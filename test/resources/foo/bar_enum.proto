@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package foo;
+
+enum TestOuterEnum {
+    EGG = 0;
+    SPAM = 5;
+}
+
+message TestEnum {
+    enum TestInnerEnum {
+        EGG = 0;
+        SPAM = 5;
+    }
+}

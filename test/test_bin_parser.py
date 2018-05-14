@@ -88,3 +88,32 @@ def test_inner_message():
     print('result: {}'.format(result))
     assert result.test == 123
     assert False
+
+
+def test_enum():
+    roots, test_proto, content = generate_proto_binary(
+        'test_enum.proto',
+        b'''test_1: 33
+            test_2: 2
+            test_3: 0
+            test_4: 5
+        ''',
+    )
+    print('generated proto message: {}'.format(content))
+    loop = asyncio.get_event_loop()
+    reader = asyncio.StreamReader(loop=loop)
+    reader.feed_data(content)
+
+    async def finish():
+        asyncio.sleep(2)
+        reader.feed_eof()
+
+    async def gather_results():
+        parse_bin = BinParser(roots).parse(test_proto, 'Test', reader)
+        return await asyncio.gather(parse_bin, finish())
+
+    result = loop.run_until_complete(gather_results())[0]
+    print('result: {}'.format(result))
+    TestEnum = type(result.test_1)
+    assert result.test_1 == TestEnum['TEST_MEMBER_3']
+    assert False

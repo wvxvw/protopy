@@ -2,7 +2,7 @@
 
 from collections import namedtuple
 from functools import partial
-from enum import Enum
+from enum import IntEnum
 
 
 _builtin_types = {
@@ -55,6 +55,7 @@ def value_type(pbtype, factory):
     return result
 
 
+# TODO(olegs): This should happen in defparser
 def normalize_fields(fields):
     normalized_fields = []
     for f in fields:
@@ -68,7 +69,7 @@ def normalize_fields(fields):
 def find_desc(name, descriptions):
     for file, desc in descriptions.items():
         for d in desc:
-            if d and d[0] == 0:
+            if d and d[0] in [0, 1]:  # message or enum
                 tname = d[1]
                 fields = d[2:]
                 if tname == name or tname.replace(b':', b'.') == name:
@@ -77,8 +78,9 @@ def find_desc(name, descriptions):
     raise ValueError("Cannot find definition of: {}".format(name))
 
 
+# TODO(olegs): This and another x_from_dict can be rewritten in C.
 def tuple_from_dict(ftype, factories, values):
-    _, ttype, fmapping, tmapping = factories[ftype]
+    _, ttype, fmapping, _ = factories[ftype]
     args = [None] * len(fmapping)
 
     for k, v in values.items():
@@ -87,8 +89,11 @@ def tuple_from_dict(ftype, factories, values):
     return ttype(*args)
 
 
-def enum_from_dict(ttype, mmaping, parser, value):
-    return ttype(mmaping[value])
+def enum_from_dict(ftype, factories, value):
+    _, ttype, fmapping = factories[ftype]
+    result = ttype(fmapping[value])
+    print('generated enum member: {!r}'.format(result))
+    return result
 
 
 def extract_type_name(tname):
@@ -101,24 +106,28 @@ def extract_type_name(tname):
 
 
 def enum_desc(ftype, desc, factories, descriptions):
+    ftype = ftype.replace(b':', b'.')
     if ftype in factories:
         return
 
-    members = []
+    members = {}
     mmapping = {}
 
     for i, field in enumerate(desc):
         name = field[0].decode('utf-8')
         num = field[1]
 
-        members.append(name)
+        members[name] = i
         mmapping[num] = i
 
-    result = Enum(ftype.decode('utf-8'), members)
+    result = IntEnum(ftype.decode('utf-8'), members)
     factories[ftype] = tuple([enum_from_dict, result, mmapping])
 
 
 def message_desc(ftype, desc, factories, descriptions):
+    # TODO(olegs): We need to handle package <-> message name
+    # collision earlier
+    ftype = ftype.replace(b':', b'.')
     if ftype in factories:
         return
 
@@ -129,13 +138,14 @@ def message_desc(ftype, desc, factories, descriptions):
     fmapping = {}
 
     for i, field in enumerate(desc):
+        field_vt = field[0]
         field_name = field[2].decode('utf-8')
         field_type = field[1]
         field_num = field[3]
         if field_type not in _builtin_types:
             field_desc = factories.get(field_type, None)
             if not field_desc:
-                unresolved[field_name] = field_type, field_num
+                unresolved[field_name] = field_type, field_num, field_vt
 
         fields[field_name] = field_type, field_num
         fields_list.append(field_name)
@@ -147,13 +157,21 @@ def message_desc(ftype, desc, factories, descriptions):
     result.__module__ = module
     factories[ftype] = result
 
-    for field_name, (field_type, field_num) in unresolved.items():
-        message_desc(
-            field_type,
-            find_desc(field_type, descriptions),
-            factories,
-            descriptions,
-        )
+    for field_name, (field_type, field_num, field_vt) in unresolved.items():
+        if field_vt == 0:
+            message_desc(
+                field_type,
+                find_desc(field_type, descriptions),
+                factories,
+                descriptions,
+            )
+        elif field_vt == 1:
+            enum_desc(
+                field_type,
+                find_desc(field_type, descriptions),
+                factories,
+                descriptions,
+            )
 
     factories[ftype] = tuple([tuple_from_dict, result, fmapping, tmapping])
 
@@ -161,6 +179,7 @@ def message_desc(ftype, desc, factories, descriptions):
 def create_descriptors(descriptions):
     factories = {}
 
+    print('descriptions: {}'.format(descriptions))
     for file, desc in descriptions.items():
         for d in desc:
             if d:
@@ -169,6 +188,13 @@ def create_descriptors(descriptions):
                     message_desc(
                         tname,
                         normalize_fields(fields),
+                        factories,
+                        descriptions,
+                    )
+                elif rtype == 1:
+                    enum_desc(
+                        tname,
+                        fields,
                         factories,
                         descriptions,
                     )

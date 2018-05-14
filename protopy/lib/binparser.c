@@ -95,11 +95,14 @@ PyObject* state_get_field_pytype(parse_state* state) {
 vt_type_t state_get_field_type(parse_state* state) {
     PyObject* field_type = state_get_field_pytype(state);
     PyObject* factory = PyDict_GetItem(state->factories, field_type);
+    print_obj("looking for factory for: %s\n", field_type);
     if (factory == NULL) {
         factory = Py_None;
+        print_obj("factories looked like: %s\n", state->factories);
     }
     PyObject* types = PyImport_ImportModule("protopy.types");
     PyObject* result = PyObject_CallMethod(types, "value_type", "OO", field_type, factory);
+    print_obj("calling PyLong_AsLong: %s\n", result);
     return (vt_type_t)PyLong_AsLong(result);
 }
 
@@ -157,10 +160,12 @@ size_t parse_varint(parse_state* state) {
     } else {
         parsed = parse_varint_impl(state, value);
     }
-    PyObject* low = PyLong_FromUnsignedLongLong(value[0]);
+    // TODO(olegs): We probably need to decref all of the below...
+    printf("calling PyLong_FromUnsignedLongLong: %llu\n", (unsigned long long)value[0]);
+    PyObject* low = PyLong_FromUnsignedLongLong((unsigned long long)value[0]);
     
     if (value[1] > 0) {
-        PyObject* high = PyLong_FromUnsignedLongLong(value[1]);
+        PyObject* high = PyLong_FromUnsignedLongLong((unsigned long long)value[1]);
         PyObject* shift = PyLong_FromLong(64L);
         PyObject* high_shifted = PyNumber_Lshift(high, shift);
         state->out = PyNumber_Or(low, high_shifted);
@@ -171,8 +176,22 @@ size_t parse_varint(parse_state* state) {
         state->out = PyNumber_Negative(state->out);
     }
     if (vt == vt_enum) {
-        // TODO(olegs): We'd need to find an enum instance for
-        // corresponding to this number.
+        printf("identified enum: %lu\n", value[0]);
+        PyObject* enum_type = state_get_field_pytype(state);
+        print_obj("Python type was: %s\n", enum_type);
+        PyObject* factory = PyDict_GetItem(
+            state->factories,
+            enum_type);
+        print_obj("Found factory: %s\n", factory);
+        PyObject* ctor = PyTuple_GetItem(factory, 0);
+        PyObject* result = PyObject_CallFunction(
+            ctor,
+            "OOO",
+            enum_type,
+            state->factories,
+            state->out);
+        state->out = result;
+        printf("enum successfully created\n");
     }
     return parsed;
 }
@@ -324,6 +343,7 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
     size_t i = 0;
     size_t j = 0;
     PyObject* dict = PyDict_New();
+    PyObject* key;
 
     state->in = cons_str(bytes, len, state->in);
 
@@ -335,10 +355,13 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
             break;
         }
         i += j;
-        PyDict_SetItem(dict, PyLong_FromLong((long)state->field), state->out);
+        printf("calling PyLong_FromLong(state->field): %lu\n", (unsigned long)state->field);
+        key = PyLong_FromUnsignedLong((unsigned long)state->field);
+        PyDict_SetItem(dict, key, state->out);
     }
     PyObject* factory = PyDict_GetItem(state->factories, state->pytype);
     PyObject* ctor = PyTuple_GetItem(factory, 0);
+    PyErr_Print();
     PyObject* result = PyObject_CallFunction(
         ctor,
         "OOO",
