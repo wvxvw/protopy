@@ -117,3 +117,38 @@ def test_enum():
     TestEnum = type(result.test_1)
     assert result.test_1 == TestEnum['TEST_MEMBER_3']
     assert False
+
+
+def test_repeated():
+    roots, test_proto, content = generate_proto_binary(
+        'test_repeated.proto',
+        b'''simple_repeats: {
+            some_ints: [1, -1, 2, -2, 3, -3]
+        }
+        multiple_repeats: {
+            some_fixed: [1, -1, 2, -2, 3, -3]
+            some_strings: ["foo", "bar", "\x01weird\x10"]
+        }
+        multiple_oneof: {
+            some_fixed: [123456789, 987654321]
+            some_strings: [""]
+        }
+        ''',
+    )
+    print('generated proto message: {}'.format(content))
+    loop = asyncio.get_event_loop()
+    reader = asyncio.StreamReader(loop=loop)
+    reader.feed_data(content)
+
+    async def finish():
+        asyncio.sleep(2)
+        reader.feed_eof()
+
+    async def gather_results():
+        parse_bin = BinParser(roots).parse(test_proto, 'Test', reader)
+        return await asyncio.gather(parse_bin, finish())
+
+    result = loop.run_until_complete(gather_results())[0]
+    print('result: {}'.format(result))
+    assert result.either_or.some_fixed == [123456789, 987654321]
+    assert False

@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+message TestSimple {
+    repeated sint32 some_ints = 2;
+}
+
+message TestMultiple {
+    repeated sfixed32 some_fixed = 3;
+    repeated string some_strings = 4;
+}
+
+message Test {
+    repeated TestSimple simple_repeats = 4;
+    repeated TestMultiple multiple_repeats = 1;
+    oneof either_or {
+        TestSimple simple_oneof = 2;
+        TestMultiple multiple_oneof = 3;
+    }
+}
