@@ -93,16 +93,35 @@ PyObject* state_get_field_pytype(parse_state* state) {
 }
 
 vt_type_t state_get_field_type(parse_state* state) {
+    if (PyList_CheckExact(state->pytype)) {
+        return vt_repeated;
+    }
     PyObject* field_type = state_get_field_pytype(state);
     PyObject* factory = PyDict_GetItem(state->factories, field_type);
-    print_obj("looking for factory for: %s\n", field_type);
     if (factory == NULL) {
         factory = Py_None;
-        print_obj("factories looked like: %s\n", state->factories);
     }
+    // TODO(olegs): We really need to do this just once, maybe at
+    // state initialization time.
     PyObject* types = PyImport_ImportModule("protopy.types");
     PyObject* result = PyObject_CallMethod(types, "value_type", "OO", field_type, factory);
-    print_obj("calling PyLong_AsLong: %s\n", result);
+    if (result == NULL) {
+        PyErr_Print();
+    }
+    return (vt_type_t)PyLong_AsLong(result);
+}
+
+vt_type_t state_get_field_repeated_type(parse_state* state) {
+    PyObject* inner = PyList_GetItem(state->pytype, 0);
+    PyObject* factory = PyDict_GetItem(state->factories, inner);
+    if (factory == NULL) {
+        factory = Py_None;
+    }
+    PyObject* types = PyImport_ImportModule("protopy.types");
+    PyObject* result = PyObject_CallMethod(types, "value_type", "OO", inner, factory);
+    if (result == NULL) {
+        PyErr_Print();
+    }
     return (vt_type_t)PyLong_AsLong(result);
 }
 
@@ -161,7 +180,6 @@ size_t parse_varint(parse_state* state) {
         parsed = parse_varint_impl(state, value);
     }
     // TODO(olegs): We probably need to decref all of the below...
-    printf("calling PyLong_FromUnsignedLongLong: %llu\n", (unsigned long long)value[0]);
     PyObject* low = PyLong_FromUnsignedLongLong((unsigned long long)value[0]);
     
     if (value[1] > 0) {
@@ -176,13 +194,10 @@ size_t parse_varint(parse_state* state) {
         state->out = PyNumber_Negative(state->out);
     }
     if (vt == vt_enum) {
-        printf("identified enum: %lu\n", value[0]);
         PyObject* enum_type = state_get_field_pytype(state);
-        print_obj("Python type was: %s\n", enum_type);
         PyObject* factory = PyDict_GetItem(
             state->factories,
             enum_type);
-        print_obj("Found factory: %s\n", factory);
         PyObject* ctor = PyTuple_GetItem(factory, 0);
         PyObject* result = PyObject_CallFunction(
             ctor,
@@ -191,7 +206,6 @@ size_t parse_varint(parse_state* state) {
             state->factories,
             state->out);
         state->out = result;
-        printf("enum successfully created\n");
     }
     return parsed;
 }
@@ -255,15 +269,21 @@ size_t parse_length_delimited(parse_state* state) {
             substate.in = nil;
             substate.factories = state->factories;
             substate.pytype = state_get_field_pytype(state);
-            
+            print_obj("message bytes: %s\n", PyBytes_FromStringAndSize(bytes, (Py_ssize_t)length));
             state->out = parse_message(
                 &substate,
                 bytes,
                 length);
             break;
         case vt_repeated:
+            substate.pos = 0;
+            substate.in = nil;
+            substate.field = state->field;
+            substate.factories = state->factories;
+            substate.pytype = state_get_field_pytype(state);
+            print_obj("repeated bytes: %s\n", PyBytes_FromStringAndSize(bytes, (Py_ssize_t)length));
             state->out = parse_repeated(
-                state,
+                &substate,
                 bytes,
                 length);
             break;
@@ -333,6 +353,8 @@ bool is_scalar(vt_type_t vt) {
     switch (vt) {
         case vt_repeated:
         case vt_message:
+        case vt_string:
+        case vt_bytes:
             return false;
         default:
             return true;
@@ -344,9 +366,12 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
     size_t j = 0;
     PyObject* dict = PyDict_New();
     PyObject* key;
+    PyObject* existing;
 
     state->in = cons_str(bytes, len, state->in);
 
+    print_obj("parse_message bytes: %s\n", PyBytes_FromStringAndSize(bytes, (Py_ssize_t)len));
+    print_obj("parse_message type: %s\n", state->pytype);
     while (i < len) {
         j = parse(state);
         if (j == 0) {
@@ -355,9 +380,20 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
             break;
         }
         i += j;
-        printf("calling PyLong_FromLong(state->field): %lu\n", (unsigned long)state->field);
         key = PyLong_FromUnsignedLong((unsigned long)state->field);
-        PyDict_SetItem(dict, key, state->out);
+        if (state->out != NULL) {
+            print_obj("parse_message state->out: %s\n", state->out);
+        } else {
+            printf("state->out was null\n");
+            PyErr_Print();
+        }
+        existing = PyDict_GetItem(dict, key);
+        if (existing && PyList_CheckExact(existing)) {
+            PyList_Append(existing, PyList_GetItem(state->out, 0));
+            Py_DECREF(state->out);
+        } else {
+            PyDict_SetItem(dict, key, state->out);
+        }
     }
     PyObject* factory = PyDict_GetItem(state->factories, state->pytype);
     PyObject* ctor = PyTuple_GetItem(factory, 0);
@@ -370,6 +406,8 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
         dict);
     if (result == NULL) {
         del(state->in);
+        printf("Something went wrong when parsing message\n");
+        PyErr_Print();
         return NULL;
     }
     state->out = result;
@@ -380,13 +418,18 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
 
 PyObject* parse_repeated(parse_state* state, char* bytes, size_t len) {
     size_t i = 0;
-    PyObject* result;
-    vt_type_t rtype = state_get_field_type(state);
+    size_t j = 0;
+    PyObject* result = PyList_New(0);
+    PyObject* subresult;
+    vt_type_t rtype = state_get_field_repeated_type(state);
 
+    Py_INCREF(result);
+    state->in = cons_str(bytes, len, nil);
+
+    printf("total repeated bytes: %zu\n", len);
+    print_obj("parse_repeated type: %s\n", state->pytype);
     if (is_scalar(rtype)) {
         parse_handler ph;
-
-        result = PyList_New(0);
 
         switch (wiretype_of(rtype)) {
             case wt_varint:
@@ -402,14 +445,49 @@ PyObject* parse_repeated(parse_state* state, char* bytes, size_t len) {
                 ph = &parse_length_delimited;
         }
         while (i < len) {
-            i += ph(state);
-            PyObject_CallMethod(result, "append", "O", state->out);
+            j = ph(state);
+            if (j == 0) {
+                break;
+            }
+            i += j;
+            PyList_Append(result, state->out);
         }
+    } else if (rtype == vt_string) {
+        subresult = PyUnicode_FromStringAndSize(bytes, (Py_ssize_t)len);
+        PyList_Append(result, subresult);
+    } else if (rtype == vt_bytes) {
+        subresult = PyBytes_FromStringAndSize(bytes, (Py_ssize_t)len);
+        PyList_Append(result, subresult);
     } else {
-        // TODO(olegs): Parse custom types
-        result = Py_None;
-    }
+        state->pytype = PyList_GetItem(state->pytype, 0);
 
+        subresult = parse_message(state, bytes, len);
+        PyList_Append(result, subresult);
+        // result = PyList_New(0);
+        // Py_INCREF(result);
+
+        // uint64_t value[2] = { 0, 0 };
+        // size_t k = 0;
+
+        // while (i < len) {
+        //     value[0] = 0;
+        //     value[1] = 0;
+        //     j = parse_varint_impl(state, value);
+        //     if (j == 0) {
+        //         printf("5. parse_repeated: finished too early\n");
+        //         break;
+        //     }
+        //     j = (size_t)value[0];
+        //     char* bytes = alloca(sizeof(char) * j);
+        //     k = 0;
+        //     while (k < j) {
+        //         k += state_read(state, bytes + k, (size_t)j - k);
+        //     }
+        //     print_obj("9. parsing repeated custom type: %s\n",
+        //               PyBytes_FromStringAndSize(bytes, (Py_ssize_t)k));
+        //     PyObject_CallMethod(result, "append", "O", parse_message(state, bytes, k));
+        // }
+    }
     return result;
 }
 
@@ -420,12 +498,14 @@ size_t select_handler(parse_state* state, parse_handler* handler) {
         *handler = backtrack;
         return 0;
     }
+    printf("select_handler in: %s\n", str(state->in));
     uint64_t value[2] = { 0, 0 };
     size_t parsed = parse_varint_impl(state, value);
     size_t wire_type = (size_t)(value[0] & 7);
 
     state->field = (size_t)(value[0] >> 3);
 
+    printf("select_handler: %zu for field: %zu\n", wire_type, state->field);
     switch (wire_type) {
         case 0:
             *handler = parse_varint;
@@ -458,5 +538,14 @@ size_t select_handler(parse_state* state, parse_handler* handler) {
 size_t parse(parse_state* state) {
     parse_handler handler = alloca(0);
     size_t parsed = select_handler(state, &handler);
-    return parsed + (*handler)(state);
+    if (PyErr_Occurred()) {
+        printf("error when selecting handler\n");
+        PyErr_Print();
+    }
+    parsed = parsed + (*handler)(state);
+    if (PyErr_Occurred()) {
+        printf("error when executing handler\n");
+        PyErr_Print();
+    }
+    return parsed;
 }

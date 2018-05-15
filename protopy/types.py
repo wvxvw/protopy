@@ -28,8 +28,8 @@ _pb_types = {
     b'int64': 1,
     b'uint32': 2,
     b'uint64': 3,
-    b'sing32': 4,
-    b'sing64': 5,
+    b'sint32': 4,
+    b'sint64': 5,
     b'bool': 6,
     # 'enum': 7,
     b'fixed64': 8,
@@ -44,14 +44,22 @@ _pb_types = {
 }
 
 
+def is_builtin(pbtype):
+    return pbtype in _pb_types
+
+
 def value_type(pbtype, factory):
+    if type(pbtype) == list:
+        return 14
     result = _pb_types.get(pbtype, None)
     if result is None:
         if factory[0] == tuple_from_dict:
             return 13
         if factory[0] == enum_from_dict:
             return 7
-        return 14
+    # this means error
+    if result is None:
+        result = 17
     return result
 
 
@@ -60,7 +68,8 @@ def normalize_fields(fields):
     normalized_fields = []
     for f in fields:
         if f[0] == 6:      # oneof
-            normalized_fields += f[2:]
+            fname = f[1]
+            normalized_fields += [[7, x[1], fname] + x[3:] for x in f[2:]]
         else:
             normalized_fields.append(f)
     return normalized_fields
@@ -81,7 +90,7 @@ def find_desc(name, descriptions):
 # TODO(olegs): This and another x_from_dict can be rewritten in C.
 def tuple_from_dict(ftype, factories, values):
     _, ttype, fmapping, _ = factories[ftype]
-    args = [None] * len(fmapping)
+    args = [None] * (max(fmapping.values()) + 1)
 
     for k, v in values.items():
         args[fmapping[k]] = v
@@ -92,7 +101,6 @@ def tuple_from_dict(ftype, factories, values):
 def enum_from_dict(ftype, factories, value):
     _, ttype, fmapping = factories[ftype]
     result = ttype(fmapping[value])
-    print('generated enum member: {!r}'.format(result))
     return result
 
 
@@ -137,7 +145,7 @@ def message_desc(ftype, desc, factories, descriptions):
     fields_list = []
     fmapping = {}
 
-    for i, field in enumerate(desc):
+    for field in desc:
         field_vt = field[0]
         field_name = field[2].decode('utf-8')
         field_type = field[1]
@@ -147,16 +155,25 @@ def message_desc(ftype, desc, factories, descriptions):
             if not field_desc:
                 unresolved[field_name] = field_type, field_num, field_vt
 
-        fields[field_name] = field_type, field_num
-        fields_list.append(field_name)
-        tmapping[field_num] = field_type
-        fmapping[field_num] = i
+        if field_name not in fields:
+            fields_list.append(field_name)
+            fmapping[field_num] = len(fields_list) - 1
+            fields[field_name] = len(fields_list) - 1
+        else:
+            fmapping[field_num] = fields[field_name]
+        if field_vt == 7:
+            tmapping[field_num] = field_type
+        elif field_vt == 8:
+            tmapping[field_num] = [field_type]
+        else:
+            raise Exception('Unrecognized field type: {}'.format(field_vt))
 
     module, name = extract_type_name(ftype)
     result = namedtuple(name, fields_list)
     result.__module__ = module
     factories[ftype] = result
 
+    # TODO(olegs): I don't think these are possible.
     for field_name, (field_type, field_num, field_vt) in unresolved.items():
         if field_vt == 0:
             message_desc(
@@ -199,4 +216,5 @@ def create_descriptors(descriptions):
                         descriptions,
                     )
 
+    print('factories: {}'.format(factories))
     return factories

@@ -13,7 +13,7 @@ message Test {
     repeated TestSimple simple_repeats = 4;
     repeated TestMultiple multiple_repeats = 1;
     oneof either_or {
-        TestSimple simple_oneof = 2;
-        TestMultiple multiple_oneof = 3;
+        TestSimple simple_oneof = 6;
+        TestMultiple multiple_oneof = 5;
     }
 }

@@ -125,10 +125,13 @@ def test_repeated():
         b'''simple_repeats: {
             some_ints: [1, -1, 2, -2, 3, -3]
         }
-        multiple_repeats: {
+        multiple_repeats: [{
             some_fixed: [1, -1, 2, -2, 3, -3]
             some_strings: ["foo", "bar", "\x01weird\x10"]
-        }
+        },
+        {
+            some_fixed: [4, -4, 5, -5, 6, -6]
+        }]
         multiple_oneof: {
             some_fixed: [123456789, 987654321]
             some_strings: [""]

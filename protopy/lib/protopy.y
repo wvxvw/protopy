@@ -229,7 +229,17 @@ field : field_label type identifier '=' positive_int field_options ';' {
     char* tname = mapconcat(to_str, $2, ".");
     list pos = from_ints(1, $5);
     list idf = cons_str($3, strlen($3), pos);
-    $$ = tag(7, cons_str(tname, strlen(tname), idf));
+    int ftag;
+    printf("field_label: %s = %d\n", $3, (int)$1);
+    switch ($1) {
+        case 2:
+            ftag = 8;
+            break;
+        default:
+            ftag = 7;
+            break;
+    }
+    $$ = tag(ftag, cons_str(tname, strlen(tname), idf));
     del($2);
 } ;
 
