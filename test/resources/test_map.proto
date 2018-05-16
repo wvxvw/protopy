@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+message InnerMap {
+    map<sint32, uint32> sint_uint = 2;
+}
+
+message InnerInnerMap {
+    map<fixed64, InnerMap> bytes_inner_map = 2;
+}
+
+message InnerInnerInnerMap {
+    map<string, InnerInnerMap> string_inner_inner_map = 2;
+}
+
+message Test {
+    map<string, sint32> simple_map = 4;
+    map<int32, InnerMap> inner_map = 5;
+    InnerMap inner = 6;
+    InnerInnerMap inner_inner = 7;
+    InnerInnerInnerMap inner_inner_inner = 8;
+}

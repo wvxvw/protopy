@@ -155,3 +155,237 @@ def test_repeated():
     print('result: {}'.format(result))
     assert result.either_or.some_fixed == [123456789, 987654321]
     assert False
+
+
+def test_map():
+    roots, test_proto, content = generate_proto_binary(
+        'test_map.proto',
+        b'''simple_map: [{
+                key: "foo"
+                value: 1
+            },
+            {
+                key: "bar"
+                value: 2
+            },
+            {
+                key: "baz"
+                value: 3
+            }]
+            inner_map: [{
+                key: 1
+                value: {
+                    sint_uint: [{
+                        key: 1
+                        value: 1
+                    },
+                    {
+                        key: 2,
+                        value: 2
+                    },
+                    {
+                        key: 3
+                        value: 3
+                    }]
+                }
+            },
+            {
+                key: 2
+                value: {
+                    sint_uint: [{
+                        key: -1
+                        value: 1
+                    },
+                    {
+                        key: -2,
+                        value: 2
+                    },
+                    {
+                        key: -3
+                        value: 3
+                    }]
+                }
+            },
+            {
+                key: 3
+                value: {
+                    sint_uint: [{
+                        key: -1
+                        value: 2
+                    },
+                    {
+                        key: -2,
+                        value: 4
+                    },
+                    {
+                        key: -3
+                        value: 6
+                    }]
+                }
+            }]
+        inner: {
+            sint_uint: [{
+                key: 1
+                value: 1
+            },
+            {
+                key: 2,
+                value: 2
+            },
+            {
+                key: 3
+                value: 3
+            }]
+        }
+        inner_inner: {
+            bytes_inner_map: [{
+                key: 123
+                value: {
+                    sint_uint: [{
+                        key: -1
+                        value: 4
+                    },
+                    {
+                        key: -2,
+                        value: 8
+                    },
+                    {
+                        key: -3
+                        value: 12
+                    }]
+                }
+            },
+            {
+                key: 456
+                value: {
+                    sint_uint: [{
+                        key: -1
+                        value: 8
+                    },
+                    {
+                        key: -2,
+                        value: 16
+                    },
+                    {
+                        key: -3
+                        value: 24
+                    }]
+                }
+            },
+            {
+                key: 789
+                value: {
+                    sint_uint: [{
+                        key: 1
+                        value: 16
+                    },
+                    {
+                        key: 2,
+                        value: 32
+                    },
+                    {
+                        key: 3
+                        value: 48
+                    }]
+                }
+            }]
+        }
+        inner_inner_inner: {
+            string_inner_inner_map: [{
+                key: "foo"
+                value: {
+                    bytes_inner_map: [{
+                        key: 12
+                        value: {
+                            sint_uint: [{
+                                key: 1
+                                value: 16
+                            },
+                            {
+                                key: 2,
+                                value: 32
+                            },
+                            {
+                                key: 3
+                                value: 48
+                            }]
+                        }
+                    },
+                    {
+                        key: 34
+                        value: {
+                            sint_uint: [{
+                                key: 1
+                                value: 16
+                            },
+                            {
+                                key: 2,
+                                value: 32
+                            },
+                            {
+                                key: 3
+                                value: 48
+                            }]
+                        }
+                    }]
+                },
+            },
+            {
+                key: "bar"
+                value: {
+                    bytes_inner_map: [{
+                        key: 56
+                        value: {
+                            sint_uint: [{
+                                key: 1
+                                value: 16
+                            },
+                            {
+                                key: 2,
+                                value: 32
+                            },
+                            {
+                                key: 3
+                                value: 48
+                            }]
+                        }
+                    },
+                    {
+                        key: 78
+                        value: {
+                            sint_uint: [{
+                                key: 1
+                                value: 16
+                            },
+                            {
+                                key: 2,
+                                value: 32
+                            },
+                            {
+                                key: 3
+                                value: 48
+                            }]
+                        }
+                    }]
+                }
+            }]
+        }
+        ''',
+    )
+    print('generated proto message: {}'.format(content))
+    loop = asyncio.get_event_loop()
+    reader = asyncio.StreamReader(loop=loop)
+    reader.feed_data(content)
+
+    async def finish():
+        asyncio.sleep(2)
+        reader.feed_eof()
+
+    async def gather_results():
+        parse_bin = BinParser(roots).parse(test_proto, 'Test', reader)
+        return await asyncio.gather(parse_bin, finish())
+
+    result = loop.run_until_complete(gather_results())[0]
+    print('result: {}'.format(result))
+    assert result.either_or.some_fixed == [123456789, 987654321]
+    assert False
