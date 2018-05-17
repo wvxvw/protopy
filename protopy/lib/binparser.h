@@ -29,7 +29,8 @@ typedef enum vt_type_t {
     vt_sfixed32 = 16,
     // not exposed to user
     vt_error   = 17,
-    vt_default = 18
+    vt_default = 18,
+    vt_map = 19
 } vt_type_t;
 
 typedef enum wiretype_t {
@@ -48,6 +49,7 @@ typedef struct {
     int64_t pos;
     size_t field;
     list in;
+    bool is_field;
     PyObject* out;
     PyObject* factories;
     PyObject* pytype;
@@ -80,6 +82,10 @@ size_t parse_fixed_32(parse_state*);
 PyObject* parse_message(parse_state*, char*, size_t);
 
 PyObject* parse_repeated(parse_state*, char*, size_t);
+
+PyObject* parse_map(parse_state*, char*, size_t);
+
+size_t select_handler(parse_state*, parse_handler*);
 
 PyObject* make_state(PyObject*, PyObject*);
 

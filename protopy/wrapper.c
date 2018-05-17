@@ -166,7 +166,6 @@ proto_def_parse_produce(list sources, list roots, size_t nthreads, apr_pool_t* m
             memcpy(source, (char*)car(sources) + 2, tocopy);
             source[tocopy] = '\0';
             def_args->source = source;
-            printf("will look for source: %s\n", def_args->source);
             def_args->error = "";
             def_args->result = NULL;
             def_args->thread_id = i;

@@ -94,10 +94,11 @@ do {                                            \
                top_level s boolean literal message_block service_body
                service_body_part rpc top_levels enum_field enum_fields
                option_name_parts option_name type user_type rpc_type
-               import field package_name package oneof_field oneof_fields;
+               import field package_name package oneof_field oneof_fields
+               map_field;
 
 %type <nothing> syntax option_def field_options_body assignment
-                map_field range_end range ranges reserved_strings
+                range_end range ranges reserved_strings
                 reserved_body reserved enum_value_option extensions rpc_options
                 enum_value_options_group;
 
@@ -283,7 +284,16 @@ key_type : INT32    { MAYBE_ABORT; $$ = 0;  }
 
 
 map_field : MAP '<' key_type ',' type '>' identifier '='
-            positive_int field_options ';' { MAYBE_ABORT; $$ = NULL; } ;
+            positive_int field_options ';' {
+    MAYBE_ABORT;
+    char* vtype = mapconcat(to_str, $5, ".");
+    $$ = tag(9, cons(
+                cons_int($3, 1, cons_str(vtype, strlen(vtype), nil)),
+                tlist,
+                cons_str($7, strlen($7), cons_int($9, 1, nil)))
+         );
+    del($5);
+} ;
 
 
 range_end : MAX /* { $$ = SIZE_MAX; } */ { MAYBE_ABORT; $$ = NULL; }
@@ -373,7 +383,7 @@ message_field : enum              { MAYBE_ABORT; $$ = tag(1, $1); }
               | message           { MAYBE_ABORT; $$ = tag(0, $1); }
               | oneof
               | OPTION option_def { MAYBE_ABORT; $$ = nil; }
-              | map_field         { MAYBE_ABORT; $$ = nil; }
+              | map_field         { MAYBE_ABORT; $$ = $1; }
               | field             { MAYBE_ABORT; $$ = $1; }
               | reserved          { MAYBE_ABORT; $$ = nil; }
               | extensions        { MAYBE_ABORT; $$ = nil; }

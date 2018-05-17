@@ -51,6 +51,8 @@ def is_builtin(pbtype):
 def value_type(pbtype, factory):
     if type(pbtype) == list:
         return 14
+    if type(pbtype) == tuple:
+        return 19
     result = _pb_types.get(pbtype, None)
     if result is None:
         if factory[0] == tuple_from_dict:
@@ -132,6 +134,22 @@ def enum_desc(ftype, desc, factories, descriptions):
     factories[ftype] = tuple([enum_from_dict, result, mmapping])
 
 
+_pb_key_types = {
+    0: b'int32',
+    1: b'int64',
+    2: b'uint32',
+    3: b'uint64',
+    4: b'sint32',
+    5: b'sint64',
+    6: b'fixed32',
+    7: b'fixed64',
+    8: b'sfixed32',
+    9: b'sfixed64',
+    10: b'bool',
+    11: b'string',
+}
+
+
 def message_desc(ftype, desc, factories, descriptions):
     # TODO(olegs): We need to handle package <-> message name
     # collision earlier
@@ -150,10 +168,6 @@ def message_desc(ftype, desc, factories, descriptions):
         field_name = field[2].decode('utf-8')
         field_type = field[1]
         field_num = field[3]
-        if field_type not in _builtin_types:
-            field_desc = factories.get(field_type, None)
-            if not field_desc:
-                unresolved[field_name] = field_type, field_num, field_vt
 
         if field_name not in fields:
             fields_list.append(field_name)
@@ -165,31 +179,14 @@ def message_desc(ftype, desc, factories, descriptions):
             tmapping[field_num] = field_type
         elif field_vt == 8:
             tmapping[field_num] = [field_type]
+        elif field_vt == 9:
+            tmapping[field_num] = _pb_key_types[field_type[0]], field_type[1]
         else:
             raise Exception('Unrecognized field type: {}'.format(field_vt))
 
     module, name = extract_type_name(ftype)
     result = namedtuple(name, fields_list)
     result.__module__ = module
-    factories[ftype] = result
-
-    # TODO(olegs): I don't think these are possible.
-    for field_name, (field_type, field_num, field_vt) in unresolved.items():
-        if field_vt == 0:
-            message_desc(
-                field_type,
-                find_desc(field_type, descriptions),
-                factories,
-                descriptions,
-            )
-        elif field_vt == 1:
-            enum_desc(
-                field_type,
-                find_desc(field_type, descriptions),
-                factories,
-                descriptions,
-            )
-
     factories[ftype] = tuple([tuple_from_dict, result, fmapping, tmapping])
 
 

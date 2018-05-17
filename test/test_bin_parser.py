@@ -387,5 +387,6 @@ def test_map():
 
     result = loop.run_until_complete(gather_results())[0]
     print('result: {}'.format(result))
-    assert result.either_or.some_fixed == [123456789, 987654321]
+    assert result.inner_inner_inner.string_inner_inner_map['bar'] \
+                                   .bytes_inner_map[78].sint_uint[2] == 32
     assert False
