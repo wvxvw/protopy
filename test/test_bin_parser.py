@@ -9,7 +9,7 @@ import os
 import pytest
 
 
-def generate_proto_binary(source, text):
+def generate_proto_binary(source, text, message='Test'):
     proto_roots = pkg_resources.resource_filename(
         __name__,
         './resources',
@@ -21,7 +21,7 @@ def generate_proto_binary(source, text):
     )
     cmd = [
         'protoc',
-        '--encode=Test',
+        '--encode={}'.format(message),
         '-I={}'.format(proto_roots),
         test_proto,
     ]
@@ -425,4 +425,29 @@ def test_map():
     print('result: {}'.format(result))
     assert result.inner_inner_inner.string_inner_inner_map['bar'] \
                                    .bytes_inner_map[78].sint_uint[2] == 32
+    assert False
+
+
+def test_inernal():
+    roots, test_proto, content = generate_proto_binary(
+        'np/v1/upload-np-data-service.proto',
+        b'''np_data_file_bytes: "\x01\x02\x03\x04\x05"''',
+        'np.v1.UploadNPDataRequest',
+    )
+    print('generated proto message: {}'.format(content))
+    loop = asyncio.get_event_loop()
+    reader = asyncio.StreamReader(loop=loop)
+    reader.feed_data(content)
+
+    async def finish():
+        asyncio.sleep(2)
+        reader.feed_eof()
+
+    async def gather_results():
+        parse_bin = BinParser(roots).parse(test_proto, 'Test', reader)
+        return await asyncio.gather(parse_bin, finish())
+
+    result = loop.run_until_complete(gather_results())[0]
+    print('result: {}'.format(result))
+    assert result.either_or.some_fixed == [123456789, 987654321]
     assert False

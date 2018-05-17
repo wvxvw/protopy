@@ -50,40 +50,41 @@ extern int yydebug;
     BOOL_TRUE = 260,
     ENUM = 261,
     EXTENSIONS = 262,
-    FIXED32 = 263,
-    FIXED64 = 264,
-    IMPORT = 265,
-    INT32 = 266,
-    INT64 = 267,
-    MAP = 268,
-    MAX = 269,
-    MESSAGE = 270,
-    ONEOF = 271,
-    OPTION = 272,
-    OPTIONAL = 273,
-    PACKAGE = 274,
-    PUBLIC = 275,
-    REPEATED = 276,
-    REQUIRED = 277,
-    RESERVED = 278,
-    RETURNS = 279,
-    RPC = 280,
-    SERVICE = 281,
-    SFIXED32 = 282,
-    SFIXED64 = 283,
-    SINT32 = 284,
-    SINT64 = 285,
-    STREAM = 286,
-    STRING = 287,
-    STRING_LITERAL = 288,
-    SYNTAX = 289,
-    TO = 290,
-    UINT32 = 291,
-    UINT64 = 292,
-    WEAK = 293,
-    POSINTEGER = 294,
-    NEGINTEGER = 295,
-    IDENTIFIER = 296
+    EXTEND = 263,
+    FIXED32 = 264,
+    FIXED64 = 265,
+    IMPORT = 266,
+    INT32 = 267,
+    INT64 = 268,
+    MAP = 269,
+    MAX = 270,
+    MESSAGE = 271,
+    ONEOF = 272,
+    OPTION = 273,
+    OPTIONAL = 274,
+    PACKAGE = 275,
+    PUBLIC = 276,
+    REPEATED = 277,
+    REQUIRED = 278,
+    RESERVED = 279,
+    RETURNS = 280,
+    RPC = 281,
+    SERVICE = 282,
+    SFIXED32 = 283,
+    SFIXED64 = 284,
+    SINT32 = 285,
+    SINT64 = 286,
+    STREAM = 287,
+    STRING = 288,
+    STRING_LITERAL = 289,
+    SYNTAX = 290,
+    TO = 291,
+    UINT32 = 292,
+    UINT64 = 293,
+    WEAK = 294,
+    POSINTEGER = 295,
+    NEGINTEGER = 296,
+    IDENTIFIER = 297
   };
 #endif
 /* Tokens.  */
@@ -92,40 +93,41 @@ extern int yydebug;
 #define BOOL_TRUE 260
 #define ENUM 261
 #define EXTENSIONS 262
-#define FIXED32 263
-#define FIXED64 264
-#define IMPORT 265
-#define INT32 266
-#define INT64 267
-#define MAP 268
-#define MAX 269
-#define MESSAGE 270
-#define ONEOF 271
-#define OPTION 272
-#define OPTIONAL 273
-#define PACKAGE 274
-#define PUBLIC 275
-#define REPEATED 276
-#define REQUIRED 277
-#define RESERVED 278
-#define RETURNS 279
-#define RPC 280
-#define SERVICE 281
-#define SFIXED32 282
-#define SFIXED64 283
-#define SINT32 284
-#define SINT64 285
-#define STREAM 286
-#define STRING 287
-#define STRING_LITERAL 288
-#define SYNTAX 289
-#define TO 290
-#define UINT32 291
-#define UINT64 292
-#define WEAK 293
-#define POSINTEGER 294
-#define NEGINTEGER 295
-#define IDENTIFIER 296
+#define EXTEND 263
+#define FIXED32 264
+#define FIXED64 265
+#define IMPORT 266
+#define INT32 267
+#define INT64 268
+#define MAP 269
+#define MAX 270
+#define MESSAGE 271
+#define ONEOF 272
+#define OPTION 273
+#define OPTIONAL 274
+#define PACKAGE 275
+#define PUBLIC 276
+#define REPEATED 277
+#define REQUIRED 278
+#define RESERVED 279
+#define RETURNS 280
+#define RPC 281
+#define SERVICE 282
+#define SFIXED32 283
+#define SFIXED64 284
+#define SINT32 285
+#define SINT64 286
+#define STREAM 287
+#define STRING 288
+#define STRING_LITERAL 289
+#define SYNTAX 290
+#define TO 291
+#define UINT32 292
+#define UINT64 293
+#define WEAK 294
+#define POSINTEGER 295
+#define NEGINTEGER 296
+#define IDENTIFIER 297
 
 /* Value type.  */
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
@@ -140,7 +142,7 @@ union YYSTYPE
     list object;
     void* nothing;
 
-#line 144 "protopy.tab.h" /* yacc.c:1909  */
+#line 146 "protopy.tab.h" /* yacc.c:1909  */
 };
 
 typedef union YYSTYPE YYSTYPE;

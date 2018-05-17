@@ -56,6 +56,7 @@ false { return BOOL_FALSE; }
 bool       { return BOOL; }
 enum       { return ENUM; }
 extensions { return EXTENSIONS; }
+extend     { return EXTEND; }
 fixed32    { return FIXED32; }
 fixed64    { return FIXED64; }
 import     { return IMPORT; }
@@ -92,10 +93,10 @@ weak       { return WEAK; }
     return IDENTIFIER;
 }
 
-[(){}=\[\];,<>\.] { return *yytext; }
+[(){}=\[\];:,<>\.] { return *yytext; }
 [ \n\t\r]+
 [/][*]([^*]|[*][^/])*[*][/]
-[/][/].*
+[/][/].* { printf("parsed comment: %s\n", yytext); }
 
 %%
 

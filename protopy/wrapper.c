@@ -273,6 +273,8 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
         (size_t)nthreads,
         mp);
 
+    printf("proto_def_parse_produce finished\n");
+
     del(roots);
 
     Py_END_ALLOW_THREADS;

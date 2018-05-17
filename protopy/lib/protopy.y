@@ -45,6 +45,7 @@ do {                                            \
 %token BOOL_TRUE;
 %token ENUM;
 %token EXTENSIONS;
+%token EXTEND;
 %token FIXED32;
 %token FIXED64;
 %token IMPORT;
@@ -93,14 +94,14 @@ do {                                            \
 %type <object> string_literal oneof enum message service message_field 
                top_level s boolean literal message_block service_body
                service_body_part rpc top_levels enum_field enum_fields
-               option_name_parts option_name type user_type rpc_type
+               option_name type user_type rpc_type
                import field package_name package oneof_field oneof_fields
-               map_field;
+               map_field option_name_suffix;
 
 %type <nothing> syntax option_def field_options_body assignment
-                range_end range ranges reserved_strings
+                range_end range ranges reserved_strings extend
                 reserved_body reserved enum_value_option extensions rpc_options
-                enum_value_options_group;
+                enum_value_options_group option_kv option_kvs option_value;
 
 %type <index> import_kind field_label key_type positive_int;
 
@@ -119,7 +120,6 @@ import : IMPORT import_kind string_literal ';' { MAYBE_ABORT; $$ = $3; } ;
 package_name : identifier {
     MAYBE_ABORT;
     $$ = cons_str($1, strlen($1), nil);
-    printf("package name: %s\n", str($$));
 }
              | package_name '.' identifier {
     MAYBE_ABORT;
@@ -204,10 +204,19 @@ positive_int : POSINTEGER { MAYBE_ABORT; $$ = (size_t)atoi($1); } ;
 literal : NEGINTEGER { MAYBE_ABORT; $$ = from_ints(1, atoi($1)); }
         | positive_int { MAYBE_ABORT; $$ = from_ints(1, $1); }
         | string_literal
-        | boolean ;
+        | boolean
+        | user_type ;
+
+option_kv : identifier ':' literal { $$ = NULL; } ;
+
+option_kvs : option_kv
+           | option_kvs option_kv ;
+
+option_value : literal { $$ = NULL; }
+             | '{' option_kvs '}' { $$ = NULL; } ;
 
 
-assignment : identifier '=' literal { MAYBE_ABORT; $$ = NULL; } ;
+assignment : option_name '=' option_value { MAYBE_ABORT; $$ = NULL; } ;
 
 
 option_def : assignment ';' { MAYBE_ABORT; $$ = NULL; } ;
@@ -317,18 +326,15 @@ reserved_body : ranges | reserved_strings ;
 reserved : RESERVED reserved_body { MAYBE_ABORT; $$ = NULL; } ;
 
 
-option_name_parts : identifier { MAYBE_ABORT; $$ = cons_str($1, strlen($1), nil); }
-                  | option_name_parts identifier {
-    MAYBE_ABORT;
-    $$ = cons_str($2, strlen($2), $1);
-} ;
+option_name_suffix : %empty { $$ = nil; }
+                   | '.' user_type { $$ = $2; }
 
 
-option_name : '(' option_name_parts ')' '.' option_name_parts {
+option_name : '(' user_type ')' option_name_suffix {
     MAYBE_ABORT;
-    $$ = cons($5, tlist, $2);
+    $$ = cons($4, tlist, $2);
 }
-            | option_name_parts ;
+            | user_type ;
 
 
 enum_value_option : option_name '=' literal { MAYBE_ABORT; $$ = NULL; } ;
@@ -376,6 +382,8 @@ enum : ENUM identifier '{' enum_fields '}' {
 } ;
 
 
+extend : EXTEND user_type '{' message_block '}' { MAYBE_ABORT; $$ = NULL; }
+
 extensions : EXTENSIONS range { MAYBE_ABORT; $$ = NULL; } ;
 
 
@@ -387,6 +395,7 @@ message_field : enum              { MAYBE_ABORT; $$ = tag(1, $1); }
               | field             { MAYBE_ABORT; $$ = $1; }
               | reserved          { MAYBE_ABORT; $$ = nil; }
               | extensions        { MAYBE_ABORT; $$ = nil; }
+              | extend            { MAYBE_ABORT; $$ = nil; }
               | ';'               { MAYBE_ABORT; $$ = nil; } ;
 
 
@@ -396,7 +405,11 @@ message_block : message_field {
 }
               | message_block message_field {
     MAYBE_ABORT;
-    $$ = cons($2, tlist, $1);
+    if (null($2)) {
+        $$ = $1;
+    } else {
+        $$ = cons($2, tlist, $1);
+    }
 } ;
 
 
@@ -444,7 +457,8 @@ top_level : message    { MAYBE_ABORT; $$ = tag(0, $1); }
           | service    { MAYBE_ABORT; $$ = tag(3, $1); }
           | import     { MAYBE_ABORT; $$ = tag(4, $1); }
           | package    { MAYBE_ABORT; $$ = tag(5, $1); }
-          | option_def { MAYBE_ABORT; $$ = nil; }
+          | OPTION option_def { MAYBE_ABORT; $$ = nil; }
+          | extend     { MAYBE_ABORT; $$ = nil; }
           | ';'        { MAYBE_ABORT; $$ = nil; } ;
 
 
@@ -454,7 +468,11 @@ top_levels : %empty {
 }
            | top_levels top_level {
     MAYBE_ABORT;
-    $$ = cons($2, tlist, $1);
+    if (null($2)) {
+        $$ = $1;
+    } else {
+        $$ = cons($2, tlist, $1);
+    }
 } ;
 
 
