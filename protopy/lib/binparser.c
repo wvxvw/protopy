@@ -343,7 +343,11 @@ size_t parse_fixed_32(parse_state* state) {
     if (state_get_field_type(state) == vt_fixed32) {
         state->out = PyLong_FromUnsignedLong(val);
     } else {
-        state->out = PyLong_FromLong(val);
+        if (val & 0x80000000) {
+            state->out = PyLong_FromLong((long)val - 0xFFFFFFFF - 1);
+        } else {
+            state->out = PyLong_FromLong((long)val);
+        }
     }
     return FIXED_LENGTH;
 #undef FIXED_LENGTH

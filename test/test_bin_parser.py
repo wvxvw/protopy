@@ -157,6 +157,42 @@ def test_repeated():
     assert False
 
 
+def test_fixed64():
+    roots, test_proto, content = generate_proto_binary(
+        'test_fixed64.proto',
+        b'''some_fixed: [1234, 12, 9876, 0]
+        some_sfixed: [-9876, 9876, 0, -1, 1]
+        sfixed_fixed: [{
+            key: -1
+            value: 1
+        },
+        {
+            key: -1000
+            value: 1000
+        }]
+        simple_fixed: 1010101010
+        simple_sfixed: -1010101010
+        ''',
+    )
+    print('generated proto message: {}'.format(content))
+    loop = asyncio.get_event_loop()
+    reader = asyncio.StreamReader(loop=loop)
+    reader.feed_data(content)
+
+    async def finish():
+        asyncio.sleep(2)
+        reader.feed_eof()
+
+    async def gather_results():
+        parse_bin = BinParser(roots).parse(test_proto, 'Test', reader)
+        return await asyncio.gather(parse_bin, finish())
+
+    result = loop.run_until_complete(gather_results())[0]
+    print('result: {}'.format(result))
+    assert result.some_fixed[1] == 12
+    assert False
+
+
 def test_map():
     roots, test_proto, content = generate_proto_binary(
         'test_map.proto',

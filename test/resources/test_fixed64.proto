@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+message Test {
+    repeated fixed64 some_fixed = 2;
+    repeated sfixed64 some_sfixed = 3;
+    map<sfixed64, fixed64> sfixed_fixed = 4;
+    fixed64 simple_fixed = 5;
+    sfixed64 simple_sfixed = 6;
+}
