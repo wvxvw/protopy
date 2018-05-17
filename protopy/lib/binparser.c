@@ -92,6 +92,11 @@ PyObject* state_get_field_pytype(parse_state* state) {
     }
     PyObject* key = Py_BuildValue("i", (int)state->field);
     PyObject* container_factory = PyDict_GetItem(state->factories, state->pytype);
+    if (container_factory == NULL) {
+        PyErr_SetString(PyExc_TypeError, "Nonexistent type");
+        // invalid proto definition, trying to read non-existent type.
+        return NULL;
+    }
     PyObject* tmap = PyTuple_GetItem(container_factory, 3);
     return PyDict_GetItem(tmap, key);
 }
@@ -109,6 +114,9 @@ vt_type_t state_get_field_type(parse_state* state) {
         field_type = state->pytype;
     } else {
         field_type = state_get_field_pytype(state);
+        if (PyErr_Occurred()) {
+            return vt_error;
+        }
     }
     PyObject* factory = PyDict_GetItem(state->factories, field_type);
     if (factory == NULL) {
@@ -418,6 +426,15 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
         }
     }
     PyObject* factory = PyDict_GetItem(state->factories, state->pytype);
+    if (!factory) {
+        del(state->in);
+        PyErr_Format(
+            PyExc_TypeError,
+            "No definition for %A, (parsed: %A)",
+            state->pytype,
+            dict);
+        return NULL;
+    }
     PyObject* ctor = PyTuple_GetItem(factory, 0);
     PyObject* result = PyObject_CallFunction(
         ctor,

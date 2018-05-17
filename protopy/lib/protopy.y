@@ -128,9 +128,9 @@ package_name : identifier {
 
 package : PACKAGE package_name ';' {
     MAYBE_ABORT;
+    $2 = nreverse($2);
     char* pname = mapconcat(to_str, $2, ".");
     $$ = cons_str(pname, strlen(pname), nil);
-    printf("package name concatenated: %s -> %s -> %s\n", str($2), pname, str($$));
     del($2);
 } ;
 
@@ -240,7 +240,7 @@ field : field_label type identifier '=' positive_int field_options ';' {
     list pos = from_ints(1, $5);
     list idf = cons_str($3, strlen($3), pos);
     int ftag;
-    printf("field_label: %s = %d\n", $3, (int)$1);
+
     switch ($1) {
         case 2:
             ftag = 8;

@@ -3,6 +3,7 @@
 from collections import namedtuple
 from functools import partial
 from enum import IntEnum
+from keyword import kwlist
 
 
 _builtin_types = {
@@ -185,6 +186,15 @@ def message_desc(ftype, desc, factories, descriptions):
             raise Exception('Unrecognized field type: {}'.format(field_vt))
 
     module, name = extract_type_name(ftype)
+
+    for i, f in enumerate(fields_list):
+        # TODO(olegs): it is possible that the original fields were
+        # also named pb_<somethign>
+        if f in kwlist:
+            fields_list[i] = 'pb_' + f
+        elif f[0] == '_':
+            fields_list[i] = 'pb' + f
+
     result = namedtuple(name, fields_list)
     result.__module__ = module
     factories[ftype] = tuple([tuple_from_dict, result, fmapping, tmapping])

@@ -96,7 +96,7 @@ weak       { return WEAK; }
 [(){}=\[\];:,<>\.] { return *yytext; }
 [ \n\t\r]+
 [/][*]([^*]|[*][^/])*[*][/]
-[/][/].* { printf("parsed comment: %s\n", yytext); }
+[/][/].*
 
 %%
 

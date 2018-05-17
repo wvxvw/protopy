@@ -243,9 +243,6 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
             &source_roots,
             &PyDict_Type,
             &parsed_files)) {
-        if (!PyErr_Occurred()) {
-            PyErr_SetString(PyExc_TypeError, "Invalid arguments");
-        }
         return NULL;
     }
 
@@ -272,8 +269,6 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
         roots,
         (size_t)nthreads,
         mp);
-
-    printf("proto_def_parse_produce finished\n");
 
     del(roots);
 

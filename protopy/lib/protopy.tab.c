@@ -1776,9 +1776,9 @@ yyreduce:
 #line 129 "protopy.y" /* yacc.c:1646  */
     {
     MAYBE_ABORT;
+    (yyvsp[-1].object) = nreverse((yyvsp[-1].object));
     char* pname = mapconcat(to_str, (yyvsp[-1].object), ".");
     (yyval.object) = cons_str(pname, strlen(pname), nil);
-    printf("package name concatenated: %s -> %s -> %s\n", str((yyvsp[-1].object)), pname, str((yyval.object)));
     del((yyvsp[-1].object));
 }
 #line 1785 "protopy.tab.c" /* yacc.c:1646  */
@@ -2113,7 +2113,7 @@ yyreduce:
     list pos = from_ints(1, (yyvsp[-2].index));
     list idf = cons_str((yyvsp[-4].string), strlen((yyvsp[-4].string)), pos);
     int ftag;
-    printf("field_label: %s = %d\n", (yyvsp[-4].string), (int)(yyvsp[-6].index));
+
     switch ((yyvsp[-6].index)) {
         case 2:
             ftag = 8;

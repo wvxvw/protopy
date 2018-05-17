@@ -1402,7 +1402,7 @@ YY_RULE_SETUP
 case 45:
 YY_RULE_SETUP
 #line 99 "protopy.l"
-{ printf("parsed comment: %s\n", yytext); }
+
 	YY_BREAK
 case 46:
 YY_RULE_SETUP

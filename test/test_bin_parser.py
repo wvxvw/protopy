@@ -428,7 +428,7 @@ def test_map():
     assert False
 
 
-def test_inernal():
+def test_internal():
     roots, test_proto, content = generate_proto_binary(
         'np/v1/upload-np-data-service.proto',
         b'''np_data_file_bytes: "\x01\x02\x03\x04\x05"''',
@@ -444,10 +444,14 @@ def test_inernal():
         reader.feed_eof()
 
     async def gather_results():
-        parse_bin = BinParser(roots).parse(test_proto, 'Test', reader)
+        parse_bin = BinParser(roots).parse(
+            test_proto,
+            'np.v1.UploadNPDataRequest',
+            reader,
+        )
         return await asyncio.gather(parse_bin, finish())
 
     result = loop.run_until_complete(gather_results())[0]
     print('result: {}'.format(result))
-    assert result.either_or.some_fixed == [123456789, 987654321]
+    assert result.np_data_file_bytes[2] == 3
     assert False

@@ -376,7 +376,7 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
         return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
 
-    yydebug = 1;
+    // yydebug = 1;
     YYLTYPE location;
     location.first_line = 0;
     location.last_line = 0;
