@@ -347,6 +347,26 @@ void* parse_one_def_cleanup(
     return NULL;
 }
 
+char* error_message_2(const char* tpl, const char* arg) {
+    char* result = malloc((strlen(tpl) + strlen(arg) + 1) * sizeof(char));
+    sprintf(result, tpl, arg);
+    return result;
+}
+
+char* error_message_1(const char* tpl, byte* arg) {
+    if (arg == NULL) {
+        char* cstr = "<NULL>";
+        char* result = malloc((strlen(tpl) + 7) * sizeof(char));
+        sprintf(result, tpl, cstr);
+        return result;
+    }
+    char* cstr = bytes_cstr(arg);
+    char* result = malloc((strlen(tpl) + str_size(arg) + 1) * sizeof(char));
+    sprintf(result, tpl, cstr);
+    free(cstr);
+    return result;
+}
+
 void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     parse_def_args_t* args = iargs;
     parsing_progress_t* progress = args->progress;
@@ -356,23 +376,29 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     yyscan_t yyscanner;
     int res = yylex_init(&yyscanner);
     if (res) {
-        args->error = "Couldn't initialize scanner";
+        args->error = strdup("Couldn't initialize scanner");
+        args->error_kind = MEMORY_ERROR;
         return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
-    // TODO(olegs): fprintf
     switch (resolved_source(args->source, args->roots, &source)) {
         case 2:
-            args->error = "Must be regular file '%s'";  // source res
+            args->error = error_message_2("Must be regular file '%s'", args->source);
+            args->error_kind = FS_ERROR;
             return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
         case 1:
-            args->error = "Couldn't find '%s'";  // source res
+            args->error = error_message_2("Couldn't find '%s'", args->source);
+            args->error_kind = FS_ERROR;
             return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
 
     h = fopen((char*)(source + 2), "rb");
     if (h == NULL) {
-        // TODO(olegs): fprintf
-        args->error = "Couldn't find '%s', %d";  // source res
+        if (source != NULL) {
+            args->error = error_message_1("Couldn't find '%s'", source);
+        } else {
+            args->error = error_message_2("Couldn't find '%s'", args->source);
+        }
+        args->error_kind = FS_ERROR;
         return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
 
@@ -403,8 +429,8 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     yylex_destroy(yyscanner);
 
     if (status != 0) {
-        // TODO(olegs): Line info, cleanup
-        args->error = "Parser failed";
+        args->error = strdup("Parser failed");
+        args->error_kind = PARSER_ERROR;
         return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
 

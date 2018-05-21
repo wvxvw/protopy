@@ -123,6 +123,8 @@ list cons_str(char*, size_t, list);
 
 list cons_int(int, size_t, list);
 
+char* bytes_cstr(byte*);
+
 extern byte empty[2];
 
 #endif // LIST_H_

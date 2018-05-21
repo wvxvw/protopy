@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from protopy.parser import DefParser
+
 import pkg_resources
+import pytest
 
 
 def test_load_file():
@@ -37,3 +39,17 @@ def test_internal_def():
     )
     print(DefParser(roots).parse(test_proto))
     assert False
+
+
+def test_nonexisting_import():
+    roots = [
+        pkg_resources.resource_filename(__name__, './resources')
+    ]
+    test_proto = pkg_resources.resource_filename(
+        __name__,
+        './resources/nonexistent_import.proto',
+    )
+    try:
+        DefParser(roots).parse(test_proto)
+    except FileNotFoundError as e:
+        assert str(e) == 'Couldn\'t find \'nonexistent.proto\''

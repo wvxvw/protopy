@@ -139,7 +139,13 @@ bool all_threads_busy(parsing_progress_t* progress) {
 }
 
 static apr_hash_t*
-proto_def_parse_produce(list sources, list roots, size_t nthreads, apr_pool_t* mp) {
+proto_def_parse_produce(
+    list sources,
+    list roots,
+    size_t nthreads,
+    apr_pool_t* mp,
+    char** error_message,
+    size_t* error_kind) {
     parsing_progress_t progress;
     size_t i = 0;
     parse_def_args_t** thds_args = alloca(sizeof(parse_def_args_t*) * nthreads);
@@ -178,18 +184,21 @@ proto_def_parse_produce(list sources, list roots, size_t nthreads, apr_pool_t* m
         } else {
             i = finished_thread(&progress);
             if (i < progress.nthreads) {
-                // TODO(olegs): Do something if the thread reported an error.
                 if (strcmp(thds_args[i]->error, "")) {
-                    printf("Encountered error reading sources: %s\n", thds_args[i]->error);
-                    // TODO(olegs): We cannot throw here because we don't hold GIL
-                    // PyErr_Format(PyExc_TypeError, "%s", thds_args[i]->error);
+                    *error_message = thds_args[i]->error;
+                    *error_kind = thds_args[i]->error_kind;
                     del(sources);
                     sources = nil;
                     apr_status_t rv;
                     apr_thread_join(&rv, progress.thds[i]);
                     progress.thds[i] = NULL;
-                    // TODO(olegs): We still need to join all remaining threads
-                    // before we can clean up.
+
+                    size_t j;
+                    for (j = 0; j < progress.nthreads; j++) {
+                        if (progress.thds[j] != NULL) {
+                            apr_thread_exit(progress.thds[j], rv);
+                        }
+                    }
                     break;
                 }
                 apr_status_t rv;
@@ -262,17 +271,41 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
         return NULL;
     }
 
+    char* error_message = NULL;
+    size_t error_kind = 0;
+    PyObject* error_class;
+
     Py_BEGIN_ALLOW_THREADS;
 
     parsed_defs = proto_def_parse_produce(
         cons_str(source, strlen(source), nil),
         roots,
         (size_t)nthreads,
-        mp);
+        mp,
+        &error_message,
+        &error_kind);
 
     del(roots);
 
     Py_END_ALLOW_THREADS;
+
+    if (error_message != NULL) {
+        switch (error_kind) {
+            case FS_ERROR:
+                error_class = PyExc_FileNotFoundError;
+                break;
+            case PARSER_ERROR:
+                error_class = PyExc_SyntaxError;
+                break;
+            default:
+                error_class = PyExc_MemoryError;
+                break;
+        }
+        PyErr_SetString(error_class, error_message);
+        free(error_message);
+        apr_pool_destroy(mp);
+        return NULL;
+    }
 
     PyObject* types = PyImport_ImportModule("protopy.types");
     PyObject* description = aprdict_to_pydict(mp, parsed_defs);

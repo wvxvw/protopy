@@ -85,12 +85,24 @@ byte* cstr_bytes(char* cstr) {
     return result;
 }
 
+char* bytes_cstr(byte* bytes) {
+    if (bytes == NULL) {
+        return NULL;
+    }
+    size_t len = str_size(bytes);
+    char* result = malloc((len + 1) * sizeof(char));
+    memcpy(result, bytes + 2, len);
+    result[len] = '\0';
+    return result;
+}
+
 void* str_dup(void* val) {
     size_t len = str_size(val);
     byte* result = malloc((len + 2) * sizeof(byte));
     byte* bval = (byte*)val;
     size_t i = 0;
 
+    // TODO(olegs): This should use memcpy
     while (i < len + 2) {
         result[i] = bval[i];
         i++;

@@ -8,6 +8,10 @@
 
 #include "list.h"
 
+#define FS_ERROR 0
+#define PARSER_ERROR 1
+#define MEMORY_ERROR 2
+
 typedef struct parsing_progress_t {
     size_t nthreads;
     bool* thds_statuses;
@@ -19,6 +23,7 @@ typedef struct parse_def_args_t {
     list roots;
     list result;
     char* error;
+    size_t error_kind;
     size_t thread_id;
     parsing_progress_t* progress;
 } parse_def_args_t;
