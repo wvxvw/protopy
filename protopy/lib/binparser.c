@@ -404,6 +404,8 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
     state->in = cons_str(bytes, len, state->in);
 
     while (i < len) {
+        print_obj("parsing message field of: %s\n", state->pytype);
+        printf("message bytes: %s\n", str(state->in));
         j = parse(state);
         if (j == 0) {
             // TODO(olegs): We finished earlier than expected, need to

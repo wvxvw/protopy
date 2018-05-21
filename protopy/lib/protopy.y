@@ -89,14 +89,14 @@ do {                                            \
                  UINT64 WEAK STRING;
 
 %type <string>  POSINTEGER NEGINTEGER IDENTIFIER
-                keyword identifier built_in_type STRING_LITERAL;
+                keyword identifier built_in_type STRING_LITERAL option_name_body_part;
 
 %type <object> string_literal oneof enum message service message_field 
                top_level s boolean literal message_block service_body
                service_body_part rpc top_levels enum_field enum_fields
                option_name type user_type rpc_type
                import field package_name package oneof_field oneof_fields
-               map_field option_name_suffix;
+               map_field option_name_suffix option_name_body;
 
 %type <nothing> syntax option_def field_options_body assignment
                 range_end range ranges reserved_strings extend
@@ -326,15 +326,26 @@ reserved_body : ranges | reserved_strings ;
 reserved : RESERVED reserved_body { MAYBE_ABORT; $$ = NULL; } ;
 
 
+option_name_body_part : IDENTIFIER | keyword ;
+
+option_name_body : option_name_body_part {
+    MAYBE_ABORT;
+    $$ = cons_str($1, strlen($1), nil);
+}
+                 | option_name_body '.' option_name_body_part {
+    MAYBE_ABORT;
+    $$ = cons($3, tstr, $1);
+} ;
+
 option_name_suffix : %empty { $$ = nil; }
-                   | '.' user_type { $$ = $2; }
+                   | '.' option_name_body { $$ = $2; }
 
 
-option_name : '(' user_type ')' option_name_suffix {
+option_name : '(' option_name_body ')' option_name_suffix {
     MAYBE_ABORT;
     $$ = cons($4, tlist, $2);
 }
-            | user_type ;
+            | option_name_body ;
 
 
 enum_value_option : option_name '=' literal { MAYBE_ABORT; $$ = NULL; } ;
@@ -401,7 +412,11 @@ message_field : enum              { MAYBE_ABORT; $$ = tag(1, $1); }
 
 message_block : message_field {
     MAYBE_ABORT;
-    $$ = from_lists(1, $1);
+    if (null($1)) {
+        $$ = nil;
+    } else {
+        $$ = from_lists(1, $1);
+    }
 }
               | message_block message_field {
     MAYBE_ABORT;
@@ -416,7 +431,10 @@ message_block : message_field {
 message : MESSAGE identifier '{' message_block '}' {
     MAYBE_ABORT;
     $$ = cons_str($2, strlen($2), $4);
-} ;
+}       | MESSAGE identifier '{' '}' {
+    MAYBE_ABORT;
+    $$ = cons_str($2, strlen($2), nil);
+};
 
 
 rpc_type : STREAM type { MAYBE_ABORT; $$ = $2; }

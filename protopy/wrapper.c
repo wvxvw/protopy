@@ -209,11 +209,14 @@ proto_def_parse_produce(
                 del(sources);
                 del(deps);
                 sources = new_sources;
+                apr_hash_t* declarations = apr_hash_make(mp);
+                list normalized = normalize_messages(thds_args[i]->result);
+                collect_declarations(normalized, declarations);
                 apr_hash_set(
                     result,
                     thds_args[i]->source,
                     strlen(thds_args[i]->source),
-                    normalize_messages(normalize_types(thds_args[i]->result)));
+                    normalize_types(normalized, declarations));
             } else if (null(sources) || all_threads_busy(&progress)) {
                 apr_sleep(100);
             }

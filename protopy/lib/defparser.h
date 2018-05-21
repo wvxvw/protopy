@@ -5,6 +5,7 @@
 
 #include <apr_general.h>
 #include <apr_thread_proc.h>
+#include <apr_hash.h>
 
 #include "list.h"
 
@@ -34,7 +35,10 @@ typedef enum ast_type_t {
     ast_enum_t = 1,
     ast_service_t = 3,
     ast_import_t = 4,
-    ast_package_t = 5
+    ast_package_t = 5,
+    ast_oneof_t = 6,
+    ast_field_t = 7,
+    ast_repeated_t = 8
 } ast_type_t;
 
 void* APR_THREAD_FUNC parse_one_def(apr_thread_t*, void*);
@@ -43,8 +47,10 @@ list imports(list);
 
 char* unqote(char*);
 
-list normalize_types(list);
+list normalize_types(list, apr_hash_t*);
 
 list normalize_messages(list);
+
+void collect_declarations(list, apr_hash_t*);
 
 #endif // DEFPARSER_H_

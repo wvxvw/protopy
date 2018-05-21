@@ -132,20 +132,76 @@ byte* package_of(list ast) {
 
 void qualify_name(list elt, size_t plen, byte* package) {
     list cell = cdr(elt);
-    size_t nn_len = plen + 1 + str_size(cell->value);
-    byte* new_name = malloc((nn_len + 2) * sizeof(byte));
-    size_t vlen = str_size(cell->value);
-
-    new_name[0] = (byte)(nn_len >> 8);
-    new_name[1] = (byte)(nn_len & 0xFF);
-    memcpy(new_name + 2, package + 2, plen);
-    new_name[plen + 2] = ':';
-    memcpy(new_name + plen + 3, cell->value + 2, vlen);
+    byte* new_name = join_bytes(package, ':', cell->value, false);
     free(cell->value);
     cell->value = new_name;
 }
 
-list normalize_types(list ast) {
+void collect_declarations(list ast, apr_hash_t* ht) {
+    list elt;
+    byte* key;
+
+    while (!null(ast)) {
+        elt = (list)car(ast);
+        switch ((ast_type_t)(*(int*)car(elt))) {
+            case ast_enum_t:
+            case ast_message_t:
+                key = (byte*)car(cdr(elt));
+                printf("adding key: %s, %zu\n", bytes_cstr(key), str_size(key));
+                apr_hash_set(ht, bytes_cstr(key), str_size(key), (void*)1);
+                break;
+            default:
+                break;
+        }
+        ast = cdr(ast);
+    }
+}
+
+void qualify_message_fields(list elt, byte* package, apr_hash_t* ht) {
+    byte* mtype = (byte*)car(cdr(elt));
+    list fields = cdr(cdr(elt));
+    list field;
+    byte* ftype;
+    byte* new_ftype;
+    byte* combined;
+    char* key;
+    char* combined_key;
+    ast_type_t rtype;
+
+    while (!null(fields)) {
+        field = (list)car(fields);
+        rtype = (ast_type_t)(*(int*)car(field));
+        switch (rtype) {
+            case ast_field_t:
+                ftype = (byte*)car(cdr(field));
+                key = bytes_cstr(ftype);
+                // TODO(olegs): deduplicate
+                if (apr_hash_get(ht, key, str_size(ftype))) {
+                    new_ftype = join_bytes(package, '.', ftype, false);
+                    free(cdr(field)->value);
+                    cdr(field)->value = new_ftype;
+                } else {
+                    combined = join_bytes(mtype, '.', ftype, false);
+                    combined_key = bytes_cstr(ftype);
+                    if (apr_hash_get(ht, combined_key, str_size(combined))) {
+                        new_ftype = join_bytes(package, '.', combined, false);
+                        free(cdr(field)->value);
+                        cdr(field)->value = new_ftype;
+                    }
+                    free(combined);
+                    free(combined_key);
+                }
+                free(key);
+                break;
+                // TODO(olegs): Handle oneof
+            default:
+                break;
+        }
+        fields = cdr(fields);
+    }
+}
+
+list normalize_types(list ast, apr_hash_t* ht) {
     byte* package = package_of(ast);
     size_t plen = str_size(package);
     list elt;
@@ -164,8 +220,7 @@ list normalize_types(list ast) {
                         break;
                     case ast_message_t:
                         qualify_name(elt, plen, package);
-                        // TODO(olegs): qualify embedded enums and messages
-                        // TODO(olegs): resolve custom types
+                        qualify_message_fields(elt, package, ht);
                         break;
                     default:
                         break;

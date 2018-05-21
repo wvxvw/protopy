@@ -50,6 +50,7 @@ def is_builtin(pbtype):
 
 
 def value_type(pbtype, factory):
+    print('value_type: {} {}'.format(pbtype, factory))
     if type(pbtype) == list:
         return 14
     if type(pbtype) == tuple:
