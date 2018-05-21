@@ -315,7 +315,9 @@ size_t parse_length_delimited(parse_state* state) {
                 length);
             break;
         default:
-            PyErr_SetString(PyExc_NotImplementedError, "Unknown length delimited type");
+            PyErr_SetString(
+                PyExc_NotImplementedError,
+                "Unknown length delimited type");
             state->out = Py_None;
     }
     return parsed + read;
@@ -408,6 +410,16 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
             // handle this differently.
             break;
         }
+        if (PyErr_Occurred()) {
+            Py_DECREF(dict);
+            if (state->out != NULL
+                && state->out != Py_None
+                && state->out != Py_True
+                && state->out != Py_False) {
+                Py_DECREF(state->out);
+            }
+            return NULL;
+        }
         i += j;
         key = PyLong_FromUnsignedLong((unsigned long)state->field);
         existing = PyDict_GetItem(dict, key);
@@ -427,7 +439,6 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
     }
     PyObject* factory = PyDict_GetItem(state->factories, state->pytype);
     if (!factory) {
-        del(state->in);
         PyErr_Format(
             PyExc_TypeError,
             "No definition for %A, (parsed: %A)",

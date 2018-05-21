@@ -117,13 +117,15 @@ size_t rope_read(list, char*, size_t, list*);
 
 list sort_unique(list, list_cmp_f);
 
-byte* cstr_bytes(char*);
+byte* cstr_bytes(const char*);
 
 list cons_str(char*, size_t, list);
 
 list cons_int(int, size_t, list);
 
 char* bytes_cstr(byte*);
+
+byte* join_bytes(byte*, char, byte*, bool);
 
 extern byte empty[2];
 

@@ -75,8 +75,7 @@ void* int_dup(void* val) {
     return result;
 }
 
-// TODO(olegs): This should be const char*
-byte* cstr_bytes(char* cstr) {
+byte* cstr_bytes(const char* cstr) {
     size_t len = strlen(cstr);
     byte* result = malloc((len + 2) * sizeof(byte));
     result[0] = (byte)(len >> 8);
@@ -94,6 +93,25 @@ char* bytes_cstr(byte* bytes) {
     memcpy(result, bytes + 2, len);
     result[len] = '\0';
     return result;
+}
+
+byte* join_bytes(byte* prefix, char delim, byte* suffix, bool cstr) {
+    size_t prefix_len = str_size(prefix);
+    size_t suffix_len = str_size(suffix);
+    size_t total_len = prefix_len + suffix_len + 1;
+    size_t pad_bytes = cstr? 4 : 3;
+    byte* combined = malloc(prefix_len + suffix_len + pad_bytes);
+
+    memcpy(combined + 2, prefix + 2, prefix_len);
+    memcpy(combined + prefix_len + 3, suffix + 2, suffix_len);
+    combined[0] = (byte)((total_len) >> 8);
+    combined[1] = (byte)((total_len) & 0xFF);
+    combined[prefix_len + 2] = delim;
+
+    if (cstr) {
+        combined[total_len + 2] = '\0';
+    }
+    return combined;
 }
 
 void* str_dup(void* val) {

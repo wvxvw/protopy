@@ -203,9 +203,6 @@ list inner_messages(list message, list* normalized, byte* prefix) {
     ast_type_t field_type;
     byte* subtype;
     byte* subname;
-    size_t sublen;
-    size_t prefix_length = str_size(prefix);
-    size_t new_len;
     list result = nil;
 
     while (!null(fields)) {
@@ -216,14 +213,7 @@ list inner_messages(list message, list* normalized, byte* prefix) {
             case ast_enum_t:
             case ast_message_t:
                 subname = (byte*)car(cdr(field));
-                sublen = str_size(subname);
-                new_len = prefix_length + sublen + 1;
-                subtype = malloc((new_len + 2) * sizeof(byte));
-                subtype[0] = (byte)(new_len >> 8);
-                subtype[1] = (byte)(new_len & 0xFF);
-                memcpy(subtype + 2, prefix + 2, prefix_length);
-                subtype[prefix_length + 2] = '.';
-                memcpy(subtype + prefix_length + 3, subname + 2, sublen);
+                subtype = join_bytes(prefix, '.', subname, false);
                 result = cons(rename_message(field, subtype, field_type), tlist, result);
                 break;
             default:
@@ -300,20 +290,12 @@ int resolved_source(const char* path, list roots, byte** result) {
     
     byte* combined = NULL;
     byte* root;
-    size_t path_len = strlen(path);
-    size_t root_len;
+    byte* path_bytes = cstr_bytes(path);
 
     while (!null(roots)) {
         free(combined);
         root = (byte*)car(roots);
-        root_len = str_size(root);
-        combined = malloc(path_len + root_len + 4);
-        memcpy(combined + 2, root + 2, root_len);
-        combined[0] = (byte)((path_len + root_len) >> 8);
-        combined[1] = (byte)((path_len + root_len) & 0xFF);
-        combined[root_len + 2] = '/';
-        memcpy(combined + root_len + 3, path, path_len);
-        combined[path_len + root_len + 3] = '\0';
+        combined = join_bytes(root, '/', path_bytes, true);
         switch (exists_and_is_regular(&finfo, ((char*)combined) + 2, mp)) {
             case 2:
                 retcode = 2;
@@ -324,6 +306,7 @@ int resolved_source(const char* path, list roots, byte** result) {
         }
         roots = cdr(roots);
     }
+    retcode = 1;
 
 cleanup:
     apr_pool_destroy(mp);
@@ -345,6 +328,13 @@ void* parse_one_def_cleanup(
     progress->thds_statuses[args->thread_id] = false;
     apr_thread_exit(thd, APR_SUCCESS);
     return NULL;
+}
+
+char* error_message_3(const char* tpl, const char* arg0, list arg1) {
+    char* arg1_cstr = str(arg1);
+    char* result = malloc((strlen(tpl) + strlen(arg0) + strlen(arg1_cstr) + 1) * sizeof(char));
+    sprintf(result, tpl, arg0, arg1_cstr);
+    return result;
 }
 
 char* error_message_2(const char* tpl, const char* arg) {
@@ -386,17 +376,19 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
             args->error_kind = FS_ERROR;
             return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
         case 1:
-            args->error = error_message_2("Couldn't find '%s'", args->source);
+            args->error = error_message_3("Couldn't find '%s' in '%s'", args->source, args->roots);
             args->error_kind = FS_ERROR;
             return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
 
-    h = fopen((char*)(source + 2), "rb");
+    char* resolved_source = bytes_cstr(source);
+    h = fopen(resolved_source, "rb");
+    free(resolved_source);
     if (h == NULL) {
         if (source != NULL) {
-            args->error = error_message_1("Couldn't find '%s'", source);
+            args->error = error_message_1("Couldn't open '%s'", source);
         } else {
-            args->error = error_message_2("Couldn't find '%s'", args->source);
+            args->error = error_message_3("Couldn't open '%s' in '%s'", args->source, args->roots);
         }
         args->error_kind = FS_ERROR;
         return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
@@ -429,7 +421,7 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     yylex_destroy(yyscanner);
 
     if (status != 0) {
-        args->error = strdup("Parser failed");
+        args->error = error_message_1("Couldn't parse '%s'", source);
         args->error_kind = PARSER_ERROR;
         return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }

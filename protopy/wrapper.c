@@ -196,7 +196,7 @@ proto_def_parse_produce(
                     size_t j;
                     for (j = 0; j < progress.nthreads; j++) {
                         if (progress.thds[j] != NULL) {
-                            apr_thread_exit(progress.thds[j], rv);
+                            apr_thread_join(&rv, progress.thds[j]);
                         }
                     }
                     break;

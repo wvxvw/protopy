@@ -60,7 +60,6 @@ def test_gen_load_file():
     result = loop.run_until_complete(gather_results())[0]
     print('result: {}'.format(result))
     assert result.test == 123
-    assert False
 
 
 def test_inner_message():
@@ -87,7 +86,6 @@ def test_inner_message():
     result = loop.run_until_complete(gather_results())[0]
     print('result: {}'.format(result))
     assert result.test == 123
-    assert False
 
 
 def test_enum():
@@ -116,7 +114,6 @@ def test_enum():
     print('result: {}'.format(result))
     TestEnum = type(result.test_1)
     assert result.test_1 == TestEnum['TEST_MEMBER_3']
-    assert False
 
 
 def test_repeated():
@@ -154,7 +151,6 @@ def test_repeated():
     result = loop.run_until_complete(gather_results())[0]
     print('result: {}'.format(result))
     assert result.either_or.some_fixed == [123456789, 987654321]
-    assert False
 
 
 def test_fixed64():
@@ -190,7 +186,6 @@ def test_fixed64():
     result = loop.run_until_complete(gather_results())[0]
     print('result: {}'.format(result))
     assert result.some_fixed[1] == 12
-    assert False
 
 
 def test_map():
@@ -425,7 +420,6 @@ def test_map():
     print('result: {}'.format(result))
     assert result.inner_inner_inner.string_inner_inner_map['bar'] \
                                    .bytes_inner_map[78].sint_uint[2] == 32
-    assert False
 
 
 def test_internal():
@@ -454,4 +448,3 @@ def test_internal():
     result = loop.run_until_complete(gather_results())[0]
     print('result: {}'.format(result))
     assert result.np_data_file_bytes[2] == 3
-    assert False
