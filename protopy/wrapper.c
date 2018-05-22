@@ -138,6 +138,54 @@ bool all_threads_busy(parsing_progress_t* progress) {
     return available_thread_pos(progress) < progress->nthreads;
 }
 
+apr_hash_t* built_in_types(apr_pool_t* mp) {
+    apr_hash_t* result = apr_hash_make(mp);
+    static char* builtins[] = {
+        "int32",
+        "int64",
+        "uint32",
+        "uint64",
+        "sint32",
+        "sint64",
+        "bool",
+        "fixed64",
+        "sfixed64",
+        "double",
+        "fixed32",
+        "sfixed32",
+        "float",
+        "string",
+        "bytes"
+    };
+    size_t i;
+    for (i = 0; i < 15; i++) {
+        apr_hash_set(result, builtins[i], strlen(builtins[i]), (void*)true);
+    }
+    return result;
+}
+
+void
+start_defparser_thread(
+    parsing_progress_t* progress,
+    parse_def_args_t** thds_args,
+    size_t i,
+    char* source,
+    list roots,
+    apr_pool_t* mp) {
+
+    parse_def_args_t* def_args = thds_args[i];
+
+    def_args->roots = roots;
+    def_args->source = source;
+    def_args->error = "";
+    def_args->result = NULL;
+    def_args->thread_id = i;
+    def_args->progress = progress;
+    thds_args[i] = def_args;
+    progress->thds_statuses[i] = true;
+    apr_thread_create(&progress->thds[i], NULL, parse_one_def, def_args, mp);
+}
+
 static apr_hash_t*
 proto_def_parse_produce(
     list sources,
@@ -146,10 +194,12 @@ proto_def_parse_produce(
     apr_pool_t* mp,
     char** error_message,
     size_t* error_kind) {
+
     parsing_progress_t progress;
     size_t i = 0;
     parse_def_args_t** thds_args = alloca(sizeof(parse_def_args_t*) * nthreads);
     apr_hash_t* result = apr_hash_make(mp);
+    apr_hash_t* builtins = built_in_types(mp);
 
     while (i < nthreads) {
         thds_args[i] = malloc(sizeof(parse_def_args_t));
@@ -163,24 +213,16 @@ proto_def_parse_produce(
         i = available_thread_pos(&progress);
 
         if (i < progress.nthreads && !null(sources)) {
-            parse_def_args_t* def_args = thds_args[i];
-
-            def_args->roots = roots;
-            // TODO(olegs): This should be a separate function
-            size_t tocopy = str_size((byte*)car(sources));
-            char* source = malloc((tocopy + 1) * sizeof(char));
-            memcpy(source, (char*)car(sources) + 2, tocopy);
-            source[tocopy] = '\0';
-            def_args->source = source;
-            def_args->error = "";
-            def_args->result = NULL;
-            def_args->thread_id = i;
-            def_args->progress = &progress;
-            thds_args[i] = def_args;
-            progress.thds_statuses[i] = true;
-            apr_thread_create(&progress.thds[i], NULL, parse_one_def, def_args, mp);
-
-            sources = cdr(sources);
+            while (!null(sources)) {
+                char* source = bytes_cstr(car(sources));
+                sources = cdr(sources);
+                if (!apr_hash_get(result, source, strlen(source))) {
+                    start_defparser_thread(&progress, thds_args, i, source, roots, mp);
+                    break;
+                } else {
+                    free(source);
+                }
+            }
         } else {
             i = finished_thread(&progress);
             if (i < progress.nthreads) {
@@ -216,7 +258,7 @@ proto_def_parse_produce(
                     result,
                     thds_args[i]->source,
                     strlen(thds_args[i]->source),
-                    normalize_types(normalized, declarations));
+                    normalize_types(normalized, declarations, builtins));
             } else if (null(sources) || all_threads_busy(&progress)) {
                 apr_sleep(100);
             }

@@ -50,7 +50,6 @@ def is_builtin(pbtype):
 
 
 def value_type(pbtype, factory):
-    print('value_type: {} {}'.format(pbtype, factory))
     if type(pbtype) == list:
         return 14
     if type(pbtype) == tuple:
@@ -67,18 +66,6 @@ def value_type(pbtype, factory):
     return result
 
 
-# TODO(olegs): This should happen in defparser
-def normalize_fields(fields):
-    normalized_fields = []
-    for f in fields:
-        if f[0] == 6:      # oneof
-            fname = f[1]
-            normalized_fields += [[7, x[1], fname] + x[3:] for x in f[2:]]
-        else:
-            normalized_fields.append(f)
-    return normalized_fields
-
-
 def find_desc(name, descriptions):
     for file, desc in descriptions.items():
         for d in desc:
@@ -86,7 +73,7 @@ def find_desc(name, descriptions):
                 tname = d[1]
                 fields = d[2:]
                 if tname == name or tname.replace(b':', b'.') == name:
-                    return normalize_fields(fields)
+                    return fields
     # TODO(olegs): Consider lazy loading of proto descriptions.
     raise ValueError("Cannot find definition of: {}".format(name))
 
@@ -204,7 +191,6 @@ def message_desc(ftype, desc, factories, descriptions):
 def create_descriptors(descriptions):
     factories = {}
 
-    print('descriptions: {}'.format(descriptions))
     for file, desc in descriptions.items():
         for d in desc:
             if d:
@@ -212,7 +198,7 @@ def create_descriptors(descriptions):
                 if rtype == 0:
                     message_desc(
                         tname,
-                        normalize_fields(fields),
+                        fields,
                         factories,
                         descriptions,
                     )
@@ -224,5 +210,4 @@ def create_descriptors(descriptions):
                         descriptions,
                     )
 
-    print('factories: {}'.format(factories))
     return factories

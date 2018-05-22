@@ -31,14 +31,14 @@ typedef struct parse_def_args_t {
 
 // TODO(olegs): It would be better if protopy.y also used this.
 typedef enum ast_type_t {
-    ast_message_t = 0,
-    ast_enum_t = 1,
-    ast_service_t = 3,
-    ast_import_t = 4,
-    ast_package_t = 5,
-    ast_oneof_t = 6,
-    ast_field_t = 7,
-    ast_repeated_t = 8
+    ast_message = 0,
+    ast_enum = 1,
+    ast_service = 3,
+    ast_import = 4,
+    ast_package = 5,
+    ast_oneof = 6,
+    ast_field = 7,
+    ast_repeated = 8
 } ast_type_t;
 
 void* APR_THREAD_FUNC parse_one_def(apr_thread_t*, void*);
@@ -47,7 +47,7 @@ list imports(list);
 
 char* unqote(char*);
 
-list normalize_types(list, apr_hash_t*);
+list normalize_types(list, apr_hash_t*, apr_hash_t*);
 
 list normalize_messages(list);
 

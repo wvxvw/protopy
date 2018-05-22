@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
+from timeit import timeit
 
 from protopy.wrapped import (
     proto_def_parse,
@@ -32,18 +33,27 @@ class DefParser:
 
 class BinParser:
 
-    def __init__(self, roots, loop=None):
+    def __init__(self, roots, loop=None, diagnostics=False):
         if not loop:
             self.loop = asyncio.get_event_loop()
         self.def_parser = DefParser(roots)
         self.state = None
+        self.diagnostics = diagnostics
 
     async def parse_chunk(self, reader):
         chunk = await reader.read()
         proto_parse(chunk, self.state)
 
+    async def parse_chunk_timed(self, reader):
+        chunk = await reader.read()
+        print(timeit(lambda: proto_parse(chunk, self.state), number=1))
+
     async def parse(self, source, message, reader):
-        self.def_parser.parse(source)
+        if self.diagnostics:
+            print(timeit(lambda: self.def_parser.parse(source), number=1))
+        else:
+            self.def_parser.parse(source)
+
         if not isinstance(message, bytes):
             message = str(message).encode('utf-8')
         self.state = make_state()
@@ -54,7 +64,10 @@ class BinParser:
         )
         result = None
 
-        while not state_ready(self.state):
-            await self.parse_chunk(reader)
-        result = state_result(self.state)
-        return result
+        if self.diagnostics:
+            while not state_ready(self.state):
+                await self.parse_chunk_timed(reader)
+        else:
+            while not state_ready(self.state):
+                await self.parse_chunk(reader)
+        return state_result(self.state)

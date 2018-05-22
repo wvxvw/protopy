@@ -104,7 +104,7 @@ list imports(list ast) {
     while (!null(ast)) {
         if (listp(ast)) {
             elt = (list)car(ast);
-            if (!null(elt) && (ast_type_t)(*(int*)car(elt)) == ast_import_t) {
+            if (!null(elt) && (ast_type_t)(*(int*)car(elt)) == ast_import) {
                 pname = str_dup((byte*)car(cdr(elt)));
                 pname_unquoted = unquote((char*)(pname + 2));
                 result = cons_str(pname_unquoted, strlen(pname_unquoted), result);
@@ -121,7 +121,7 @@ byte* package_of(list ast) {
     while (!null(ast)) {
         if (listp(ast)) {
             elt = (list)car(ast);
-            if (!null(elt) && (ast_type_t)(*(int*)car(elt)) == ast_package_t) {
+            if (!null(elt) && (ast_type_t)(*(int*)car(elt)) == ast_package) {
                 return str_dup((byte*)car(cdr(elt)));
             }
         }
@@ -144,10 +144,9 @@ void collect_declarations(list ast, apr_hash_t* ht) {
     while (!null(ast)) {
         elt = (list)car(ast);
         switch ((ast_type_t)(*(int*)car(elt))) {
-            case ast_enum_t:
-            case ast_message_t:
+            case ast_enum:
+            case ast_message:
                 key = (byte*)car(cdr(elt));
-                printf("adding key: %s, %zu\n", bytes_cstr(key), str_size(key));
                 apr_hash_set(ht, bytes_cstr(key), str_size(key), (void*)1);
                 break;
             default:
@@ -157,7 +156,13 @@ void collect_declarations(list ast, apr_hash_t* ht) {
     }
 }
 
-void qualify_message_fields(list elt, byte* package, apr_hash_t* ht) {
+void
+qualify_message_fields(
+    list elt,
+    byte* package,
+    apr_hash_t* local_types,
+    apr_hash_t* builtins) {
+
     byte* mtype = (byte*)car(cdr(elt));
     list fields = cdr(cdr(elt));
     list field;
@@ -172,19 +177,33 @@ void qualify_message_fields(list elt, byte* package, apr_hash_t* ht) {
         field = (list)car(fields);
         rtype = (ast_type_t)(*(int*)car(field));
         switch (rtype) {
-            case ast_field_t:
+            case ast_repeated:
+            case ast_field:
                 ftype = (byte*)car(cdr(field));
                 key = bytes_cstr(ftype);
-                // TODO(olegs): deduplicate
-                if (apr_hash_get(ht, key, str_size(ftype))) {
+                // built-in definitions don't need any special
+                // treatment.
+                if (apr_hash_get(builtins, key, str_size(ftype))) {
+                    // we are fine
+                }
+                // This is the top-level definition from the current file
+                else if (apr_hash_get(local_types, key, str_size(ftype))) {
                     new_ftype = join_bytes(package, '.', ftype, false);
                     free(cdr(field)->value);
                     cdr(field)->value = new_ftype;
                 } else {
                     combined = join_bytes(mtype, '.', ftype, false);
                     combined_key = bytes_cstr(ftype);
-                    if (apr_hash_get(ht, combined_key, str_size(combined))) {
+                    // This is the nested definition from the message
+                    // we are in (hopefully...)
+                    if (apr_hash_get(local_types, combined_key, str_size(combined))) {
                         new_ftype = join_bytes(package, '.', combined, false);
+                        free(cdr(field)->value);
+                        cdr(field)->value = new_ftype;
+                        // This definition must have been imported
+                        // from the package we are in...
+                    } else if (!strchr(key, '.')) {
+                        new_ftype = join_bytes(package, '.', ftype, false);
                         free(cdr(field)->value);
                         cdr(field)->value = new_ftype;
                     }
@@ -201,7 +220,7 @@ void qualify_message_fields(list elt, byte* package, apr_hash_t* ht) {
     }
 }
 
-list normalize_types(list ast, apr_hash_t* ht) {
+list normalize_types(list ast, apr_hash_t* local_types, apr_hash_t* builtins) {
     byte* package = package_of(ast);
     size_t plen = str_size(package);
     list elt;
@@ -215,12 +234,12 @@ list normalize_types(list ast, apr_hash_t* ht) {
             elt = (list)car(ast);
             if (!null(elt)) {
                 switch ((ast_type_t)(*(int*)car(elt))) {
-                    case ast_enum_t:
+                    case ast_enum:
                         qualify_name(elt, plen, package);
                         break;
-                    case ast_message_t:
+                    case ast_message:
                         qualify_name(elt, plen, package);
-                        qualify_message_fields(elt, package, ht);
+                        qualify_message_fields(elt, package, local_types, builtins);
                         break;
                     default:
                         break;
@@ -236,10 +255,10 @@ list rename_message(list original, byte* new_name, ast_type_t field_type) {
     list fields = duplicate(cdr(cdr(original)));
     int* tag = malloc(sizeof(int));
     switch (field_type) {
-        case ast_enum_t:
+        case ast_enum:
             *tag = 1;
             break;
-        case ast_message_t:
+        case ast_message:
             *tag = 0;
             break;
         default:
@@ -265,8 +284,8 @@ list inner_messages(list message, list* normalized, byte* prefix) {
         field_type = *(int*)car(field);
 
         switch (field_type) {
-            case ast_enum_t:
-            case ast_message_t:
+            case ast_enum:
+            case ast_message:
                 subname = (byte*)car(cdr(field));
                 subtype = join_bytes(prefix, '.', subname, false);
                 result = cons(rename_message(field, subtype, field_type), tlist, result);
@@ -278,6 +297,52 @@ list inner_messages(list message, list* normalized, byte* prefix) {
     }
     *normalized = nreverse(processed);
     return result;
+}
+
+void normalize_oneof(list message) {
+    list fields = cdr(cdr(message));
+    list field;
+    list oneof_fields;
+    list extracted;
+    list oneof_field;
+    byte* oneof_name;
+    byte* oneof_ftype;
+    int oneof_field_num;
+    ast_type_t field_type;
+
+    while (!null(fields)) {
+        field = (list)car(fields);
+        field_type = (ast_type_t)(*(int*)car(field));
+        if (field_type == ast_oneof) {
+            oneof_fields = cdr(cdr(field));
+            oneof_name = car(cdr(field));
+            extracted = cdr(fields);
+
+            while (!null(oneof_fields)) {
+                oneof_field = (list)car(oneof_fields);
+                oneof_field_num = *(int*)car(cdr(cdr(cdr(oneof_field))));
+                oneof_ftype = car(cdr(oneof_field));
+                extracted = cons(
+                    cons_int(
+                        ast_field,
+                        1,
+                        cons(
+                            str_dup(oneof_ftype),
+                            tstr,
+                            cons(
+                                str_dup(oneof_name),
+                                tstr,
+                                cons_int(oneof_field_num, 1, nil)))),
+                    tlist,
+                    extracted);
+                oneof_fields = cdr(oneof_fields);
+            }
+            del(fields->value);
+            fields->value = extracted->value;
+            fields->next = extracted->next;
+        }
+        fields = cdr(fields);
+    }
 }
 
 list normalize_messages(list ast) {
@@ -297,9 +362,10 @@ list normalize_messages(list ast) {
         node = (list)car(ast);
         node_type = (ast_type_t)(*(int*)car(node));
         switch (node_type) {
-            case ast_message_t:
+            case ast_message:
                 message_type = (byte*)car(cdr(node));
                 inner = inner_messages(cdr(node), &normalized, message_type);
+                normalize_oneof(normalized);
                 result = cons(normalized, tlist, result);
                 inner_normalized = normalize_messages(inner);
                 while (!null(inner_normalized)) {
@@ -471,7 +537,6 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
             &args->result);
     } while (status == YYPUSH_MORE);
     
-    printf("parsed def: %s\n", str(args->result));
     yypstate_delete(ps);
     yylex_destroy(yyscanner);
 

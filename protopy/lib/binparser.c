@@ -243,10 +243,17 @@ size_t parse_fixed_64(parse_state* state) {
         val <<= 8;
         val |= (unsigned long long)(unsigned char)buf[read];
     }
-    if (state_get_field_type(state) == vt_fixed64) {
-        state->out = PyLong_FromUnsignedLongLong(val);
-    } else {
-        state->out = PyLong_FromLongLong((long long)val);
+    
+    switch (state_get_field_type(state)) {
+        case vt_fixed64:
+            state->out = PyLong_FromUnsignedLongLong(val);
+            break;
+        case vt_double:
+            state->out = PyFloat_FromDouble((double)val);
+            break;
+        default:
+            state->out = PyLong_FromLongLong((long long)val);
+            break;
     }
     return FIXED_LENGTH;
 #undef FIXED_LENGTH
@@ -404,8 +411,6 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
     state->in = cons_str(bytes, len, state->in);
 
     while (i < len) {
-        print_obj("parsing message field of: %s\n", state->pytype);
-        printf("message bytes: %s\n", str(state->in));
         j = parse(state);
         if (j == 0) {
             // TODO(olegs): We finished earlier than expected, need to
