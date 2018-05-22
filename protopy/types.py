@@ -27,10 +27,6 @@ _pb_types = {
 }
 
 
-def is_builtin(pbtype):
-    return pbtype in _pb_types
-
-
 def value_type(pbtype, factory):
     if type(pbtype) == list:
         return 14
