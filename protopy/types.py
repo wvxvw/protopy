@@ -6,24 +6,6 @@ from enum import IntEnum
 from keyword import kwlist
 
 
-_builtin_types = {
-    b'int32',
-    b'int64',
-    b'uint32',
-    b'uint64',
-    b'sint32',
-    b'sint64',
-    b'bool',
-    b'fixed64',
-    b'sfixed64',
-    b'double',
-    b'fixed32',
-    b'sfixed32',
-    b'float',
-    b'string',
-    b'bytes',
-}
-
 _pb_types = {
     b'int32': 0,
     b'int64': 1,
