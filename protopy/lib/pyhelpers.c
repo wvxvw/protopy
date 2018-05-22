@@ -1,4 +1,3 @@
-#include <alloca.h>
 #include <stdio.h>
 
 #include <Python.h>
@@ -19,11 +18,11 @@ void print_obj(const char* template, PyObject* obj) {
 }
 
 PyObject* str_to_pystr(char* val, size_t len) {
-    return Py_BuildValue("y#", val, len);
+    return PyBytes_FromStringAndSize(val, (Py_ssize_t)len);
 }
 
 PyObject* int_to_pyint(int* val) {
-    return Py_BuildValue("i", *val);
+    return PyLong_FromLong((long)(*val));
 }
 
 PyObject* list_to_pylist(list elts) {
@@ -61,11 +60,11 @@ list pylist_to_list(PyObject* obj) {
     list result = nil;
     char* val;
     PyObject* item;
-    int buf_len;
+    Py_ssize_t buf_len;
 
     while (i < len) {
         item = PyList_GetItem(obj, i);
-        PyArg_Parse(item, "y#", &val, &buf_len);
+        PyBytes_AsStringAndSize(item, &val, &buf_len);
         result = cons_str(val, (size_t)buf_len, result);
         i++;
     }
