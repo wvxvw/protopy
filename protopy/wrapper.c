@@ -61,9 +61,7 @@ PyMODINIT_FUNC PyInit_wrapped(void) {
 }
 
 static PyObject* apr_cleanup(PyObject* self, PyObject* args) {
-    printf("apr_cleanup start\n");
     apr_terminate();
-    printf("apr_cleanup finish\n");
     return Py_None;
 }
 

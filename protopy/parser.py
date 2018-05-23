@@ -18,14 +18,12 @@ class DefParser:
         self.defs = {}
 
     def parse(self, source, force=False):
+        source = str(source).encode('utf-8')
         if source not in self.files or force:
             self.defs.update(
-                proto_def_parse(
-                    str(source).encode('utf-8'),
-                    self.roots,
-                    self.files,
-                ),
+                proto_def_parse(source, self.roots, self.files),
             )
+            print('files updated for: {} not in {}'.format(source, self.files))
 
 
 class BinParser:
