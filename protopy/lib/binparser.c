@@ -90,15 +90,18 @@ PyObject* state_get_field_pytype(parse_state* state) {
     if (state->is_field) {
         return state->pytype;
     }
-    PyObject* key = Py_BuildValue("i", (int)state->field);
+    PyObject* key = PyLong_FromSsize_t((Py_ssize_t)state->field);
     PyObject* container_factory = PyDict_GetItem(state->factories, state->pytype);
     if (container_factory == NULL) {
+        Py_DECREF(key);
         PyErr_SetString(PyExc_TypeError, "Nonexistent type");
         // invalid proto definition, trying to read non-existent type.
         return NULL;
     }
     PyObject* tmap = PyTuple_GetItem(container_factory, 3);
-    return PyDict_GetItem(tmap, key);
+    PyObject* result = PyDict_GetItem(tmap, key);
+    Py_DECREF(key);
+    return result;
 }
 
 vt_type_t state_get_field_type(parse_state* state) {
@@ -126,7 +129,10 @@ vt_type_t state_get_field_type(parse_state* state) {
     // state initialization time.
     PyObject* types = PyImport_ImportModule("protopy.types");
     PyObject* result = PyObject_CallMethod(types, "value_type", "OO", field_type, factory);
-    return (vt_type_t)PyLong_AsLong(result);
+    vt_type_t vt_result = (vt_type_t)PyLong_AsLong(result);
+    Py_DECREF(types);
+    Py_DECREF(result);
+    return vt_result;
 }
 
 vt_type_t state_get_field_repeated_type(parse_state* state) {
@@ -137,7 +143,10 @@ vt_type_t state_get_field_repeated_type(parse_state* state) {
     }
     PyObject* types = PyImport_ImportModule("protopy.types");
     PyObject* result = PyObject_CallMethod(types, "value_type", "OO", inner, factory);
-    return (vt_type_t)PyLong_AsLong(result);
+    vt_type_t vt_result = (vt_type_t)PyLong_AsLong(result);
+    Py_DECREF(types);
+    Py_DECREF(result);
+    return vt_result;
 }
 
 size_t parse_varint_impl(parse_state* state, uint64_t value[2]) {
@@ -201,6 +210,9 @@ size_t parse_varint(parse_state* state) {
         PyObject* high = PyLong_FromUnsignedLongLong((unsigned long long)value[1]);
         PyObject* shift = PyLong_FromLong(64L);
         PyObject* high_shifted = PyNumber_Lshift(high, shift);
+        Py_DECREF(low);
+        Py_DECREF(high);
+        Py_DECREF(shift);
         state->out = PyNumber_Or(low, high_shifted);
     } else {
         state->out = low;
@@ -439,10 +451,13 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
                 Py_DECREF(state->out);
             } else {
                 PyDict_SetItem(dict, key, state->out);
+                Py_DECREF(state->out);
             }
         } else {
             PyDict_SetItem(dict, key, state->out);
+            Py_DECREF(state->out);
         }
+        Py_DECREF(key);
     }
     PyObject* factory = PyDict_GetItem(state->factories, state->pytype);
     if (!factory) {
@@ -461,6 +476,7 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
         state->factories,
         dict);
     state->out = result;
+    Py_DECREF(dict);
     Py_INCREF(state->out);
     del(state->in);
     return result;
@@ -522,7 +538,6 @@ PyObject* parse_repeated(parse_state* state, char* bytes, size_t len) {
     PyObject* subresult;
     vt_type_t rtype = state_get_field_repeated_type(state);
 
-    Py_INCREF(result);
     state->in = cons_str(bytes, len, nil);
 
     if (is_scalar(rtype)) {

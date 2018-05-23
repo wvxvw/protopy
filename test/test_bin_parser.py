@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from protopy.parser import BinParser
 from subprocess import Popen, PIPE
+from time import sleep
 
 import pkg_resources
 import os
@@ -44,11 +45,23 @@ def test_gen_load_file():
         b'test: 123\ntest_whatever: "123456"',
     )
     print('generated proto message: {}'.format(content))
+    import gc
 
-    result = BinParser(roots).parse(test_proto, 'Test', content)
+    # gc.set_debug(gc.DEBUG_STATS | gc.DEBUG_COLLECTABLE | gc.DEBUG_UNCOLLECTABLE |
+    #              gc.DEBUG_SAVEALL | gc.DEBUG_LEAK)
+    # gc.set_debug(gc.DEBUG_LEAK)
+
+    for _ in range(10):
+        result = BinParser(roots).parse(test_proto, 'Test', content)
+
+    # result = BinParser(roots).parse(test_proto, 'Test', content)
+    # sleep(10)
 
     print('result: {}'.format(result))
     assert result.test == 123
+    # print('1. {}, gc.garbage: {}'.format(len(gc.garbage), gc.garbage))
+    # gc.collect()
+    # print('2. {}, gc.garbage: {}'.format(len(gc.garbage), gc.garbage))
 
 
 def test_inner_message():

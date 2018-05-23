@@ -23,7 +23,6 @@ class DefParser:
             self.defs.update(
                 proto_def_parse(source, self.roots, self.files),
             )
-            print('files updated for: {} not in {}'.format(source, self.files))
 
 
 class BinParser:

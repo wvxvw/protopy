@@ -78,8 +78,7 @@ static PyObject* proto_parse(PyObject* self, PyObject* args) {
     if (state == NULL) {
         return NULL;
     }
-    PyObject* parsed = parse_message(state, in, (size_t)available);
-    return parsed;
+    return parse_message(state, in, (size_t)available);
 }
 
 size_t available_thread_pos(parsing_progress_t* progress) {
@@ -278,7 +277,7 @@ PyObject* aprdict_to_pydict(apr_pool_t* mp, apr_hash_t* ht) {
 
     for (hi = apr_hash_first(mp, ht); hi; hi = apr_hash_next(hi)) {
         apr_hash_this(hi, &key, NULL, &val);
-        PyObject* pykey = Py_BuildValue("y", (char*)key);
+        PyObject* pykey = PyBytes_FromString((char*)key);
         PyDict_SetItem(result, pykey, list_to_pylist((list)val));
     }
     return result;
@@ -360,11 +359,14 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
         "O",
         description);
     PyObject* keys = PyDict_Keys(description);
+    PyObject* elt;
     Py_ssize_t length = PyList_Size(keys);
     Py_ssize_t i = 0;
 
     while (i < length) {
-        PyDict_SetItem(parsed_files, PyList_GetItem(keys, i), Py_True);
+        elt = PyList_GetItem(keys, i);
+        Py_INCREF(elt);
+        PyDict_SetItem(parsed_files, elt, Py_True);
         i++;
     }
     Py_DECREF(description);
