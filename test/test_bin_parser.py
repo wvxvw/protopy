@@ -3,7 +3,6 @@ from protopy.parser import BinParser
 from subprocess import Popen, PIPE
 
 import pkg_resources
-import asyncio
 import os
 
 import pytest
@@ -45,19 +44,9 @@ def test_gen_load_file():
         b'test: 123\ntest_whatever: "123456"',
     )
     print('generated proto message: {}'.format(content))
-    loop = asyncio.get_event_loop()
-    reader = asyncio.StreamReader(loop=loop)
-    reader.feed_data(content)
 
-    async def finish():
-        asyncio.sleep(2)
-        reader.feed_eof()
+    result = BinParser(roots).parse(test_proto, 'Test', content)
 
-    async def gather_results():
-        parse_bin = BinParser(roots).parse(test_proto, 'Test', reader)
-        return await asyncio.gather(parse_bin, finish())
-
-    result = loop.run_until_complete(gather_results())[0]
     print('result: {}'.format(result))
     assert result.test == 123
 
@@ -71,19 +60,9 @@ def test_inner_message():
         ''',
     )
     print('generated proto message: {}'.format(content))
-    loop = asyncio.get_event_loop()
-    reader = asyncio.StreamReader(loop=loop)
-    reader.feed_data(content)
 
-    async def finish():
-        asyncio.sleep(2)
-        reader.feed_eof()
+    result = BinParser(roots).parse(test_proto, 'Test', content)
 
-    async def gather_results():
-        parse_bin = BinParser(roots).parse(test_proto, 'Test', reader)
-        return await asyncio.gather(parse_bin, finish())
-
-    result = loop.run_until_complete(gather_results())[0]
     print('result: {}'.format(result))
     assert result.test == 123
 
@@ -98,19 +77,9 @@ def test_enum():
         ''',
     )
     print('generated proto message: {}'.format(content))
-    loop = asyncio.get_event_loop()
-    reader = asyncio.StreamReader(loop=loop)
-    reader.feed_data(content)
 
-    async def finish():
-        asyncio.sleep(2)
-        reader.feed_eof()
+    result = BinParser(roots).parse(test_proto, 'Test', content)
 
-    async def gather_results():
-        parse_bin = BinParser(roots).parse(test_proto, 'Test', reader)
-        return await asyncio.gather(parse_bin, finish())
-
-    result = loop.run_until_complete(gather_results())[0]
     print('result: {}'.format(result))
     TestEnum = type(result.test_1)
     assert result.test_1 == TestEnum['TEST_MEMBER_3']
@@ -136,19 +105,9 @@ def test_repeated():
         ''',
     )
     print('generated proto message: {}'.format(content))
-    loop = asyncio.get_event_loop()
-    reader = asyncio.StreamReader(loop=loop)
-    reader.feed_data(content)
 
-    async def finish():
-        asyncio.sleep(2)
-        reader.feed_eof()
+    result = BinParser(roots).parse(test_proto, 'Test', content)
 
-    async def gather_results():
-        parse_bin = BinParser(roots).parse(test_proto, 'Test', reader)
-        return await asyncio.gather(parse_bin, finish())
-
-    result = loop.run_until_complete(gather_results())[0]
     print('result: {}'.format(result))
     assert result.either_or.some_fixed == [123456789, 987654321]
 
@@ -171,19 +130,9 @@ def test_fixed64():
         ''',
     )
     print('generated proto message: {}'.format(content))
-    loop = asyncio.get_event_loop()
-    reader = asyncio.StreamReader(loop=loop)
-    reader.feed_data(content)
 
-    async def finish():
-        asyncio.sleep(2)
-        reader.feed_eof()
+    result = BinParser(roots).parse(test_proto, 'Test', content)
 
-    async def gather_results():
-        parse_bin = BinParser(roots).parse(test_proto, 'Test', reader)
-        return await asyncio.gather(parse_bin, finish())
-
-    result = loop.run_until_complete(gather_results())[0]
     print('result: {}'.format(result))
     assert result.some_fixed[1] == 12
 
@@ -404,19 +353,9 @@ def test_map():
         ''',
     )
     print('generated proto message: {}'.format(content))
-    loop = asyncio.get_event_loop()
-    reader = asyncio.StreamReader(loop=loop)
-    reader.feed_data(content)
 
-    async def finish():
-        asyncio.sleep(2)
-        reader.feed_eof()
+    result = BinParser(roots).parse(test_proto, 'Test', content)
 
-    async def gather_results():
-        parse_bin = BinParser(roots).parse(test_proto, 'Test', reader)
-        return await asyncio.gather(parse_bin, finish())
-
-    result = loop.run_until_complete(gather_results())[0]
     print('result: {}'.format(result))
     assert result.inner_inner_inner.string_inner_inner_map['bar'] \
                                    .bytes_inner_map[78].sint_uint[2] == 32
@@ -429,22 +368,12 @@ def test_internal():
         'np.v1.UploadNPDataRequest',
     )
     print('generated proto message: {}'.format(content))
-    loop = asyncio.get_event_loop()
-    reader = asyncio.StreamReader(loop=loop)
-    reader.feed_data(content)
 
-    async def finish():
-        asyncio.sleep(2)
-        reader.feed_eof()
+    result = BinParser(roots).parse(
+        test_proto,
+        'np.v1.UploadNPDataRequest',
+        content,
+    )
 
-    async def gather_results():
-        parse_bin = BinParser(roots).parse(
-            test_proto,
-            'np.v1.UploadNPDataRequest',
-            reader,
-        )
-        return await asyncio.gather(parse_bin, finish())
-
-    result = loop.run_until_complete(gather_results())[0]
     print('result: {}'.format(result))
     assert result.np_data_file_bytes[2] == 3

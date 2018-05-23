@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import asyncio
-from timeit import timeit
-
 from protopy.wrapped import (
     proto_def_parse,
     proto_parse,
@@ -33,31 +30,12 @@ class DefParser:
 
 class BinParser:
 
-    def __init__(self, roots, loop=None, diagnostics=False):
-        if not loop:
-            self.loop = asyncio.get_event_loop()
+    def __init__(self, roots):
         self.def_parser = DefParser(roots)
         self.state = None
-        self.diagnostics = diagnostics
 
-    async def parse_chunk(self, reader):
-        chunk = await reader.read()
-        proto_parse(chunk, self.state)
-
-    async def parse_chunk_timed(self, reader):
-        chunk = await reader.read()
-        print('proto_parse #{} bytes {} seconds'.format(
-            len(chunk),
-            timeit(lambda: proto_parse(chunk, self.state), number=1),
-        ))
-
-    async def parse(self, source, message, reader):
-        if self.diagnostics:
-            print('parsing extra defs: {} seconds'.format(
-                timeit(lambda: self.def_parser.parse(source), number=1),
-            ))
-        else:
-            self.def_parser.parse(source)
+    def parse(self, source, message, buf):
+        self.def_parser.parse(source)
 
         if not isinstance(message, bytes):
             message = str(message).encode('utf-8')
@@ -67,12 +45,9 @@ class BinParser:
             message,
             self.def_parser.defs,
         )
-        result = None
 
-        if self.diagnostics:
-            while not state_ready(self.state):
-                await self.parse_chunk_timed(reader)
-        else:
-            while not state_ready(self.state):
-                await self.parse_chunk(reader)
+        proto_parse(buf, self.state)
+
+        if not state_ready(self.state):
+            raise RuntimeError('Parser did not finish')
         return state_result(self.state)
