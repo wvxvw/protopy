@@ -361,6 +361,29 @@ def test_map():
                                    .bytes_inner_map[78].sint_uint[2] == 32
 
 
+def test_invalid_source_path():
+    roots = [pkg_resources.resource_filename(
+        __name__,
+        './resources',
+    )]
+    try:
+        BinParser(roots).parse(None, 'Test', 'does not matter')
+    except FileNotFoundError:
+        pass
+    roots, test_proto, content = generate_proto_binary(
+        'test.proto',
+        b'test: 123\ntest_whatever: "123456"',
+    )
+    print('generated proto message: {}'.format(content))
+
+    parser = BinParser(roots)
+    parser.parse(test_proto, 'Test', content)
+    try:
+        parser.parse(None, 'Test', content)
+    except FileNotFoundError:
+        pass
+
+
 def test_internal():
     roots, test_proto, content = generate_proto_binary(
         'np/v1/upload-np-data-service.proto',
