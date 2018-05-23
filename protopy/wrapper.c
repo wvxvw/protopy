@@ -62,7 +62,7 @@ PyMODINIT_FUNC PyInit_wrapped(void) {
 
 static PyObject* apr_cleanup(PyObject* self, PyObject* args) {
     apr_terminate();
-    return Py_None;
+    Py_RETURN_NONE;
 }
 
 static PyObject* proto_parse(PyObject* self, PyObject* args) {
@@ -279,6 +279,7 @@ PyObject* aprdict_to_pydict(apr_pool_t* mp, apr_hash_t* ht) {
         apr_hash_this(hi, &key, NULL, &val);
         PyObject* pykey = PyBytes_FromString((char*)key);
         PyDict_SetItem(result, pykey, list_to_pylist((list)val));
+        Py_DECREF(pykey);
     }
     return result;
 }
@@ -287,7 +288,7 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     PyObject* source_roots;
     PyObject* parsed_files;
     char* source;
-    
+
     if (!PyArg_ParseTuple(
             args,
             "yO!O!",
@@ -306,6 +307,8 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     if (nthreads < 1) {
         nthreads = 1;
     }
+    Py_DECREF(multiprocessing);
+    Py_DECREF(ncores);
     list roots = pylist_to_list(source_roots);
     apr_pool_t* mp = NULL;
     apr_hash_t* parsed_defs;
@@ -359,17 +362,16 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
         "O",
         description);
     PyObject* keys = PyDict_Keys(description);
-    PyObject* elt;
     Py_ssize_t length = PyList_Size(keys);
     Py_ssize_t i = 0;
 
     while (i < length) {
-        elt = PyList_GetItem(keys, i);
-        Py_INCREF(elt);
-        PyDict_SetItem(parsed_files, elt, Py_True);
+        PyDict_SetItem(parsed_files, PyList_GetItem(keys, i), Py_True);
         i++;
     }
     Py_DECREF(description);
+    Py_DECREF(types);
+    Py_DECREF(keys);
 
     apr_pool_destroy(mp);
 

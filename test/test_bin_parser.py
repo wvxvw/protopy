@@ -51,7 +51,7 @@ def test_gen_load_file():
     #              gc.DEBUG_SAVEALL | gc.DEBUG_LEAK)
     # gc.set_debug(gc.DEBUG_LEAK)
 
-    for _ in range(10):
+    for _ in range(100):
         result = BinParser(roots).parse(test_proto, 'Test', content)
 
     # result = BinParser(roots).parse(test_proto, 'Test', content)

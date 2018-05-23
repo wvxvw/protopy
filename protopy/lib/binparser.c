@@ -28,8 +28,10 @@ PyObject* state_ready(PyObject* self, PyObject* args) {
         return NULL;
     }
     if (state->out == Py_None) {
+        Py_INCREF(Py_False);
         return Py_False;
     }
+    Py_INCREF(Py_True);
     return Py_True;
 }
 
