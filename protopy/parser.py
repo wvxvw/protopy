@@ -46,11 +46,16 @@ class BinParser:
 
     async def parse_chunk_timed(self, reader):
         chunk = await reader.read()
-        print(timeit(lambda: proto_parse(chunk, self.state), number=1))
+        print('proto_parse #{} bytes {} seconds'.format(
+            len(chunk),
+            timeit(lambda: proto_parse(chunk, self.state), number=1),
+        ))
 
     async def parse(self, source, message, reader):
         if self.diagnostics:
-            print(timeit(lambda: self.def_parser.parse(source), number=1))
+            print('parsing extra defs: {} seconds'.format(
+                timeit(lambda: self.def_parser.parse(source), number=1),
+            ))
         else:
             self.def_parser.parse(source)
 
