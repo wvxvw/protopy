@@ -378,17 +378,9 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
         "create_descriptors",
         "O",
         description);
-    PyObject* keys = PyDict_Keys(description);
-    Py_ssize_t length = PyList_Size(keys);
-    Py_ssize_t i = 0;
-
-    while (i < length) {
-        PyDict_SetItem(parsed_files, PyList_GetItem(keys, i), Py_True);
-        i++;
-    }
+    PyDict_Update(parsed_files, description);
     Py_DECREF(description);
     Py_DECREF(types);
-    Py_DECREF(keys);
 
     apr_pool_destroy(mp);
 
