@@ -47,8 +47,9 @@ bool is_scalar(vt_type_t);
 
 typedef struct {
     int64_t pos;
+    int64_t len;
     size_t field;
-    list in;
+    unsigned char* in;
     bool is_field;
     PyObject* out;
     PyObject* factories;
@@ -63,7 +64,7 @@ vt_type_t state_get_repeated_type(parse_state*);
 
 vt_type_t state_get_field_type(parse_state*);
 
-size_t state_read(parse_state*, char*, size_t);
+size_t state_read(parse_state*, unsigned char**, size_t);
 
 size_t parse(parse_state*);
 
@@ -79,11 +80,11 @@ size_t parse_end_group(parse_state*);
 
 size_t parse_fixed_32(parse_state*);
 
-PyObject* parse_message(parse_state*, char*, size_t);
+PyObject* parse_message(parse_state*);
 
-PyObject* parse_repeated(parse_state*, char*, size_t);
+PyObject* parse_repeated(parse_state*);
 
-PyObject* parse_map(parse_state*, char*, size_t);
+PyObject* parse_map(parse_state*);
 
 size_t select_handler(parse_state*, parse_handler*);
 

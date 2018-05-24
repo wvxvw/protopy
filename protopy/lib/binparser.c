@@ -14,7 +14,6 @@ void free_state(PyObject* capsule) {
         return;
     }
     parse_state* state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
-    del(state->in);
     free(state);
 }
 
@@ -49,7 +48,6 @@ PyObject* state_result(PyObject* self, PyObject* args) {
 
 PyObject* make_state(PyObject* self, PyObject* args) {
     parse_state* state = malloc(sizeof(parse_state));
-    state->in = nil;
     state->pos = 0;
     state->out = Py_None;
     state->is_field = false;
@@ -77,15 +75,17 @@ PyObject* state_set_factory(PyObject* self, PyObject* args) {
 }
 
 int64_t state_get_available(parse_state* state) {
-    return (int64_t)rope_length(state->in);
+    return state->len - state->pos;
 }
 
-size_t state_read(parse_state* state, char* buf, size_t n) {
-    list into;
-    size_t result = rope_read(state->in, buf, n, &into);
-    del(state->in);
-    state->in = into;
-    return result;
+size_t state_read(parse_state* state, unsigned char** buf, size_t n) {
+    *buf = &state->in[state->pos];
+    if (state->len >= state->pos + (int64_t)n) {
+        state->pos += (int64_t)n;
+        return n;
+    }
+    state->pos = state->len;
+    return state->len - state->pos;
 }
 
 PyObject* state_get_field_pytype(parse_state* state) {
@@ -152,20 +152,18 @@ vt_type_t state_get_field_repeated_type(parse_state* state) {
 }
 
 size_t parse_varint_impl(parse_state* state, uint64_t value[2]) {
-    // TODO(olegs): This can be made more efficient if we try to
-    // pre-read more bytes.
-    char* buf = alloca(sizeof(char) * 2);
+    unsigned char* buf = NULL;
     unsigned char current;
     size_t bytes_read = 0;
     size_t read = 0;
     size_t index = 0;
 
     while (state_get_available(state) > 0 && read < 16) {
-        bytes_read = state_read(state, buf, 1);
+        bytes_read = state_read(state, &buf, 1);
         if (bytes_read == 0) {
             return read;
         }
-        current = (unsigned char)buf[0];
+        current = buf[0];
         if (read == 7) {
             index = 1;
         }
@@ -241,21 +239,17 @@ size_t parse_varint(parse_state* state) {
 
 size_t parse_fixed_64(parse_state* state) {
 #define FIXED_LENGTH 8
-    char* buf = alloca((FIXED_LENGTH + 1) * sizeof(char));
+    unsigned char* buf = NULL;
     size_t read = 0;
 
-    // TODO(olegs): Same as other reads: this must know how to give up
-    // once the reading is no longer possible
-    while (read < FIXED_LENGTH) {
-        read += state_read(state, buf, FIXED_LENGTH);
-    }
+    state_read(state, &buf, FIXED_LENGTH);
     unsigned long long val = 0;
-    read = FIXED_LENGTH + 1;
+    read = FIXED_LENGTH;
     // ntohl only takes up to 32 bits
     while (read > 0) {
         read--;
         val <<= 8;
-        val |= (unsigned long long)(unsigned char)buf[read];
+        val |= (unsigned long long)buf[read];
     }
     
     switch (state_get_field_type(state)) {
@@ -281,59 +275,49 @@ size_t parse_length_delimited(parse_state* state) {
     size_t length = (size_t)value[0];
     // TODO(olegs): Figure out what's the safe value to allocate on
     // stack and allocate on heap, if above the threshold.
-    char* bytes = alloca(sizeof(char) * length);
+    unsigned char* bytes = NULL;
     size_t read = 0;
     parse_state substate;
 
-    while (read < length) {
-        read += state_read(state, bytes + read, (size_t)length - read);
-        // TODO(olegs): Maybe the interface to reading objects from
-        // stream should be flexible enough to not block here until
-        // the entire object is received.
-        // TODO(olegs): This is a dangerous place because it may hang
-        // if the socket closes in the of receiving a message.
+    if (state_read(state, &bytes, length) != length) {
+        return 0;
     }
+
     switch (state_get_field_type(state)) {
         case vt_string:
-            state->out = PyUnicode_FromStringAndSize(bytes, (Py_ssize_t)length);
+            state->out = PyUnicode_FromStringAndSize((char*)bytes, (Py_ssize_t)length);
             break;
         case vt_bytes:
-            state->out = PyBytes_FromStringAndSize(bytes, (Py_ssize_t)length);
+            state->out = PyBytes_FromStringAndSize((char*)bytes, (Py_ssize_t)length);
             break;
         case vt_message:
             substate.pos = 0;
-            substate.in = nil;
+            substate.in = bytes;
+            substate.len = (int64_t)length;
             substate.factories = state->factories;
             substate.pytype = state_get_field_pytype(state);
             substate.is_field = false;
-            state->out = parse_message(
-                &substate,
-                bytes,
-                length);
+            state->out = parse_message(&substate);
             break;
         case vt_repeated:
             substate.pos = 0;
-            substate.in = nil;
+            substate.in = bytes;
+            substate.len = (int64_t)length;
             substate.field = state->field;
             substate.factories = state->factories;
             substate.pytype = state_get_field_pytype(state);
             substate.is_field = false;
-            state->out = parse_repeated(
-                &substate,
-                bytes,
-                length);
+            state->out = parse_repeated(&substate);
             break;
         case vt_map:
             substate.pos = 0;
-            substate.in = nil;
+            substate.in = bytes;
+            substate.len = (int64_t)length;
             substate.field = state->field;
             substate.factories = state->factories;
             substate.pytype = state_get_field_pytype(state);
             substate.is_field = false;
-            state->out = parse_map(
-                &substate,
-                bytes,
-                length);
+            state->out = parse_map(&substate);
             break;
         default:
             PyErr_SetString(
@@ -356,20 +340,17 @@ size_t parse_end_group(parse_state* state) {
 
 size_t parse_fixed_32(parse_state* state) {
 #define FIXED_LENGTH 4
-    char* buf = alloca(FIXED_LENGTH * sizeof(char));
+    unsigned char* buf = NULL;
     size_t read = 0;
 
-    // TODO(olegs): Same as other reads: this must know how to give up
-    // once the reading is no longer possible
-    while (read < FIXED_LENGTH) {
-        read += state_read(state, buf, FIXED_LENGTH);
-    }
+    state_read(state, &buf, FIXED_LENGTH);
+    
     unsigned long val = 0;
-    read = FIXED_LENGTH + 1;
+    read = FIXED_LENGTH;
     while (read > 0) {
         read--;
         val <<= 8;
-        val |= (unsigned long)(unsigned char)buf[read];
+        val |= (unsigned long)buf[read];
     }
     if (state_get_field_type(state) == vt_fixed32) {
         state->out = PyLong_FromUnsignedLong(val);
@@ -415,16 +396,14 @@ bool is_scalar(vt_type_t vt) {
     }
 }
 
-PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
-    size_t i = 0;
+PyObject* parse_message(parse_state* state) {
+    int64_t i = 0;
     size_t j = 0;
     PyObject* dict = PyDict_New();
     PyObject* key;
     PyObject* existing;
 
-    state->in = cons_str(bytes, len, state->in);
-
-    while (i < len) {
+    while (i < state->len) {
         j = parse(state);
         if (j == 0) {
             // TODO(olegs): We finished earlier than expected, need to
@@ -441,7 +420,7 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
             }
             return NULL;
         }
-        i += j;
+        i += (int64_t)j;
         key = PyLong_FromUnsignedLong((unsigned long)state->field);
         existing = PyDict_GetItem(dict, key);
         if (existing) {
@@ -480,17 +459,15 @@ PyObject* parse_message(parse_state* state, char* bytes, size_t len) {
     state->out = result;
     Py_DECREF(dict);
     Py_INCREF(state->out);
-    del(state->in);
     return result;
 }
 
-PyObject* parse_map(parse_state* state, char* bytes, size_t len) {
+PyObject* parse_map(parse_state* state) {
     PyObject* key_type = PyTuple_GetItem(state->pytype, 0);
     PyObject* value_type = PyTuple_GetItem(state->pytype, 1);
     PyObject* result = PyDict_New();
     parse_handler handler;
 
-    state->in = cons_str(bytes, len, nil);
     select_handler(state, &handler);
 
     if (state->field == 1) {
@@ -533,14 +510,12 @@ PyObject* parse_map(parse_state* state, char* bytes, size_t len) {
     return result;
 }
 
-PyObject* parse_repeated(parse_state* state, char* bytes, size_t len) {
-    size_t i = 0;
+PyObject* parse_repeated(parse_state* state) {
+    int64_t i = 0;
     size_t j = 0;
     PyObject* result = PyList_New(0);
     PyObject* subresult;
     vt_type_t rtype = state_get_field_repeated_type(state);
-
-    state->in = cons_str(bytes, len, nil);
 
     if (is_scalar(rtype)) {
         parse_handler ph;
@@ -558,25 +533,29 @@ PyObject* parse_repeated(parse_state* state, char* bytes, size_t len) {
             default:
                 ph = &parse_length_delimited;
         }
-        while (i < len) {
+        while (i < state->len) {
             j = ph(state);
             if (j == 0) {
                 break;
             }
-            i += j;
+            i += (int64_t)j;
             PyList_Append(result, state->out);
+            Py_DECREF(state->out);
         }
     } else if (rtype == vt_string) {
-        subresult = PyUnicode_FromStringAndSize(bytes, (Py_ssize_t)len);
+        subresult = PyUnicode_FromStringAndSize((char*)state->in, (Py_ssize_t)state->len);
         PyList_Append(result, subresult);
+        Py_DECREF(subresult);
     } else if (rtype == vt_bytes) {
-        subresult = PyBytes_FromStringAndSize(bytes, (Py_ssize_t)len);
+        subresult = PyBytes_FromStringAndSize((char*)state->in, (Py_ssize_t)state->len);
         PyList_Append(result, subresult);
+        Py_DECREF(subresult);
     } else {
         state->pytype = PyList_GetItem(state->pytype, 0);
 
-        subresult = parse_message(state, bytes, len);
+        subresult = parse_message(state);
         PyList_Append(result, subresult);
+        Py_DECREF(subresult);
     }
     return result;
 }

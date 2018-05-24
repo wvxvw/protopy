@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3.5
 # -*- coding: utf-8 -*-
 
 import os
@@ -51,6 +51,7 @@ setup(
             ],
             include_dirs=[apr_lib],
             libraries=['apr-1'],
+            py_limited_api=False,
             # include_dirs=['./include/apr/unix/include']
             # extra_link_args=['-Wl,-rpath,{}'.format(LIB_DIR)]
         )

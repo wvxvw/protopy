@@ -67,18 +67,35 @@ static PyObject* apr_cleanup(PyObject* self, PyObject* args) {
 
 static PyObject* proto_parse(PyObject* self, PyObject* args) {
     parse_state* state;
-    char* in;
-    int available;
+    PyObject* in;
     PyObject* capsule;
     
-    if (!PyArg_ParseTuple(args, "s#O", &in, &available, &capsule)) {
+    if (!PyArg_ParseTuple(args, "OO", &in, &capsule)) {
         return NULL;
     }
     state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
     if (state == NULL) {
         return NULL;
     }
-    return parse_message(state, in, (size_t)available);
+    Py_buffer buf;
+    unsigned char* contiguous = NULL;
+    if (PyObject_GetBuffer(in, &buf, PyBUF_SIMPLE)) {
+        PyErr_Format(PyExc_TypeError, "%A doesn't implement buffer API", in);
+        return NULL;
+    }
+    if (!PyBuffer_IsContiguous(&buf, 'C')) {
+        if (PyBuffer_ToContiguous(contiguous, &buf, buf.len, 'C')) {
+            PyErr_Format(PyExc_MemoryError, "cannot copy %i bytes from %A", buf.len, in);
+            return NULL;
+        }
+        state->in = contiguous;
+    } else {
+        state->in = (unsigned char*)buf.buf;
+    }
+    state->len = (int64_t)buf.len;
+    PyObject* result = parse_message(state);
+    PyBuffer_Release(&buf);
+    return result;
 }
 
 size_t available_thread_pos(parsing_progress_t* progress) {
