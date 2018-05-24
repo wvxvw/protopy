@@ -47,7 +47,7 @@ list imports(list);
 
 char* unqote(char*);
 
-list normalize_types(list, apr_hash_t*, apr_hash_t*);
+list normalize_types(list, apr_hash_t*, apr_hash_t*, list, apr_pool_t*);
 
 list normalize_messages(list);
 

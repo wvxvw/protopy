@@ -265,7 +265,6 @@ proto_def_parse_produce(
                 list deps = imports(thds_args[i]->result);
                 list new_sources = append(sources, deps);
                 del(sources);
-                del(deps);
                 sources = new_sources;
                 apr_hash_t* declarations = apr_hash_make(mp);
                 list normalized = normalize_messages(thds_args[i]->result);
@@ -274,7 +273,13 @@ proto_def_parse_produce(
                     result,
                     thds_args[i]->source,
                     strlen(thds_args[i]->source),
-                    normalize_types(normalized, declarations, builtins));
+                    normalize_types(
+                        normalized,
+                        declarations,
+                        builtins,
+                        deps,
+                        mp));
+                del(deps);
             } else if (null(sources) || all_threads_busy(&progress)) {
                 apr_sleep(100);
             }

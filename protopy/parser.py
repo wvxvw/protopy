@@ -42,7 +42,6 @@ class BinParser:
             message,
             self.def_parser.defs,
         )
-
         proto_parse(buf, self.state)
 
         if not state_ready(self.state):

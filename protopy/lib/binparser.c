@@ -131,6 +131,12 @@ vt_type_t state_get_field_type(parse_state* state) {
     // state initialization time.
     PyObject* types = PyImport_ImportModule("protopy.types");
     PyObject* result = PyObject_CallMethod(types, "value_type", "OO", field_type, factory);
+    if (!result) {
+        Py_DECREF(types);
+        PyErr_Clear();
+        PyErr_Format(PyExc_TypeError, "No definition for type: %A", field_type);
+        return vt_error;
+    }
     vt_type_t vt_result = (vt_type_t)PyLong_AsLong(result);
     Py_DECREF(types);
     Py_DECREF(result);
@@ -320,9 +326,11 @@ size_t parse_length_delimited(parse_state* state) {
             state->out = parse_map(&substate);
             break;
         default:
-            PyErr_SetString(
-                PyExc_NotImplementedError,
-                "Unknown length delimited type");
+            if (!PyErr_Occurred()) {
+                PyErr_SetString(
+                    PyExc_NotImplementedError,
+                    "Unknown length delimited type");
+            }
             state->out = Py_None;
     }
     return parsed + read;

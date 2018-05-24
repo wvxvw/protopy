@@ -156,12 +156,61 @@ void collect_declarations(list ast, apr_hash_t* ht) {
     }
 }
 
+char* package_of_type(const char* type) {
+    if (!strchr(type, '.')) {
+        return NULL;
+    }
+    char* ctype = strdup(type);
+    size_t i = 0;
+    size_t found = 0;
+    size_t len = strlen(type);
+
+    while (i < len) {
+        if (ctype[i] == '.') {
+            found = i;
+        }
+        i++;
+    }
+    ctype[found] = '\0';
+    return ctype;
+}
+
+char* package_dir(byte* file) {
+    char* ctype = bytes_cstr(file);
+    if (!strchr(ctype, '.')) {
+        free(ctype);
+        return NULL;
+    }
+    size_t i = 0;
+    size_t found = 0;
+    size_t len = str_size(file);
+
+    while (i < len) {
+        if (ctype[i] == '/') {
+            found = i;
+        }
+        i++;
+    }
+    ctype[found] = '\0';
+    return ctype;
+}
+
+bool package_matches(const char* type, const char* package) {
+    char* prefix = package_of_type(type);
+    bool result = strcmp(prefix, package) == 0;
+    free(prefix);
+    return result;
+}
+
 void
 qualify_message_fields(
     list elt,
     byte* package,
     apr_hash_t* local_types,
-    apr_hash_t* builtins) {
+    apr_hash_t* builtins,
+    bool imported_subpackages,
+    apr_hash_t* subpackages,
+    apr_pool_t* mp) {
 
     byte* mtype = (byte*)car(cdr(elt));
     list fields = cdr(cdr(elt));
@@ -206,6 +255,19 @@ qualify_message_fields(
                         new_ftype = join_bytes(package, '.', ftype, false);
                         free(cdr(field)->value);
                         cdr(field)->value = new_ftype;
+                    } else if (imported_subpackages) {
+                        apr_hash_index_t* hi;
+                        void* val;
+                        const void* sub;
+                        for (hi = apr_hash_first(mp, subpackages); hi; hi = apr_hash_next(hi)) {
+                            apr_hash_this(hi, &sub, NULL, &val);
+                            if (package_matches(key, sub)) {
+                                new_ftype = join_bytes(package, '.', ftype, false);
+                                free(cdr(field)->value);
+                                cdr(field)->value = new_ftype;
+                                break;
+                            }
+                        }
                     }
                     free(combined);
                     free(combined_key);
@@ -220,11 +282,62 @@ qualify_message_fields(
     }
 }
 
-list normalize_types(list ast, apr_hash_t* local_types, apr_hash_t* builtins) {
+void
+find_subpackages(
+    byte* package,
+    list imports,
+    bool* imported,
+    apr_hash_t** subs,
+    apr_pool_t* mp) {
+
+    char* prefix;
+    size_t len = str_size(package);
+    size_t i;
+    char a, b;
+    bool matched = true;
+
+    while (!null(imports)) {
+        prefix = package_dir(car(imports));
+        i = 0;
+        matched = true;
+        while (i < len) {
+            a = prefix[i];
+            b = package[i + 2];
+            if (a != b && !(a == '/' && b == '.')) {
+                matched = false;
+                break;
+            }
+            i++;
+        }
+
+        if (matched) {
+            if (!*imported) {
+                *subs = apr_hash_make(mp);
+            }
+            *imported = true;
+            apr_hash_set(*subs, prefix + len + 1, strlen(prefix + len + 1), (void*)1);
+        }
+
+        imports = cdr(imports);
+    }
+}
+
+list
+normalize_types(
+    list ast,
+    apr_hash_t* local_types,
+    apr_hash_t* builtins,
+    list imports,
+    apr_pool_t* mp) {
+
     byte* package = package_of(ast);
     size_t plen = str_size(package);
     list elt;
     list result = ast;
+    bool imported_subpackages;
+    apr_hash_t* subpackages;
+
+    find_subpackages(package, imports, &imported_subpackages, &subpackages, mp);
 
     if (!plen) {
         return result;
@@ -239,7 +352,14 @@ list normalize_types(list ast, apr_hash_t* local_types, apr_hash_t* builtins) {
                         break;
                     case ast_message:
                         qualify_name(elt, plen, package);
-                        qualify_message_fields(elt, package, local_types, builtins);
+                        qualify_message_fields(
+                            elt,
+                            package,
+                            local_types,
+                            builtins,
+                            imported_subpackages,
+                            subpackages,
+                            mp);
                         break;
                     default:
                         break;
