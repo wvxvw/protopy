@@ -102,6 +102,14 @@ PyObject* state_get_field_pytype(parse_state* state) {
     }
     PyObject* tmap = PyTuple_GetItem(container_factory, 3);
     PyObject* result = PyDict_GetItem(tmap, key);
+    if (!result) {
+        PyErr_Format(
+            PyExc_TypeError,
+            "Encountered stray key: %A in message of type %A(%A)",
+            key,
+            state->pytype,
+            tmap);
+    }
     Py_DECREF(key);
     return result;
 }
