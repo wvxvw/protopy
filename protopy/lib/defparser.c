@@ -202,6 +202,62 @@ bool package_matches(const char* type, const char* package) {
     return result;
 }
 
+byte* maybe_replace_field_type(
+    byte* ftype,
+    byte* mtype,
+    byte* package,
+    apr_hash_t* local_types,
+    apr_hash_t* builtins,
+    bool imported_subpackages,
+    apr_hash_t* subpackages,
+    apr_pool_t* mp) {
+    byte* new_ftype;
+    byte* combined;
+    char* key;
+    char* combined_key;
+
+    key = bytes_cstr(ftype);
+    // built-in definitions don't need any special
+    // treatment.
+    if (apr_hash_get(builtins, key, str_size(ftype))) {
+        // we are fine
+    }
+    // This is the top-level definition from the current file
+    else if (apr_hash_get(local_types, key, str_size(ftype))) {
+        new_ftype = join_bytes(package, '.', ftype, false);
+        return new_ftype;
+    } else {
+        combined = join_bytes(mtype, '.', ftype, false);
+        combined_key = bytes_cstr(ftype);
+        // This is the nested definition from the message
+        // we are in (hopefully...)
+        if (apr_hash_get(local_types, combined_key, str_size(combined))) {
+            new_ftype = join_bytes(package, '.', combined, false);
+            return new_ftype;
+            // This definition must have been imported
+            // from the package we are in...
+        } else if (!strchr(key, '.')) {
+            new_ftype = join_bytes(package, '.', ftype, false);
+            return new_ftype;
+        } else if (imported_subpackages) {
+            apr_hash_index_t* hi;
+            void* val;
+            const void* sub;
+            for (hi = apr_hash_first(mp, subpackages); hi; hi = apr_hash_next(hi)) {
+                apr_hash_this(hi, &sub, NULL, &val);
+                if (package_matches(key, sub)) {
+                    new_ftype = join_bytes(package, '.', ftype, false);
+                    return new_ftype;
+                }
+            }
+        }
+        free(combined);
+        free(combined_key);
+    }
+    free(key);
+    return NULL;
+}
+
 void
 qualify_message_fields(
     list elt,
@@ -216,11 +272,8 @@ qualify_message_fields(
     list fields = cdr(cdr(elt));
     list field;
     byte* ftype;
-    byte* new_ftype;
-    byte* combined;
-    char* key;
-    char* combined_key;
     ast_type_t rtype;
+    byte* replaced;
 
     while (!null(fields)) {
         field = (list)car(fields);
@@ -229,52 +282,35 @@ qualify_message_fields(
             case ast_repeated:
             case ast_field:
                 ftype = (byte*)car(cdr(field));
-                key = bytes_cstr(ftype);
-                // built-in definitions don't need any special
-                // treatment.
-                if (apr_hash_get(builtins, key, str_size(ftype))) {
-                    // we are fine
-                }
-                // This is the top-level definition from the current file
-                else if (apr_hash_get(local_types, key, str_size(ftype))) {
-                    new_ftype = join_bytes(package, '.', ftype, false);
+                replaced = maybe_replace_field_type(
+                    ftype,
+                    mtype,
+                    package,
+                    local_types,
+                    builtins,
+                    imported_subpackages,
+                    subpackages,
+                    mp);
+                if (replaced) {
                     free(cdr(field)->value);
-                    cdr(field)->value = new_ftype;
-                } else {
-                    combined = join_bytes(mtype, '.', ftype, false);
-                    combined_key = bytes_cstr(ftype);
-                    // This is the nested definition from the message
-                    // we are in (hopefully...)
-                    if (apr_hash_get(local_types, combined_key, str_size(combined))) {
-                        new_ftype = join_bytes(package, '.', combined, false);
-                        free(cdr(field)->value);
-                        cdr(field)->value = new_ftype;
-                        // This definition must have been imported
-                        // from the package we are in...
-                    } else if (!strchr(key, '.')) {
-                        new_ftype = join_bytes(package, '.', ftype, false);
-                        free(cdr(field)->value);
-                        cdr(field)->value = new_ftype;
-                    } else if (imported_subpackages) {
-                        apr_hash_index_t* hi;
-                        void* val;
-                        const void* sub;
-                        for (hi = apr_hash_first(mp, subpackages); hi; hi = apr_hash_next(hi)) {
-                            apr_hash_this(hi, &sub, NULL, &val);
-                            if (package_matches(key, sub)) {
-                                new_ftype = join_bytes(package, '.', ftype, false);
-                                free(cdr(field)->value);
-                                cdr(field)->value = new_ftype;
-                                break;
-                            }
-                        }
-                    }
-                    free(combined);
-                    free(combined_key);
+                    cdr(field)->value = replaced;
                 }
-                free(key);
                 break;
-                // TODO(olegs): Handle oneof
+            case ast_map:
+                ftype = (byte*)car(cdr(car(cdr(field))));
+                replaced = maybe_replace_field_type(
+                    ftype,
+                    mtype,
+                    package,
+                    local_types,
+                    builtins,
+                    imported_subpackages,
+                    subpackages,
+                    mp);
+                if (replaced) {
+                    free(cdr(car(cdr(field)))->value);
+                    cdr(car(cdr(field)))->value = replaced;
+                }
             default:
                 break;
         }

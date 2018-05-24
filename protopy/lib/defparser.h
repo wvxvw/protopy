@@ -38,7 +38,8 @@ typedef enum ast_type_t {
     ast_package = 5,
     ast_oneof = 6,
     ast_field = 7,
-    ast_repeated = 8
+    ast_repeated = 8,
+    ast_map = 9
 } ast_type_t;
 
 void* APR_THREAD_FUNC parse_one_def(apr_thread_t*, void*);
