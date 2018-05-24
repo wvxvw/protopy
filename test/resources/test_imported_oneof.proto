@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package resources;
+
+import "resources/oneof.proto";
+import "resources/nested/oneof.proto";
+
+message TestSimple {
+    oneof simple {
+        int foo = 1;
+        string bar = 2;
+    }
+}
+
+message TestOther {
+    oneof simple {
+        TestSimple foo = 1;
+        string bar = 2;
+    }
+}
+
+message TestMessage {
+    oneof message {
+        TestSimple simple = 1;
+        TestOther other = 2;
+    }
+}
+
+message Test {
+    message EmbeddedMessage {
+        oneof we_need_to_go_deeper {
+            TestMessage test = 1;
+            TestOther other = 2;
+        }
+    }
+    oneof import {
+        EmbeddedMessage simple_embed = 1;
+        Test.EmbeddedMessage contorted_embed = 2;
+        ImportedMessage imported_embed = 3;
+        ImportedMessage.InnerMessage imported_sub = 4;
+        nested.ImportedMessage deep_imported_sub = 5;
+        nested.ImportedMessage.InnerMessage deep_contorted_imported_sub = 6;
+    }
+}

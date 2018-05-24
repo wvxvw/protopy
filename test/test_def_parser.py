@@ -49,3 +49,17 @@ def test_nonexisting_import():
         DefParser(roots).parse(test_proto)
     except FileNotFoundError as e:
         assert 'nonexistent.proto' in str(e)
+
+
+def test_imported_oneof():
+    roots = [
+        pkg_resources.resource_filename(__name__, './')
+    ]
+    test_proto = pkg_resources.resource_filename(
+        __name__,
+        './resources/test_imported_oneof.proto',
+    )
+    parser = DefParser(roots)
+    parser.parse(test_proto)
+    print(parser.files)
+    assert False

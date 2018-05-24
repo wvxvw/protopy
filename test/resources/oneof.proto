@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package resources;
+
+import "resources/nested/oneof.proto";
+
+message ImportedMessage {
+    oneof whatever {
+        int foo = 1;
+        string bar = 2;
+    }
+    message InnerMessage {
+        oneof whichever {
+            nested.ImportedMessage one = 1;
+            nested.ImportedMessage.InnerMessage two = 2;
+        }
+    }
+}
