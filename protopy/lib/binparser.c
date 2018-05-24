@@ -297,7 +297,8 @@ size_t parse_length_delimited(parse_state* state) {
         return 0;
     }
 
-    switch (state_get_field_type(state)) {
+    vt_type_t vt = state_get_field_type(state);
+    switch (vt) {
         case vt_string:
             state->out = PyUnicode_FromStringAndSize((char*)bytes, (Py_ssize_t)length);
             break;
@@ -439,7 +440,7 @@ PyObject* parse_message(parse_state* state) {
         i += (int64_t)j;
         key = PyLong_FromUnsignedLong((unsigned long)state->field);
         existing = PyDict_GetItem(dict, key);
-        if (existing) {
+        if (existing && state->out != NULL) {
             if (PyList_CheckExact(existing)) {
                 PyList_Append(existing, PyList_GetItem(state->out, 0));
                 Py_DECREF(state->out);
@@ -450,7 +451,7 @@ PyObject* parse_message(parse_state* state) {
                 PyDict_SetItem(dict, key, state->out);
                 Py_DECREF(state->out);
             }
-        } else {
+        } else if (state->out != NULL) {
             PyDict_SetItem(dict, key, state->out);
             Py_DECREF(state->out);
         }
@@ -474,7 +475,9 @@ PyObject* parse_message(parse_state* state) {
         dict);
     state->out = result;
     Py_DECREF(dict);
-    Py_INCREF(state->out);
+    if (state->out != NULL) {
+        Py_INCREF(state->out);
+    }
     return result;
 }
 
@@ -499,14 +502,18 @@ PyObject* parse_map(parse_state* state) {
     PyObject* key = Py_None;
     PyObject* value = Py_None;
 
-    if (state->field == 1) {
-        key = state->out;
+    if (state->out != NULL) {
+        if (state->field == 1) {
+            key = state->out;
+        } else {
+            value = state->out;
+        }
     } else {
-        value = state->out;
+        Py_DECREF(result);
+        return NULL;
     }
 
     select_handler(state, &handler);
-
     if (state->field == 1) {
         state->pytype = key_type;
     } else {
@@ -514,11 +521,16 @@ PyObject* parse_map(parse_state* state) {
     }
 
     (*handler)(state);
-
-    if (state->field == 1) {
-        key = state->out;
+    
+    if (state->out != NULL) {
+        if (state->field == 1) {
+            key = state->out;
+        } else {
+            value = state->out;
+        }
     } else {
-        value = state->out;
+        Py_DECREF(result);
+        return NULL;
     }
 
     PyDict_SetItem(result, key, value);
@@ -570,6 +582,9 @@ PyObject* parse_repeated(parse_state* state) {
         state->pytype = PyList_GetItem(state->pytype, 0);
 
         subresult = parse_message(state);
+        if (!subresult) {
+            return NULL;
+        }
         PyList_Append(result, subresult);
         Py_DECREF(subresult);
     }
