@@ -27,23 +27,6 @@ _pb_types = {
 }
 
 
-def value_type(pbtype, factory):
-    if type(pbtype) == list:
-        return 14
-    if type(pbtype) == tuple:
-        return 19
-    result = _pb_types.get(pbtype, None)
-    if result is None:
-        if factory[0] == tuple_from_dict:
-            return 13
-        if factory[0] == enum_from_dict:
-            return 7
-    # this means error
-    if result is None:
-        result = 17
-    return result
-
-
 def find_desc(name, descriptions):
     for file, desc in descriptions.items():
         for d in desc:
@@ -98,7 +81,7 @@ def enum_desc(ftype, desc, factories, descriptions):
         mmapping[num] = i
 
     result = IntEnum(ftype.decode('utf-8'), members)
-    factories[ftype] = tuple([enum_from_dict, result, mmapping])
+    factories[ftype] = tuple([7, result, mmapping])
 
 
 _pb_key_types = {
@@ -163,7 +146,7 @@ def message_desc(ftype, desc, factories, descriptions):
 
     result = namedtuple(name, fields_list)
     result.__module__ = module
-    factories[ftype] = tuple([tuple_from_dict, result, fmapping, tmapping])
+    factories[ftype] = tuple([13, result, fmapping, tmapping])
 
 
 def create_descriptors(descriptions):

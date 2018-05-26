@@ -45,11 +45,6 @@ def test_gen_load_file():
         b'test: 123\ntest_whatever: "123456"',
     )
     print('generated proto message: {}'.format(content))
-    import gc
-
-    # gc.set_debug(gc.DEBUG_STATS | gc.DEBUG_COLLECTABLE | gc.DEBUG_UNCOLLECTABLE |
-    #              gc.DEBUG_SAVEALL | gc.DEBUG_LEAK)
-    # gc.set_debug(gc.DEBUG_LEAK)
 
     # for _ in range(100):
     #     result = BinParser(roots).parse(test_proto, 'Test', content)
@@ -58,9 +53,15 @@ def test_gen_load_file():
 
     print('result: {}'.format(result))
     assert result.test == 123
-    # print('1. {}, gc.garbage: {}'.format(len(gc.garbage), gc.garbage))
-    # gc.collect()
-    # print('2. {}, gc.garbage: {}'.format(len(gc.garbage), gc.garbage))
+
+
+def try_gc():
+    import gc
+    gc.set_debug(gc.DEBUG_LEAK)
+    gc.collect()
+
+    for g in gc.garbage:
+        print('gc.garbage: {}'.format(g))
 
 
 def test_inner_message():
@@ -125,6 +126,30 @@ def test_repeated():
 
 
 def test_fixed64():
+    roots, test_proto, content = generate_proto_binary(
+        'test_fixed64.proto',
+        b'''sfixed_fixed: [{
+            key: -1
+            value: 123
+        },
+        {
+            key: -1000
+            value: 1000
+        }]
+        simple_fixed: 1010101010
+        simple_sfixed: -1010101010
+        ''',
+    )
+    print('generated proto message: {}'.format(content))
+
+    result = BinParser(roots).parse(test_proto, 'Test', content)
+
+    print('result: {}'.format(result))
+    assert result.simple_fixed == 1010101010
+    # try_gc()
+
+
+def test_1_fixed64():
     roots, test_proto, content = generate_proto_binary(
         'test_fixed64.proto',
         b'''some_fixed: [1234, 12, 9876, 0]

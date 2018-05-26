@@ -51,6 +51,7 @@ PyObject* make_state(PyObject* self, PyObject* args) {
     state->pos = 0;
     state->out = Py_None;
     state->is_field = false;
+    state->builtin_types = Py_None;
     return PyCapsule_New(state, NULL, free_state);
 }
 
@@ -59,8 +60,9 @@ PyObject* state_set_factory(PyObject* self, PyObject* args) {
     PyObject* capsule;
     PyObject* pytype;
     PyObject* factories;
+    PyObject* builtins;
 
-    if (!PyArg_ParseTuple(args, "OOO", &capsule, &pytype, &factories)) {
+    if (!PyArg_ParseTuple(args, "OOOO", &capsule, &pytype, &factories, &builtins)) {
         return NULL;
     }
 
@@ -70,6 +72,7 @@ PyObject* state_set_factory(PyObject* self, PyObject* args) {
     }
     state->pytype = pytype;
     state->factories = factories;
+    state->builtin_types = builtins;
 
     return Py_None;
 }
@@ -86,6 +89,25 @@ size_t state_read(parse_state* state, unsigned char** buf, size_t n) {
     }
     state->pos = state->len;
     return state->len - state->pos;
+}
+
+vt_type_t value_type(parse_state* state, PyObject* pbtype, PyObject* factory) {
+    if (PyList_CheckExact(pbtype)) {
+        return vt_repeated;
+    }
+    if (PyTuple_CheckExact(pbtype)) {
+        return vt_map;
+    }
+    PyObject* builtin = PyDict_GetItem(state->builtin_types, pbtype);
+    if (builtin) {
+        return (vt_type_t)PyLong_AsLong(builtin);
+    }
+    if (factory == NULL || factory == Py_None) {
+        PyErr_Format(PyExc_TypeError, "No definition for type: %A", pbtype);
+        return vt_error;
+    }
+    PyObject* kind = PyTuple_GetItem(factory, 0);
+    return (vt_type_t)PyLong_AsLong(kind);
 }
 
 PyObject* state_get_field_pytype(parse_state* state) {
@@ -132,37 +154,13 @@ vt_type_t state_get_field_type(parse_state* state) {
         }
     }
     PyObject* factory = PyDict_GetItem(state->factories, field_type);
-    if (factory == NULL) {
-        factory = Py_None;
-    }
-    // TODO(olegs): We really need to do this just once, maybe at
-    // state initialization time.
-    PyObject* types = PyImport_ImportModule("protopy.types");
-    PyObject* result = PyObject_CallMethod(types, "value_type", "OO", field_type, factory);
-    if (!result) {
-        Py_DECREF(types);
-        PyErr_Clear();
-        PyErr_Format(PyExc_TypeError, "No definition for type: %A", field_type);
-        return vt_error;
-    }
-    vt_type_t vt_result = (vt_type_t)PyLong_AsLong(result);
-    Py_DECREF(types);
-    Py_DECREF(result);
-    return vt_result;
+    return value_type(state, field_type, factory);
 }
 
 vt_type_t state_get_field_repeated_type(parse_state* state) {
     PyObject* inner = PyList_GetItem(state->pytype, 0);
     PyObject* factory = PyDict_GetItem(state->factories, inner);
-    if (factory == NULL) {
-        factory = Py_None;
-    }
-    PyObject* types = PyImport_ImportModule("protopy.types");
-    PyObject* result = PyObject_CallMethod(types, "value_type", "OO", inner, factory);
-    vt_type_t vt_result = (vt_type_t)PyLong_AsLong(result);
-    Py_DECREF(types);
-    Py_DECREF(result);
-    return vt_result;
+    return value_type(state, inner, factory);
 }
 
 size_t parse_varint_impl(parse_state* state, uint64_t value[2]) {
@@ -206,6 +204,62 @@ bool is_signed_vt(vt_type_t vt) {
     return vt == vt_sing32 || vt == vt_sing64;
 }
 
+/* def tuple_from_dict(ftype, factories, values): */
+/*     _, ttype, fmapping, _ = factories[ftype] */
+/*     args = [None] * (max(fmapping.values()) + 1) */
+
+/*     for k, v in values.items(): */
+/*         args[fmapping[k]] = v */
+
+/*     return ttype(*args) */
+
+PyObject* tuple_from_dict(PyObject* ftype, PyObject* factory, PyObject* values) {
+    PyObject* ttype = PyTuple_GetItem(factory, 1);
+    PyObject* fmapping = PyTuple_GetItem(factory, 2);
+    PyObject *key, *value;
+    Py_ssize_t pos = 0;
+    Py_ssize_t arg_len = 0;
+    Py_ssize_t field;
+
+    while (PyDict_Next(fmapping, &pos, &key, &value)) {
+        field = (Py_ssize_t)PyLong_AsLong(value);
+        if (field > arg_len) {
+            arg_len = field;
+        }
+    }
+    PyObject* args = PyTuple_New(arg_len + 1);
+
+    pos = 0;
+    while (pos < arg_len + 1) {
+        PyTuple_SetItem(args, pos, Py_None);
+        pos++;
+    }
+
+    pos = 0;
+    while (PyDict_Next(values, &pos, &key, &value)) {
+        field = (Py_ssize_t)PyLong_AsLong(PyDict_GetItem(fmapping, key));
+        PyTuple_SetItem(args, field, value);
+    }
+    PyObject* result = PyObject_Call(ttype, args, NULL);
+    Py_INCREF(result);
+    return result;
+}
+
+
+/* def enum_from_dict(ftype, factories, value): */
+/*     _, ttype, fmapping = factories[ftype] */
+/*     result = ttype(fmapping[value]) */
+/*     return result */
+
+PyObject* enum_from_dict(PyObject* ftype, PyObject* factory, PyObject* value) {
+    PyObject* ttype = PyTuple_GetItem(factory, 1);
+    PyObject* fmapping = PyTuple_GetItem(factory, 2);
+    PyObject* args = PyDict_GetItem(fmapping, value);
+    PyObject* result = PyObject_CallFunctionObjArgs(ttype, args, NULL);
+    Py_INCREF(result);
+    return result;
+}
+
 size_t parse_varint(parse_state* state) {
     uint64_t value[2] = { 0, 0 };
     vt_type_t vt = state_get_field_type(state);
@@ -236,17 +290,8 @@ size_t parse_varint(parse_state* state) {
     }
     if (vt == vt_enum) {
         PyObject* enum_type = state_get_field_pytype(state);
-        PyObject* factory = PyDict_GetItem(
-            state->factories,
-            enum_type);
-        PyObject* ctor = PyTuple_GetItem(factory, 0);
-        PyObject* result = PyObject_CallFunction(
-            ctor,
-            "OOO",
-            enum_type,
-            state->factories,
-            state->out);
-        state->out = result;
+        PyObject* factory = PyDict_GetItem(state->factories, enum_type);
+        state->out = enum_from_dict(enum_type, factory, state->out);
     }
     return parsed;
 }
@@ -265,7 +310,7 @@ size_t parse_fixed_64(parse_state* state) {
         val <<= 8;
         val |= (unsigned long long)buf[read];
     }
-    
+
     switch (state_get_field_type(state)) {
         case vt_fixed64:
             state->out = PyLong_FromUnsignedLongLong(val);
@@ -277,6 +322,7 @@ size_t parse_fixed_64(parse_state* state) {
             state->out = PyLong_FromLongLong((long long)val);
             break;
     }
+    Py_INCREF(state->out);
     return FIXED_LENGTH;
 #undef FIXED_LENGTH
 }
@@ -301,9 +347,11 @@ size_t parse_length_delimited(parse_state* state) {
     switch (vt) {
         case vt_string:
             state->out = PyUnicode_FromStringAndSize((char*)bytes, (Py_ssize_t)length);
+            Py_INCREF(state->out);
             break;
         case vt_bytes:
             state->out = PyBytes_FromStringAndSize((char*)bytes, (Py_ssize_t)length);
+            Py_INCREF(state->out);
             break;
         case vt_message:
             substate.pos = 0;
@@ -312,7 +360,9 @@ size_t parse_length_delimited(parse_state* state) {
             substate.factories = state->factories;
             substate.pytype = state_get_field_pytype(state);
             substate.is_field = false;
+            substate.builtin_types = state->builtin_types;
             state->out = parse_message(&substate);
+            Py_INCREF(state->out);
             break;
         case vt_repeated:
             substate.pos = 0;
@@ -322,7 +372,9 @@ size_t parse_length_delimited(parse_state* state) {
             substate.factories = state->factories;
             substate.pytype = state_get_field_pytype(state);
             substate.is_field = false;
+            substate.builtin_types = state->builtin_types;
             state->out = parse_repeated(&substate);
+            Py_INCREF(state->out);
             break;
         case vt_map:
             substate.pos = 0;
@@ -332,7 +384,9 @@ size_t parse_length_delimited(parse_state* state) {
             substate.factories = state->factories;
             substate.pytype = state_get_field_pytype(state);
             substate.is_field = false;
+            substate.builtin_types = state->builtin_types;
             state->out = parse_map(&substate);
+            Py_INCREF(state->out);
             break;
         default:
             if (!PyErr_Occurred()) {
@@ -341,6 +395,7 @@ size_t parse_length_delimited(parse_state* state) {
                     "Unknown length delimited type");
             }
             state->out = Py_None;
+            Py_INCREF(state->out);
     }
     return parsed + read;
 }
@@ -466,19 +521,17 @@ PyObject* parse_message(parse_state* state) {
             dict);
         return NULL;
     }
-    PyObject* ctor = PyTuple_GetItem(factory, 0);
-    PyObject* result = PyObject_CallFunction(
-        ctor,
-        "OOO",
-        state->pytype,
-        state->factories,
-        dict);
-    state->out = result;
+    vt_type_t ctor = (vt_type_t)PyLong_AsLong(PyTuple_GetItem(factory, 0));
+    if (ctor == vt_message) {
+        state->out = tuple_from_dict(state->pytype, factory, dict);
+    } else {
+        state->out = enum_from_dict(state->pytype, factory, dict);
+    }
     Py_DECREF(dict);
     if (state->out != NULL) {
         Py_INCREF(state->out);
     }
-    return result;
+    return state->out;
 }
 
 PyObject* parse_map(parse_state* state) {
@@ -534,7 +587,6 @@ PyObject* parse_map(parse_state* state) {
     }
 
     PyDict_SetItem(result, key, value);
-    
     return result;
 }
 

@@ -54,6 +54,7 @@ typedef struct {
     PyObject* out;
     PyObject* factories;
     PyObject* pytype;
+    PyObject* builtin_types;
 } parse_state;
 
 typedef size_t (*parse_handler)(parse_state*);
