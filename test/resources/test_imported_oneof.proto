@@ -4,6 +4,7 @@ package resources;
 
 import "resources/oneof.proto";
 import "resources/nested/oneof.proto";
+import "google/api/http.proto";
 
 message TestSimple {
     oneof simple {
@@ -47,4 +48,11 @@ message Test {
     ImportedMessage.InnerMessage regular_field_4 = 10;
     nested.ImportedMessage regular_field_5 = 11;
     nested.ImportedMessage.InnerMessage regular_field_6 = 16;
+
+    google.api.CustomHttpPattern pattern = 17;
+
+    repeated EmbeddedMessage repeated_embed = 18;
+    repeated nested.ImportedMessage.InnerMessage repeated_imported = 19;
+
+    map<string, EmbeddedMessage> embedded_map = 20;
 }

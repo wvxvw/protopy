@@ -50,7 +50,7 @@ char* unqote(char*);
 
 list normalize_types(list, apr_hash_t*, apr_hash_t*, list, apr_pool_t*);
 
-list normalize_messages(list);
+list normalize_messages(list, apr_pool_t*);
 
 void collect_declarations(list, apr_hash_t*);
 

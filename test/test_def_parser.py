@@ -53,7 +53,8 @@ def test_nonexisting_import():
 
 def test_imported_oneof():
     roots = [
-        pkg_resources.resource_filename(__name__, './')
+        pkg_resources.resource_filename(__name__, './'),
+        pkg_resources.resource_filename(__name__, './resources')
     ]
     test_proto = pkg_resources.resource_filename(
         __name__,

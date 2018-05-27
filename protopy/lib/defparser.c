@@ -156,50 +156,69 @@ void collect_declarations(list ast, apr_hash_t* ht) {
     }
 }
 
-char* package_of_type(const char* type) {
-    if (!strchr(type, '.')) {
-        return NULL;
-    }
-    char* ctype = strdup(type);
-    size_t i = 0;
-    size_t found = 0;
-    size_t len = strlen(type);
-
-    while (i < len) {
-        if (ctype[i] == '.') {
-            found = i;
-        }
-        i++;
-    }
-    ctype[found] = '\0';
-    return ctype;
-}
-
-char* package_dir(byte* file) {
-    char* ctype = bytes_cstr(file);
-    if (!strchr(ctype, '.')) {
-        free(ctype);
-        return NULL;
-    }
-    size_t i = 0;
+byte* package_dir(byte* file) {
+    size_t i = 2;
     size_t found = 0;
     size_t len = str_size(file);
 
     while (i < len) {
-        if (ctype[i] == '/') {
+        if (file[i] == '/') {
             found = i;
         }
         i++;
     }
-    ctype[found] = '\0';
-    return ctype;
+    if (found == 0) {
+        return str_dup(file);
+    }
+    return sub_str(file, found - 2);
 }
 
 bool package_matches(const char* type, const char* package) {
-    char* prefix = package_of_type(type);
-    bool result = strcmp(prefix, package) == 0;
-    free(prefix);
-    return result;
+    size_t i = 0;
+    size_t len = strlen(package);
+    size_t tlen = strlen(type);
+    char a, b;
+
+    if (tlen < len) {
+        return false;
+    }
+
+    while (i < len) {
+        a = type[i];
+        b = package[i];
+        if (a != b) {
+            if ((a != '.' && a != '/') || (b != '.' && b != '/')) {
+                return false;
+            }
+        }
+        i++;
+    }
+    return true;
+}
+
+bool is_prefix(const byte* a, const byte* b) {
+    size_t la = str_size(a);
+    size_t lb = str_size(b);
+
+    if (la > lb) {
+        return false;
+    }
+
+    size_t i = 2;
+    char ca, cb;
+
+    while (i < la) {
+        ca = a[i];
+        cb = b[i];
+
+        if (ca != cb) {
+            if ((ca != '.' && ca != '/') || (cb != '.' && cb != '/')) {
+                return false;
+            }
+        }
+        i++;
+    }
+    return true;
 }
 
 byte* maybe_replace_field_type(
@@ -208,54 +227,43 @@ byte* maybe_replace_field_type(
     byte* package,
     apr_hash_t* local_types,
     apr_hash_t* builtins,
-    bool imported_subpackages,
-    apr_hash_t* subpackages,
+    apr_hash_t* external,
     apr_pool_t* mp) {
-    byte* new_ftype;
-    byte* combined;
+
+    byte* new_ftype = NULL;
     char* key;
-    char* combined_key;
 
     key = bytes_cstr(ftype);
     // built-in definitions don't need any special
     // treatment.
     if (apr_hash_get(builtins, key, str_size(ftype))) {
-        // we are fine
+        goto cleanup;
     }
     // This is the top-level definition from the current file
-    else if (apr_hash_get(local_types, key, str_size(ftype))) {
+    if (apr_hash_get(local_types, key, str_size(ftype))) {
         new_ftype = join_bytes(package, '.', ftype, false);
-        return new_ftype;
-    } else {
-        combined = join_bytes(mtype, '.', ftype, false);
-        combined_key = bytes_cstr(ftype);
-        // This is the nested definition from the message
-        // we are in (hopefully...)
-        if (apr_hash_get(local_types, combined_key, str_size(combined))) {
-            new_ftype = join_bytes(package, '.', combined, false);
-            return new_ftype;
-            // This definition must have been imported
-            // from the package we are in...
-        } else if (!strchr(key, '.')) {
-            new_ftype = join_bytes(package, '.', ftype, false);
-            return new_ftype;
-        } else if (imported_subpackages) {
-            apr_hash_index_t* hi;
-            void* val;
-            const void* sub;
-            for (hi = apr_hash_first(mp, subpackages); hi; hi = apr_hash_next(hi)) {
-                apr_hash_this(hi, &sub, NULL, &val);
-                if (package_matches(key, sub)) {
-                    new_ftype = join_bytes(package, '.', ftype, false);
-                    return new_ftype;
-                }
-            }
-        }
-        free(combined);
-        free(combined_key);
+        goto cleanup;
     }
+    if (!external) {
+        goto cleanup;
+    }
+    if (is_prefix(package, ftype)) {
+        goto cleanup;
+    }
+    apr_hash_index_t* hi;
+    void* val;
+    const void* ext;
+
+    for (hi = apr_hash_first(mp, external); hi; hi = apr_hash_next(hi)) {
+        apr_hash_this(hi, &ext, NULL, &val);
+        if (is_prefix(ext, ftype)) {
+            goto cleanup;
+        }
+    }
+    new_ftype = join_bytes(package, '.', ftype, false);
+cleanup:
     free(key);
-    return NULL;
+    return new_ftype;
 }
 
 void
@@ -264,8 +272,7 @@ qualify_message_fields(
     byte* package,
     apr_hash_t* local_types,
     apr_hash_t* builtins,
-    bool imported_subpackages,
-    apr_hash_t* subpackages,
+    apr_hash_t* external,
     apr_pool_t* mp) {
 
     byte* mtype = (byte*)car(cdr(elt));
@@ -288,8 +295,7 @@ qualify_message_fields(
                     package,
                     local_types,
                     builtins,
-                    imported_subpackages,
-                    subpackages,
+                    external,
                     mp);
                 if (replaced) {
                     free(cdr(field)->value);
@@ -304,8 +310,7 @@ qualify_message_fields(
                     package,
                     local_types,
                     builtins,
-                    imported_subpackages,
-                    subpackages,
+                    external,
                     mp);
                 if (replaced) {
                     free(cdr(car(cdr(field)))->value);
@@ -318,44 +323,47 @@ qualify_message_fields(
     }
 }
 
-void
-find_subpackages(
-    byte* package,
-    list imports,
-    bool* imported,
-    apr_hash_t** subs,
-    apr_pool_t* mp) {
+apr_hash_t*
+find_external_packages(byte* package, list imports, apr_pool_t* mp) {
 
-    char* prefix;
+    byte* imported;
     size_t len = str_size(package);
+    size_t ext_len;
     size_t i;
     char a, b;
-    bool matched = true;
+    bool is_subpackage;
+    apr_hash_t* result = NULL;
+    byte* bimported;
 
     while (!null(imports)) {
-        prefix = package_dir(car(imports));
+        imported = car(imports);
         i = 0;
-        matched = true;
-        while (i < len) {
-            a = prefix[i];
+        ext_len = str_size(imported);
+        is_subpackage = true;
+        while (i < len && i < ext_len) {
+            a = imported[i + 2];
             b = package[i + 2];
-            if (a != b && !(a == '/' && b == '.')) {
-                matched = false;
+            if ((a == '/' || a == '.') && (b == '/' || b == '.')) {
+                break;
+            }
+            if (a != b) {
+                is_subpackage = false;
                 break;
             }
             i++;
         }
 
-        if (matched) {
-            if (!*imported) {
-                *subs = apr_hash_make(mp);
+        if (!is_subpackage) {
+            if (result == NULL) {
+                result = apr_hash_make(mp);
             }
-            *imported = true;
-            apr_hash_set(*subs, prefix + len + 1, strlen(prefix + len + 1), (void*)1);
+            bimported = package_dir(imported);
+            apr_hash_set(result, bimported, str_size(bimported) + 2, (void*)1);
         }
 
         imports = cdr(imports);
     }
+    return result;
 }
 
 list
@@ -370,15 +378,12 @@ normalize_types(
     size_t plen = str_size(package);
     list elt;
     list result = ast;
-    bool imported_subpackages;
-    apr_hash_t* subpackages;
 
-    find_subpackages(package, imports, &imported_subpackages, &subpackages, mp);
+    apr_hash_t* external = find_external_packages(package, imports, mp);
 
     if (!plen) {
         return result;
     }
-    printf("1. normalize_types: %s\n", str(ast));
     while (!null(ast)) {
         if (listp(ast)) {
             elt = (list)car(ast);
@@ -394,8 +399,7 @@ normalize_types(
                             package,
                             local_types,
                             builtins,
-                            imported_subpackages,
-                            subpackages,
+                            external,
                             mp);
                         break;
                     default:
@@ -405,7 +409,6 @@ normalize_types(
         }
         ast = cdr(ast);
     }
-    printf("2. normalize_types: %s\n", str(result));
     return result;
 }
 
@@ -426,7 +429,70 @@ list rename_message(list original, byte* new_name, ast_type_t field_type) {
     return renamed;
 }
 
-list inner_messages(list message, list* normalized, byte* prefix) {
+void rename_extracted_types(apr_pool_t* mp, list inner, list normalized) {
+    apr_hash_t* extracted = apr_hash_make(mp);
+    byte* mtpype = (byte*)car(cdr(normalized));
+    byte* type;
+
+    while (!null(inner)) {
+        type = (byte*)car(cdr(car(inner)));
+        apr_hash_set(
+            extracted,
+            type + 3 + str_size(mtpype),
+            str_size(type) - str_size(mtpype) - 1,
+            (void*)1);
+        inner = cdr(inner);
+    }
+
+    list fields = cdr(cdr(normalized));
+    list field;
+    ast_type_t ft;
+    byte* pytype;
+    byte* replacement;
+    list pair;
+
+    while (!null(fields)) {
+        field = car(fields);
+        ft = (ast_type_t)(*(int*)car(field));
+        switch (ft) {
+            case ast_repeated:
+            case ast_field:
+                pytype = (byte*)car(cdr(field));
+                if (apr_hash_get(extracted, pytype + 2, str_size(pytype))) {
+                    replacement = join_bytes(mtpype, '.', pytype, false);
+                    free(cdr(field)->value);
+                    cdr(field)->value = replacement;
+                }
+                break;
+            case ast_map:
+                pair = car(cdr(field));
+                pytype = (byte*)car(cdr(pair));
+                if (apr_hash_get(extracted, pytype + 2, str_size(pytype))) {
+                    replacement = join_bytes(mtpype, '.', pytype, false);
+                    free(cdr(pair)->value);
+                    cdr(pair)->value = replacement;
+                }
+                break;
+            case ast_oneof:
+                pair = cdr(cdr(field));
+                while (!null(pair)) {
+                    pytype = (byte*)car(cdr(car(pair)));
+                    if (apr_hash_get(extracted, pytype + 2, str_size(pytype))) {
+                        replacement = join_bytes(mtpype, '.', pytype, false);
+                        free(cdr(car(pair))->value);
+                        cdr(car(pair))->value = replacement;
+                    }
+                    pair = cdr(pair);
+                }
+                break;
+            default:
+                break;
+        }
+        fields = cdr(fields);
+    }
+}
+
+list inner_messages(list message, list* normalized, byte* prefix, apr_pool_t* mp) {
     byte* message_type = (byte*)car(message);
     size_t mt_len = str_size(message_type);
     list processed = cons_str((char*)(message_type + 2), mt_len, from_ints(1, 0));
@@ -454,6 +520,9 @@ list inner_messages(list message, list* normalized, byte* prefix) {
         fields = cdr(fields);
     }
     *normalized = nreverse(processed);
+    if (!null(result)) {
+        rename_extracted_types(mp, result, *normalized);
+    }
     return result;
 }
 
@@ -503,7 +572,7 @@ void normalize_oneof(list message) {
     }
 }
 
-list normalize_messages(list ast) {
+list normalize_messages(list ast, apr_pool_t* mp) {
     list result = nil;
     list node;
     ast_type_t node_type;
@@ -522,10 +591,10 @@ list normalize_messages(list ast) {
         switch (node_type) {
             case ast_message:
                 message_type = (byte*)car(cdr(node));
-                inner = inner_messages(cdr(node), &normalized, message_type);
+                inner = inner_messages(cdr(node), &normalized, message_type, mp);
                 normalize_oneof(normalized);
                 result = cons(normalized, tlist, result);
-                inner_normalized = normalize_messages(inner);
+                inner_normalized = normalize_messages(inner, mp);
                 while (!null(inner_normalized)) {
                     result = cons(car(inner_normalized), tlist, result);
                     inner_normalized = cdr(inner_normalized);

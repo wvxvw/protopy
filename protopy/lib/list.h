@@ -75,11 +75,13 @@ char* list_str(void*);
 
 size_t int_size(void*);
 
-size_t str_size(void*);
+size_t str_size(const void*);
 
 void* int_dup(void*);
 
-void* str_dup(void*);
+void* str_dup(const void*);
+
+byte* sub_str(const byte*, size_t);
 
 extern list nil;
 
@@ -123,7 +125,7 @@ list cons_str(char*, size_t, list);
 
 list cons_int(int, size_t, list);
 
-char* bytes_cstr(byte*);
+char* bytes_cstr(const byte*);
 
 byte* join_bytes(byte*, char, byte*, bool);
 

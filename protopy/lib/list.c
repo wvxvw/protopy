@@ -84,7 +84,7 @@ byte* cstr_bytes(const char* cstr) {
     return result;
 }
 
-char* bytes_cstr(byte* bytes) {
+char* bytes_cstr(const byte* bytes) {
     if (bytes == NULL) {
         return NULL;
     }
@@ -104,8 +104,8 @@ byte* join_bytes(byte* prefix, char delim, byte* suffix, bool cstr) {
 
     memcpy(combined + 2, prefix + 2, prefix_len);
     memcpy(combined + prefix_len + 3, suffix + 2, suffix_len);
-    combined[0] = (byte)((total_len) >> 8);
-    combined[1] = (byte)((total_len) & 0xFF);
+    combined[0] = (byte)(total_len >> 8);
+    combined[1] = (byte)(total_len & 0xFF);
     combined[prefix_len + 2] = delim;
 
     if (cstr) {
@@ -114,7 +114,19 @@ byte* join_bytes(byte* prefix, char delim, byte* suffix, bool cstr) {
     return combined;
 }
 
-void* str_dup(void* val) {
+byte* sub_str(const byte* s, size_t len) {
+    printf("sub_str: %zu < %zu\n", str_size(s), len);
+    if (str_size(s) < len) {
+        return empty;
+    }
+    byte* result = malloc((len + 2) * sizeof(byte));
+    memcpy(result + 2, s + 2, len);
+    result[0] = (byte)(len >> 8);
+    result[1] = (byte)(len & 0xFF);
+    return result;
+}
+
+void* str_dup(const void* val) {
     size_t len = str_size(val);
     byte* result = malloc((len + 2) * sizeof(byte));
     byte* bval = (byte*)val;
@@ -268,7 +280,7 @@ size_t int_size(void* val) {
     return sizeof(int);
 }
 
-size_t str_size(void* val) {
+size_t str_size(const void* val) {
     byte* buf = (byte*)val;
     return (((size_t)buf[0]) << 8) | (size_t)buf[1];
 }

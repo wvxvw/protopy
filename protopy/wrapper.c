@@ -267,7 +267,7 @@ proto_def_parse_produce(
                 del(sources);
                 sources = new_sources;
                 apr_hash_t* declarations = apr_hash_make(mp);
-                list normalized = normalize_messages(thds_args[i]->result);
+                list normalized = normalize_messages(thds_args[i]->result, mp);
                 collect_declarations(normalized, declarations);
                 apr_hash_set(
                     result,
