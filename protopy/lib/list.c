@@ -115,7 +115,6 @@ byte* join_bytes(byte* prefix, char delim, byte* suffix, bool cstr) {
 }
 
 byte* sub_str(const byte* s, size_t len) {
-    printf("sub_str: %zu < %zu\n", str_size(s), len);
     if (str_size(s) < len) {
         return empty;
     }
