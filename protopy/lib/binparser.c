@@ -220,6 +220,13 @@ PyObject* tuple_from_dict(PyObject* ftype, PyObject* factory, PyObject* values) 
     Py_ssize_t pos = 0;
     Py_ssize_t arg_len = 0;
     Py_ssize_t field;
+    PyObject* result;
+
+    if (PyDict_Size(fmapping) == 0) {
+        result = PyObject_Call(ttype, PyTuple_New(0), NULL);
+        Py_INCREF(result);
+        return result;
+    }
 
     while (PyDict_Next(fmapping, &pos, &key, &value)) {
         field = (Py_ssize_t)PyLong_AsLong(value);
@@ -240,8 +247,10 @@ PyObject* tuple_from_dict(PyObject* ftype, PyObject* factory, PyObject* values) 
         field = (Py_ssize_t)PyLong_AsLong(PyDict_GetItem(fmapping, key));
         PyTuple_SetItem(args, field, value);
     }
-    PyObject* result = PyObject_Call(ttype, args, NULL);
-    Py_INCREF(result);
+    result = PyObject_Call(ttype, args, NULL);
+    if (result) {
+        Py_INCREF(result);
+    }
     return result;
 }
 
