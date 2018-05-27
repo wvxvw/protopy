@@ -106,7 +106,7 @@ list imports(list ast) {
             elt = (list)car(ast);
             if (!null(elt) && (ast_type_t)(*(int*)car(elt)) == ast_import) {
                 pname = str_dup((byte*)car(cdr(elt)));
-                pname_unquoted = unquote((char*)(pname + 2));
+                pname_unquoted = unquote(bytes_cstr(pname));
                 result = cons_str(pname_unquoted, strlen(pname_unquoted), result);
             }
         }
@@ -378,6 +378,7 @@ normalize_types(
     if (!plen) {
         return result;
     }
+    printf("1. normalize_types: %s\n", str(ast));
     while (!null(ast)) {
         if (listp(ast)) {
             elt = (list)car(ast);
@@ -404,6 +405,7 @@ normalize_types(
         }
         ast = cdr(ast);
     }
+    printf("2. normalize_types: %s\n", str(result));
     return result;
 }
 

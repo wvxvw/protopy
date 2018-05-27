@@ -7,7 +7,7 @@ import "resources/nested/oneof.proto";
 
 message TestSimple {
     oneof simple {
-        int foo = 1;
+        int32 foo = 1;
         string bar = 2;
     }
 }
@@ -41,4 +41,10 @@ message Test {
         nested.ImportedMessage deep_imported_sub = 5;
         nested.ImportedMessage.InnerMessage deep_contorted_imported_sub = 6;
     }
+    EmbeddedMessage regular_field_1 = 7;
+    Test.EmbeddedMessage regular_field_2 = 8;
+    ImportedMessage regular_field_3 = 9;
+    ImportedMessage.InnerMessage regular_field_4 = 10;
+    nested.ImportedMessage regular_field_5 = 11;
+    nested.ImportedMessage.InnerMessage regular_field_6 = 16;
 }

@@ -6,7 +6,7 @@ import "resources/nested/oneof.proto";
 
 message ImportedMessage {
     oneof whatever {
-        int foo = 1;
+        int32 foo = 1;
         string bar = 2;
     }
     message InnerMessage {
