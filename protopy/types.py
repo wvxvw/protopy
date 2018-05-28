@@ -6,56 +6,6 @@ from enum import IntEnum
 from keyword import kwlist
 
 
-_pb_types = {
-    b'int32': 0,
-    b'int64': 1,
-    b'uint32': 2,
-    b'uint64': 3,
-    b'sint32': 4,
-    b'sint64': 5,
-    b'bool': 6,
-    # 'enum': 7,
-    b'fixed64': 8,
-    b'sfixed64': 9,
-    b'double': 10,
-    b'string': 11,
-    b'bytes': 12,
-    # 'message': 13,
-    # 'repeated': 14,
-    b'fixed32': 15,
-    b'sfixed32': 16,
-}
-
-
-def find_desc(name, descriptions):
-    for file, desc in descriptions.items():
-        for d in desc:
-            if d and d[0] in [0, 1]:  # message or enum
-                tname = d[1]
-                fields = d[2:]
-                if tname == name or tname.replace(b':', b'.') == name:
-                    return fields
-    # TODO(olegs): Consider lazy loading of proto descriptions.
-    raise ValueError("Cannot find definition of: {}".format(name))
-
-
-# TODO(olegs): This and another x_from_dict can be rewritten in C.
-def tuple_from_dict(ftype, factories, values):
-    _, ttype, fmapping, _ = factories[ftype]
-    args = [None] * (max(fmapping.values()) + 1)
-
-    for k, v in values.items():
-        args[fmapping[k]] = v
-
-    return ttype(*args)
-
-
-def enum_from_dict(ftype, factories, value):
-    _, ttype, fmapping = factories[ftype]
-    result = ttype(fmapping[value])
-    return result
-
-
 def extract_type_name(tname):
     i = len(tname)
     while i > 0:

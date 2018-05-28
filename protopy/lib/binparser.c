@@ -169,9 +169,12 @@ size_t parse_varint_impl(parse_state* state, uint64_t value[2]) {
     size_t read = 0;
     size_t index = 0;
 
-    while (state_get_available(state) > 0 && read < 16) {
+    while (read < 16) {
         bytes_read = state_read(state, &buf, 1);
         if (bytes_read == 0) {
+            PyErr_Format(
+                PyExc_SyntaxError,
+                "Didn't finish reading varint");
             return read;
         }
         current = buf[0];
@@ -202,15 +205,6 @@ size_t parse_zig_zag(parse_state* state, uint64_t value[2], bool* is_neg) {
 bool is_signed_vt(vt_type_t vt) {
     return vt == vt_sing32 || vt == vt_sing64;
 }
-
-/* def tuple_from_dict(ftype, factories, values): */
-/*     _, ttype, fmapping, _ = factories[ftype] */
-/*     args = [None] * (max(fmapping.values()) + 1) */
-
-/*     for k, v in values.items(): */
-/*         args[fmapping[k]] = v */
-
-/*     return ttype(*args) */
 
 PyObject* tuple_from_dict(PyObject* ftype, PyObject* factory, PyObject* values) {
     PyObject* ttype = PyTuple_GetItem(factory, 1);
@@ -253,12 +247,6 @@ PyObject* tuple_from_dict(PyObject* ftype, PyObject* factory, PyObject* values) 
     }
     return result;
 }
-
-
-/* def enum_from_dict(ftype, factories, value): */
-/*     _, ttype, fmapping = factories[ftype] */
-/*     result = ttype(fmapping[value]) */
-/*     return result */
 
 PyObject* enum_from_dict(PyObject* ftype, PyObject* factory, PyObject* value) {
     PyObject* ttype = PyTuple_GetItem(factory, 1);
