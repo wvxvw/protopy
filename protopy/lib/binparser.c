@@ -216,7 +216,9 @@ PyObject* tuple_from_dict(PyObject* ftype, PyObject* factory, PyObject* values) 
 
     if (PyDict_Size(fmapping) == 0) {
         result = PyObject_Call(ttype, PyTuple_New(0), NULL);
-        Py_INCREF(result);
+        if (result) {
+            Py_INCREF(result);
+        }
         return result;
     }
 
