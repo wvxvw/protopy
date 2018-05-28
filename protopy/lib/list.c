@@ -13,7 +13,7 @@ elt_type types[] = {
     {"list", list_str, (size)len,      (deleter)del, (copier)duplicate},
 };
 
-list cons(void* elt, type_t elt_type, list old) {
+list cons(void* elt, const type_t elt_type, const list old) {
     list result = malloc(sizeof(_list));
     result->t = elt_type;
     result->next = old;
@@ -21,13 +21,13 @@ list cons(void* elt, type_t elt_type, list old) {
     return result;
 }
 
-list cons_int(int val, size_t s, list old) {
+list cons_int(const int val, const size_t s, const list old) {
     int* ival = malloc(int_size((void*)((long)val)));
     *ival = val;
     return cons(ival, tint, old);
 }
 
-list cons_str(char* val, size_t s, list old) {
+list cons_str(const char* val, const size_t s, const list old) {
     byte* bval = malloc((s + 2) * sizeof(byte));
     bval[0] = (byte)(s >> 8);
     bval[1] = (byte)(s & 0xFF);
@@ -41,11 +41,11 @@ list cons_str(char* val, size_t s, list old) {
     return cons(bval, tstr, old);
 }
 
-void* car(list elts) {
+void* car(const list elts) {
     return elts->value;
 }
 
-list cdr(list elts) {
+list cdr(const list elts) {
     return elts->next;
 }
 
@@ -65,7 +65,7 @@ list append(list a, list b) {
     return nappend(duplicate(a), duplicate(b));
 }
 
-bool null(list elts) {
+bool null(const list elts) {
     return elts == nil;
 }
 
@@ -95,7 +95,7 @@ char* bytes_cstr(const byte* bytes) {
     return result;
 }
 
-byte* join_bytes(byte* prefix, char delim, byte* suffix, bool cstr) {
+byte* join_bytes(const byte* prefix, const char delim, const byte* suffix, bool cstr) {
     size_t prefix_len = str_size(prefix);
     size_t suffix_len = str_size(suffix);
     size_t total_len = prefix_len + suffix_len + 1;
@@ -114,7 +114,7 @@ byte* join_bytes(byte* prefix, char delim, byte* suffix, bool cstr) {
     return combined;
 }
 
-byte* sub_str(const byte* s, size_t len) {
+byte* sub_str(const byte* s, const size_t len) {
     if (str_size(s) < len) {
         return empty;
     }
@@ -139,18 +139,19 @@ void* str_dup(const void* val) {
     return result;
 }
 
-list duplicate(list elts) {
+list duplicate(const list elts) {
     if (null(elts)) {
         return nil;
     }
 
     list result = nil;
     void* val;
+    list head = elts;
 
-    while (!null(elts)) {
-        val = copier_of(elts)(car(elts));
-        result = cons(val, elts->t, result);
-        elts = cdr(elts);
+    while (!null(head)) {
+        val = copier_of(head)(car(head));
+        result = cons(val, head->t, result);
+        head = cdr(head);
     }
     return nreverse(result);
 }

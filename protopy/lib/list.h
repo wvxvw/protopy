@@ -29,19 +29,19 @@ typedef struct _list {
     void* value;
 } *list;
 
-list cons(void*, type_t, list);
+list cons(void*, const type_t, const list);
 
-void* car(list);
+void* car(const list);
 
-list cdr(list);
+list cdr(const list);
 
 list nappend(list, list);
 
 list append(list, list);
 
-bool null(list);
+bool null(const list);
 
-list duplicate(list);
+list duplicate(const list);
 
 char* str(list);
 
@@ -81,7 +81,7 @@ void* int_dup(void*);
 
 void* str_dup(const void*);
 
-byte* sub_str(const byte*, size_t);
+byte* sub_str(const byte*, const size_t);
 
 extern list nil;
 
@@ -121,13 +121,13 @@ list sort_unique(list, list_cmp_f);
 
 byte* cstr_bytes(const char*);
 
-list cons_str(char*, size_t, list);
+list cons_str(const char*, const size_t, const list);
 
-list cons_int(int, size_t, list);
+list cons_int(const int, const size_t, const list);
 
 char* bytes_cstr(const byte*);
 
-byte* join_bytes(byte*, char, byte*, bool);
+byte* join_bytes(const byte*, const char, const byte*, bool);
 
 extern byte empty[2];
 
