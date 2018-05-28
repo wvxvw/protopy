@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <inttypes.h>
-#include <alloca.h>
 
 #include <Python.h>
 
@@ -76,11 +75,11 @@ PyObject* state_set_factory(PyObject* self, PyObject* args) {
     Py_RETURN_NONE;
 }
 
-int64_t state_get_available(parse_state* state) {
+int64_t state_get_available(parse_state* const state) {
     return state->len - state->pos;
 }
 
-size_t state_read(parse_state* state, unsigned char** buf, size_t n) {
+size_t state_read(parse_state* const state, unsigned char** buf, size_t n) {
     *buf = &state->in[state->pos];
     if (state->len >= state->pos + (int64_t)n) {
         state->pos += (int64_t)n;
@@ -90,7 +89,7 @@ size_t state_read(parse_state* state, unsigned char** buf, size_t n) {
     return state->len - state->pos;
 }
 
-vt_type_t value_type(parse_state* state, PyObject* pbtype, PyObject* factory) {
+vt_type_t value_type(parse_state* const state, PyObject* pbtype, PyObject* factory) {
     if (PyList_CheckExact(pbtype)) {
         return vt_repeated;
     }
@@ -109,7 +108,7 @@ vt_type_t value_type(parse_state* state, PyObject* pbtype, PyObject* factory) {
     return (vt_type_t)PyLong_AsLong(kind);
 }
 
-PyObject* state_get_field_pytype(parse_state* state) {
+PyObject* state_get_field_pytype(parse_state* const state) {
     if (state->is_field) {
         return state->pytype;
     }
@@ -135,7 +134,7 @@ PyObject* state_get_field_pytype(parse_state* state) {
     return result;
 }
 
-vt_type_t state_get_field_type(parse_state* state) {
+vt_type_t state_get_field_type(parse_state* const state) {
     if (PyList_CheckExact(state->pytype)) {
         return vt_repeated;
     }
@@ -156,13 +155,13 @@ vt_type_t state_get_field_type(parse_state* state) {
     return value_type(state, field_type, factory);
 }
 
-vt_type_t state_get_field_repeated_type(parse_state* state) {
+vt_type_t state_get_field_repeated_type(parse_state* const state) {
     PyObject* inner = PyList_GetItem(state->pytype, 0);
     PyObject* factory = PyDict_GetItem(state->factories, inner);
     return value_type(state, inner, factory);
 }
 
-size_t parse_varint_impl(parse_state* state, uint64_t value[2]) {
+size_t parse_varint_impl(parse_state* const state, uint64_t value[2]) {
     unsigned char* buf = NULL;
     unsigned char current;
     size_t bytes_read = 0;
@@ -190,7 +189,7 @@ size_t parse_varint_impl(parse_state* state, uint64_t value[2]) {
     return 0;
 }
 
-size_t parse_zig_zag(parse_state* state, uint64_t value[2], bool* is_neg) {
+size_t parse_zig_zag(parse_state* const state, uint64_t value[2], bool* is_neg) {
     size_t parsed = parse_varint_impl(state, value);
     *is_neg = (value[0] & 1) == 1;
     uint64_t high = value[1];
@@ -257,7 +256,7 @@ PyObject* enum_from_dict(PyObject* ftype, PyObject* factory, PyObject* value) {
     return result;
 }
 
-size_t parse_varint(parse_state* state) {
+size_t parse_varint(parse_state* const state) {
     uint64_t value[2] = { 0, 0 };
     vt_type_t vt = state_get_field_type(state);
     bool sign = false;
@@ -293,7 +292,7 @@ size_t parse_varint(parse_state* state) {
     return parsed;
 }
 
-size_t parse_fixed_64(parse_state* state) {
+size_t parse_fixed_64(parse_state* const state) {
 #define FIXED_LENGTH 8
     unsigned char* buf = NULL;
     size_t read = 0;
@@ -324,14 +323,12 @@ size_t parse_fixed_64(parse_state* state) {
 #undef FIXED_LENGTH
 }
 
-size_t parse_length_delimited(parse_state* state) {
+size_t parse_length_delimited(parse_state* const state) {
     uint64_t value[2] = { 0, 0 };
     size_t parsed = parse_varint_impl(state, value);
     // No reason to care for high bits, we aren't expecting strings of
     // that length anyways.
     size_t length = (size_t)value[0];
-    // TODO(olegs): Figure out what's the safe value to allocate on
-    // stack and allocate on heap, if above the threshold.
     unsigned char* bytes = NULL;
     size_t read = 0;
     parse_state substate;
@@ -397,17 +394,17 @@ size_t parse_length_delimited(parse_state* state) {
     return parsed + read;
 }
 
-size_t parse_start_group(parse_state* state) {
+size_t parse_start_group(parse_state* const state) {
     PyErr_SetString(PyExc_NotImplementedError, "Proto v2 not supported");
     return 0;
 }
 
-size_t parse_end_group(parse_state* state) {
+size_t parse_end_group(parse_state* const state) {
     PyErr_SetString(PyExc_NotImplementedError, "Proto v2 not supported");
     return 0;
 }
 
-size_t parse_fixed_32(parse_state* state) {
+size_t parse_fixed_32(parse_state* const state) {
 #define FIXED_LENGTH 4
     unsigned char* buf = NULL;
     size_t read = 0;
@@ -465,7 +462,7 @@ bool is_scalar(vt_type_t vt) {
     }
 }
 
-PyObject* parse_message(parse_state* state) {
+PyObject* parse_message(parse_state* const state) {
     int64_t i = 0;
     size_t j = 0;
     PyObject* dict = PyDict_New();
@@ -531,7 +528,7 @@ PyObject* parse_message(parse_state* state) {
     return state->out;
 }
 
-PyObject* parse_map(parse_state* state) {
+PyObject* parse_map(parse_state* const state) {
     PyObject* key_type = PyTuple_GetItem(state->pytype, 0);
     PyObject* value_type = PyTuple_GetItem(state->pytype, 1);
     PyObject* result = PyDict_New();
@@ -587,7 +584,7 @@ PyObject* parse_map(parse_state* state) {
     return result;
 }
 
-PyObject* parse_repeated(parse_state* state) {
+PyObject* parse_repeated(parse_state* const state) {
     int64_t i = 0;
     size_t j = 0;
     PyObject* result = PyList_New(0);
@@ -640,9 +637,9 @@ PyObject* parse_repeated(parse_state* state) {
     return result;
 }
 
-size_t backtrack(parse_state* state) { return 0; }
+size_t backtrack(parse_state* const state) { return 0; }
 
-size_t select_handler(parse_state* state, parse_handler* handler) {
+size_t select_handler(parse_state* const state, parse_handler* handler) {
     if (state_get_available(state) == 0) {
         *handler = backtrack;
         return 0;
@@ -682,7 +679,7 @@ size_t select_handler(parse_state* state, parse_handler* handler) {
     return parsed;
 }
 
-size_t parse(parse_state* state) {
+size_t parse(parse_state* const state) {
     parse_handler handler;
     size_t parsed = select_handler(state, &handler);
     return parsed + (*handler)(state);
