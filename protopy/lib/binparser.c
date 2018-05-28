@@ -98,14 +98,14 @@ vt_type_t value_type(parse_state* const state, PyObject* pbtype, PyObject* facto
     }
     PyObject* builtin = PyDict_GetItem(state->builtin_types, pbtype);
     if (builtin) {
-        return (vt_type_t)PyLong_AsLong(builtin);
+        return (vt_type_t)PyLong_AsSsize_t(builtin);
     }
     if (factory == NULL || factory == Py_None) {
         PyErr_Format(PyExc_TypeError, "No definition for type: %A", pbtype);
         return vt_error;
     }
     PyObject* kind = PyTuple_GetItem(factory, 0);
-    return (vt_type_t)PyLong_AsLong(kind);
+    return (vt_type_t)PyLong_AsSsize_t(kind);
 }
 
 PyObject* state_get_field_pytype(parse_state* const state) {
@@ -221,7 +221,7 @@ PyObject* tuple_from_dict(PyObject* ftype, PyObject* factory, PyObject* values) 
     }
 
     while (PyDict_Next(fmapping, &pos, &key, &value)) {
-        field = (Py_ssize_t)PyLong_AsLong(value);
+        field = PyLong_AsSsize_t(value);
         if (field > arg_len) {
             arg_len = field;
         }
@@ -237,7 +237,7 @@ PyObject* tuple_from_dict(PyObject* ftype, PyObject* factory, PyObject* values) 
 
     pos = 0;
     while (PyDict_Next(values, &pos, &key, &value)) {
-        field = (Py_ssize_t)PyLong_AsLong(PyDict_GetItem(fmapping, key));
+        field = PyLong_AsSsize_t(PyDict_GetItem(fmapping, key));
         PyTuple_SetItem(args, field, value);
     }
     result = PyObject_Call(ttype, args, NULL);
@@ -515,7 +515,7 @@ PyObject* parse_message(parse_state* const state) {
             dict);
         return NULL;
     }
-    vt_type_t ctor = (vt_type_t)PyLong_AsLong(PyTuple_GetItem(factory, 0));
+    vt_type_t ctor = (vt_type_t)PyLong_AsSsize_t(PyTuple_GetItem(factory, 0));
     if (ctor == vt_message) {
         state->out = tuple_from_dict(state->pytype, factory, dict);
     } else {
