@@ -51,7 +51,6 @@ PyObject* make_state(PyObject* self, PyObject* args) {
     state->pos = 0;
     state->out = Py_None;
     state->is_field = false;
-    state->builtin_types = Py_None;
     return PyCapsule_New(state, NULL, free_state);
 }
 
@@ -74,7 +73,7 @@ PyObject* state_set_factory(PyObject* self, PyObject* args) {
     state->factories = factories;
     state->builtin_types = builtins;
 
-    return Py_None;
+    Py_RETURN_NONE;
 }
 
 int64_t state_get_available(parse_state* state) {
@@ -238,6 +237,7 @@ PyObject* tuple_from_dict(PyObject* ftype, PyObject* factory, PyObject* values) 
 
     pos = 0;
     while (pos < arg_len + 1) {
+        Py_INCREF(Py_None);
         PyTuple_SetItem(args, pos, Py_None);
         pos++;
     }
