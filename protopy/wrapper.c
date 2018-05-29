@@ -17,6 +17,7 @@
 #include "lib/binparser.h"
 #include "lib/defparser.h"
 #include "lib/list.h"
+#include "lib/descriptors.h"
 
 
 static char module_docstring[] = "Protobuf decoder and encoder.";
@@ -309,16 +310,20 @@ PyObject* aprdict_to_pydict(apr_pool_t* mp, apr_hash_t* ht) {
 static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     PyObject* source_roots;
     PyObject* parsed_files;
+    PyObject* message_ctor;
+    PyObject* enum_ctor;
     char* source;
 
     if (!PyArg_ParseTuple(
             args,
-            "yO!O!",
+            "yO!O!OO",
             &source,
             &PyList_Type,
             &source_roots,
             &PyDict_Type,
-            &parsed_files)) {
+            &parsed_files,
+            &message_ctor,
+            &enum_ctor)) {
         return NULL;
     }
 
@@ -332,6 +337,8 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     Py_DECREF(multiprocessing);
     Py_DECREF(ncores);
     list roots = pylist_to_list(source_roots);
+    // TODO(olegs): This pool needs to be initialized per parser
+    // instance.
     apr_pool_t* mp = NULL;
     apr_hash_t* parsed_defs;
 
@@ -376,6 +383,7 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
         return NULL;
     }
 
+    create_descriptors(parsed_defs, enum_ctor, message_ctor, mp);
     PyObject* types = PyImport_ImportModule("protopy.types");
     PyObject* description = aprdict_to_pydict(mp, parsed_defs);
     PyObject* result = PyObject_CallMethod(

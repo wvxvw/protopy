@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+from collections import namedtuple
+from enum import IntEnum
+
 from protopy.wrapped import (
     proto_def_parse,
     proto_parse,
@@ -29,7 +32,9 @@ _PB_TYPES = {
 
 class DefParser:
 
-    def __init__(self, roots):
+    def __init__(self, roots, enum_ctor=IntEnum, message_ctor=namedtuple):
+        self.enum_ctor = enum_ctor
+        self.message_ctor = message_ctor
         self.roots = list(set([str(r).encode('utf-8') for r in roots]))
         self.files = {}
         self.defs = {}
@@ -38,7 +43,13 @@ class DefParser:
         source = str(source).encode('utf-8')
         if source not in self.files or force:
             self.defs.update(
-                proto_def_parse(source, self.roots, self.files),
+                proto_def_parse(
+                    source,
+                    self.roots,
+                    self.files,
+                    self.message_ctor,
+                    self.enum_ctor,
+                ),
             )
 
 

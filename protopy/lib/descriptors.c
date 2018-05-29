@@ -3,7 +3,9 @@
 #include <apr_hash.h>
 
 #include "list.h"
+#include "defparser.h"
 #include "descriptors.h"
+#include "pyhelpers.h"
 
 void extract_type_name(
     const byte* tname,
@@ -16,7 +18,7 @@ void extract_type_name(
     while (i > 0) {
         if (tname[i] == '.' || tname[i] == ':') {
             *package = sub_str(tname, i - 2);
-            *pname = sub_str(tname + i, len - i);
+            *pname = sub_str(tname + i - 1, len - i - 1);
             return;
         }
         i--;
@@ -33,7 +35,10 @@ enum_desc(
     PyObject* enum_ctor,
     apr_pool_t* const mp) {
 
+    // TODO(olegs): In the future... we will allocate strings fro APR
+    // pools, so managing their memory will be easier.
     const byte* norm_ftype = replace_str(ftype, ':', '.');
+    // TODO(olegs): Maybe check if we already registered this type?
 
     size_t i = 0;
     PyObject* members = PyDict_New();
@@ -51,28 +56,29 @@ enum_desc(
         PyObject* member = PyUnicode_FromStringAndSize(
             (char*)(tname + 2),
             str_size(tname));
-        field_info_t* info = apr_palloc(mp, sizeof(field));
-        const void* key = apr_palloc(mp, sizeof(size_t));
+        field_info_t* info = apr_palloc(mp, sizeof(field_info_t));
+        size_t* key = apr_palloc(mp, sizeof(size_t));
 
-        *(size_t*)key = num;
-        *(size_t*)info->n = i;
+        *key = num;
+        info->n = i;
         
         apr_hash_set(mapping, key, sizeof(size_t), info);
         PyDict_SetItem(members, member, PyLong_FromSsize_t(num));
-        
+
         head = cdr(head);
         i++;
     }
     ctor = PyObject_CallFunctionObjArgs(
         enum_ctor,
         PyUnicode_FromStringAndSize(
-            (char*)norm_ftype + 2,
+            (char*)(norm_ftype + 2),
             str_size(norm_ftype)),
         members,
         NULL);
+    Py_DECREF(members);
 
     factory_t* factory = apr_palloc(mp, sizeof(factory_t));
-    *(size_t*)factory->vt_type = vt_enum;
+    factory->vt_type = vt_enum;
     factory->mapping = mapping;
     factory->ctor = ctor;
 
@@ -127,14 +133,98 @@ enum_desc(
 //     result.__module__ = module
 //     factories[ftype] = tuple([13, result, fmapping, tmapping])
 
+void ensure_valid_names(PyObject* fields_list) {
+
+}
+
 void
 message_desc(
     const byte* ftype,
     const list desc,
     apr_hash_t* const factories,
-    apr_hash_t* const descriptions,
+    PyObject* message_ctor,
     apr_pool_t* const mp) {
 
+    byte* norm_ftype = replace_str(ftype, ':', '.');
+    PyObject* fields_list = PyList_New(0);
+    apr_hash_t* fields = apr_hash_make(mp);
+    apr_hash_t* mapping = apr_hash_make(mp);
+    list head = desc;
+    size_t field_idx = 0;
+
+    list field;
+    size_t field_ast;
+    byte* field_name;
+    byte* field_type;
+    size_t field_num;
+    size_t* key;
+    byte* pytype;
+    field_info_t* info;
+
+    while (!null(head)) {
+        field = car(head);
+        field_ast = SIZE_VAL(field);
+        field_type = STR_VAL(cdr(field));
+        field_name = STR_VAL(cdr(cdr(field)));
+        field_num = SIZE_VAL(cdr(cdr(cdr(field))));
+
+        switch ((ast_type_t)field_ast) {
+            case ast_field:
+                printf("adding field record: %s\n", bytes_cstr(field_name));
+                info = apr_palloc(mp, sizeof(field_info_t));
+                info->n = field_idx;
+                pytype = apr_palloc(mp, str_size(field_type) + 2);
+                memcpy(pytype, field_type, str_size(field_type) + 2);
+                info->pytype = pytype;
+                // We'll figure these out once we actually start parsing.
+                info->vt_type = vt_default;
+                key = apr_palloc(mp, sizeof(size_t));
+                *key = field_num;
+                apr_hash_set(mapping, key, sizeof(size_t), info);
+                printf("added field record: %zu\n", *key);
+                PyList_Append(
+                    fields_list,
+                    PyUnicode_FromStringAndSize(
+                        (char*)(field_name + 2),
+                        str_size(field_name)));
+                break;
+            case ast_repeated:
+                break;
+            case ast_map:
+                break;
+            default:
+                PyErr_Format(
+                    PyExc_TypeError,
+                    "Unrecognized field type: %i", field_ast);
+                break;
+        }
+        if (apr_hash_get(fields, field_name, str_size(field_name) + 2)) {
+            
+        }
+        head = cdr(head);
+    }
+
+    byte* name;
+    byte* package;
+
+    extract_type_name(norm_ftype, &name, &package);
+    ensure_valid_names(fields_list);
+
+    printf("creating message constructor\n");
+    PyObject* ctor = PyObject_CallFunctionObjArgs(
+        message_ctor,
+        PyUnicode_FromStringAndSize((char*)name + 2, str_size(name)),
+        fields_list,
+        NULL);
+    printf("creating message factory\n");
+    factory_t* factory = apr_palloc(mp, sizeof(factory_t));
+    factory->vt_type = vt_message;
+    factory->mapping = mapping;
+    factory->ctor = ctor;
+    printf("message_desc finished\n");
+    if (PyErr_Occurred()) {
+        PyErr_Print();
+    }
 }
 
 // def create_descriptors(descriptions):
@@ -163,10 +253,48 @@ message_desc(
 
 apr_hash_t*
 create_descriptors(
-    const apr_hash_t* const descriptions,
+    apr_hash_t* const descriptions,
+    PyObject* enum_ctor,
+    PyObject* message_ctor,
     apr_pool_t* const mp) {
 
-    apr_hash_t* result = apr_hash_make(mp);
+    apr_hash_t* factories = apr_hash_make(mp);
+    apr_hash_index_t* hi;
+    void* val;
+    const void* key;
+    list file_desc;
+    list desc;
+    size_t rtype;
+    byte* tname;
+    list fields;
 
-    return result;
+    for (hi = apr_hash_first(mp, descriptions); hi; hi = apr_hash_next(hi)) {
+        apr_hash_this(hi, &key, NULL, &val);
+        file_desc = (list)val;
+
+        while (!null(file_desc)) {
+            desc = LIST_VAL(file_desc);
+            printf("creating descryptor for: %s\n", str(desc));
+            // TODO(olegs): This shouldn't be needed, check yacc code
+            // and defparser to make sure this can be removed.
+            if (!null(desc)) {
+                rtype = SIZE_VAL(desc);
+                switch (rtype) {
+                    case 0:
+                        tname = STR_VAL(cdr(desc));
+                        fields = cdr(cdr(desc));
+                        message_desc(tname, fields, factories, message_ctor, mp);
+                        break;
+                    case 1:
+                        tname = STR_VAL(cdr(desc));
+                        fields = cdr(cdr(desc));
+                        enum_desc(tname, fields, factories, enum_ctor, mp);
+                        break;
+                }
+            }
+            file_desc = cdr(file_desc);
+        }
+    }
+
+    return factories;
 }
