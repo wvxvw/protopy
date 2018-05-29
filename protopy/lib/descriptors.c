@@ -158,6 +158,7 @@ message_desc(
     byte* field_type;
     size_t field_num;
     size_t* key;
+    size_t* idx;
     byte* pytype;
     field_info_t* info;
 
@@ -170,23 +171,38 @@ message_desc(
 
         switch ((ast_type_t)field_ast) {
             case ast_field:
-                printf("adding field record: %s\n", bytes_cstr(field_name));
-                info = apr_palloc(mp, sizeof(field_info_t));
-                info->n = field_idx;
-                pytype = apr_palloc(mp, str_size(field_type) + 2);
-                memcpy(pytype, field_type, str_size(field_type) + 2);
-                info->pytype = pytype;
-                // We'll figure these out once we actually start parsing.
-                info->vt_type = vt_default;
-                key = apr_palloc(mp, sizeof(size_t));
-                *key = field_num;
-                apr_hash_set(mapping, key, sizeof(size_t), info);
-                printf("added field record: %zu\n", *key);
-                PyList_Append(
-                    fields_list,
-                    PyUnicode_FromStringAndSize(
-                        (char*)(field_name + 2),
-                        str_size(field_name)));
+                // TODO(olegs): Deduplicate
+                idx = apr_hash_get(fields, field_name, str_size(field_name) + 2);
+                if (idx) {
+                    info = apr_palloc(mp, sizeof(field_info_t));
+                    info->n = (size_t)idx;
+                    pytype = apr_palloc(mp, str_size(field_type) + 2);
+                    memcpy(pytype, field_type, str_size(field_type) + 2);
+                    info->pytype = pytype;
+                    info->vt_type = vt_default;
+                    key = apr_palloc(mp, sizeof(size_t));
+                    *key = field_num;
+                    apr_hash_set(mapping, key, sizeof(size_t), info);
+                } else {
+                    info = apr_palloc(mp, sizeof(field_info_t));
+                    info->n = field_idx;
+                    pytype = apr_palloc(mp, str_size(field_type) + 2);
+                    memcpy(pytype, field_type, str_size(field_type) + 2);
+                    info->pytype = pytype;
+                    // We'll figure these out once we actually start parsing.
+                    info->vt_type = vt_default;
+                    key = apr_palloc(mp, sizeof(size_t));
+                    *key = field_num;
+                    apr_hash_set(mapping, key, sizeof(size_t), info);
+                    apr_hash_set(fields, field_name, str_size(field_name) + 2, (void*)1);
+
+                    PyList_Append(
+                        fields_list,
+                        PyUnicode_FromStringAndSize(
+                            (char*)(field_name + 2),
+                            str_size(field_name)));
+                    field_idx++;
+                }
                 break;
             case ast_repeated:
                 break;
@@ -197,9 +213,6 @@ message_desc(
                     PyExc_TypeError,
                     "Unrecognized field type: %i", field_ast);
                 break;
-        }
-        if (apr_hash_get(fields, field_name, str_size(field_name) + 2)) {
-            
         }
         head = cdr(head);
     }
