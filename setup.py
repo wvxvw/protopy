@@ -41,6 +41,7 @@ setup(
         Extension(
             'wrapped',
             [
+                'protopy/lib/descriptors.c',
                 'protopy/lib/binparser.c',
                 'protopy/lib/defparser.c',
                 'protopy/lib/protopy.lex.c',

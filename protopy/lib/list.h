@@ -5,6 +5,10 @@
 #include <stdbool.h>
 #include <string.h>
 
+#define SIZE_VAL(x) (size_t)(*(int*)car(x))
+#define STR_VAL(x) (byte*)car(x)
+#define LIST_VAL(x) (list)car(x)
+
 typedef unsigned char byte;
 
 typedef enum type {
@@ -128,6 +132,8 @@ list cons_int(const int, const size_t, const list);
 char* bytes_cstr(const byte*);
 
 byte* join_bytes(const byte*, const char, const byte*, bool);
+
+byte* replace_str(const byte* s, byte, byte);
 
 extern byte empty[2];
 

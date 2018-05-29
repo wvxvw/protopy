@@ -1,49 +1,82 @@
+#include <Python.h>
 #include <apr_general.h>
+#include <apr_hash.h>
 
 #include "list.h"
-
-// def extract_type_name(tname):
-//     i = len(tname)
-//     while i > 0:
-//         i -= 1
-//         if tname[i] in b'.:':
-//             return tname[:i].decode('utf-8'), tname[i + 1:].decode('utf-8')
-//     return '', tname.decode('utf-8')
+#include "descriptors.h"
 
 void extract_type_name(
     const byte* tname,
     byte** pname,
-    byte** package,
-    apr_pool_t* mp) {
+    byte** package) {
 
+    size_t len = str_size(tname) + 2;
+    size_t i = len;
+
+    while (i > 0) {
+        if (tname[i] == '.' || tname[i] == ':') {
+            *package = sub_str(tname, i - 2);
+            *pname = sub_str(tname + i, len - i);
+            return;
+        }
+        i--;
+    }
+    *pname = str_dup(tname);
+    *package = str_dup(empty);
 }
-
-// def enum_desc(ftype, desc, factories, descriptions):
-//     ftype = ftype.replace(b':', b'.')
-//     if ftype in factories:
-//         return
-
-//     members = {}
-//     mmapping = {}
-
-//     for i, field in enumerate(desc):
-//         name = field[0].decode('utf-8')
-//         num = field[1]
-
-//         members[name] = i
-//         mmapping[num] = i
-
-//     result = IntEnum(ftype.decode('utf-8'), members)
-//     factories[ftype] = tuple([7, result, mmapping])
 
 void
 enum_desc(
     const byte* ftype,
     const list desc,
     apr_hash_t* const factories,
-    apr_hash_t* const descriptions,
+    PyObject* enum_ctor,
     apr_pool_t* const mp) {
 
+    const byte* norm_ftype = replace_str(ftype, ':', '.');
+
+    size_t i = 0;
+    PyObject* members = PyDict_New();
+    apr_hash_t* mapping = apr_hash_make(mp);
+    PyObject* ctor;
+
+    list head = desc;
+    list field;
+
+    while (!null(head)) {
+        field = car(head);
+
+        byte* tname = car(field);
+        size_t num = SIZE_VAL(cdr(field));
+        PyObject* member = PyUnicode_FromStringAndSize(
+            (char*)(tname + 2),
+            str_size(tname));
+        field_info_t* info = apr_palloc(mp, sizeof(field));
+        const void* key = apr_palloc(mp, sizeof(size_t));
+
+        *(size_t*)key = num;
+        *(size_t*)info->n = i;
+        
+        apr_hash_set(mapping, key, sizeof(size_t), info);
+        PyDict_SetItem(members, member, PyLong_FromSsize_t(num));
+        
+        head = cdr(head);
+        i++;
+    }
+    ctor = PyObject_CallFunctionObjArgs(
+        enum_ctor,
+        PyUnicode_FromStringAndSize(
+            (char*)norm_ftype + 2,
+            str_size(norm_ftype)),
+        members,
+        NULL);
+
+    factory_t* factory = apr_palloc(mp, sizeof(factory_t));
+    *(size_t*)factory->vt_type = vt_enum;
+    factory->mapping = mapping;
+    factory->ctor = ctor;
+
+    apr_hash_set(factories, ftype, str_size(ftype) + 2, factory);
 }
 
 // def message_desc(ftype, desc, factories, descriptions):
@@ -133,4 +166,7 @@ create_descriptors(
     const apr_hash_t* const descriptions,
     apr_pool_t* const mp) {
 
+    apr_hash_t* result = apr_hash_make(mp);
+
+    return result;
 }

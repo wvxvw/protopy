@@ -596,4 +596,17 @@ list sort_unique(list elts, list_cmp_f cmp) {
     return merge_unique(a, b, cmp);
 }
 
+byte* replace_str(const byte* s, byte a, byte b) {
+    byte* result = str_dup(s);
+    size_t i = str_size(s);
+
+    while (i > 0) {
+        i--;
+        if (result[i] == a) {
+            result[i] = b;
+        }
+    }
+    return result;
+}
+
 byte empty[2] = {0, 0};
