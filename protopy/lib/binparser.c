@@ -325,12 +325,27 @@ size_t parse_fixed_64(parse_state* const state) {
 #undef FIXED_LENGTH
 }
 
+void init_substate(
+    parse_state* substate,
+    parse_state* parent,
+    unsigned char* bytes,
+    uint64_t length) {
+
+    substate->pos = 0;
+    substate->in = bytes;
+    substate->len = length;
+    substate->factories = parent->factories;
+    substate->pytype = state_get_field_pytype(parent);
+    substate->is_field = false;
+    substate->builtin_types = parent->builtin_types;
+}
+
 size_t parse_length_delimited(parse_state* const state) {
     uint64_t value[2] = { 0, 0 };
     size_t parsed = parse_varint_impl(state, value);
     // No reason to care for high bits, we aren't expecting strings of
     // that length anyways.
-    size_t length = (size_t)value[0];
+    uint64_t length = value[0];
     unsigned char* bytes = NULL;
     size_t read = 0;
     parse_state substate;
@@ -350,37 +365,17 @@ size_t parse_length_delimited(parse_state* const state) {
             Py_INCREF(state->out);
             break;
         case vt_message:
-            substate.pos = 0;
-            substate.in = bytes;
-            substate.len = (int64_t)length;
-            substate.factories = state->factories;
-            substate.pytype = state_get_field_pytype(state);
-            substate.is_field = false;
-            substate.builtin_types = state->builtin_types;
+            init_substate(&substate, state, bytes, length);
             state->out = parse_message(&substate);
             Py_INCREF(state->out);
             break;
         case vt_repeated:
-            substate.pos = 0;
-            substate.in = bytes;
-            substate.len = (int64_t)length;
-            substate.field = state->field;
-            substate.factories = state->factories;
-            substate.pytype = state_get_field_pytype(state);
-            substate.is_field = false;
-            substate.builtin_types = state->builtin_types;
+            init_substate(&substate, state, bytes, length);
             state->out = parse_repeated(&substate);
             Py_INCREF(state->out);
             break;
         case vt_map:
-            substate.pos = 0;
-            substate.in = bytes;
-            substate.len = (int64_t)length;
-            substate.field = state->field;
-            substate.factories = state->factories;
-            substate.pytype = state_get_field_pytype(state);
-            substate.is_field = false;
-            substate.builtin_types = state->builtin_types;
+            init_substate(&substate, state, bytes, length);
             state->out = parse_map(&substate);
             Py_INCREF(state->out);
             break;
@@ -517,12 +512,7 @@ PyObject* parse_message(parse_state* const state) {
             dict);
         return NULL;
     }
-    vt_type_t ctor = (vt_type_t)PyLong_AsSsize_t(PyTuple_GetItem(factory, 0));
-    if (ctor == vt_message) {
-        state->out = tuple_from_dict(state->pytype, factory, dict);
-    } else {
-        state->out = enum_from_dict(state->pytype, factory, dict);
-    }
+    state->out = tuple_from_dict(state->pytype, factory, dict);
     Py_DECREF(dict);
     if (state->out != NULL) {
         Py_INCREF(state->out);

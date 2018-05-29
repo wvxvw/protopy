@@ -15,7 +15,7 @@ def extract_type_name(tname):
     return '', tname.decode('utf-8')
 
 
-def enum_desc(ftype, desc, factories, descriptions):
+def enum_desc(ftype, desc, factories):
     ftype = ftype.replace(b':', b'.')
     if ftype in factories:
         return
@@ -50,7 +50,7 @@ _pb_key_types = {
 }
 
 
-def message_desc(ftype, desc, factories, descriptions):
+def message_desc(ftype, desc, factories):
     # TODO(olegs): We need to handle package <-> message name
     # collision earlier
     ftype = ftype.replace(b':', b'.')
@@ -111,14 +111,12 @@ def create_descriptors(descriptions):
                         tname,
                         fields,
                         factories,
-                        descriptions,
                     )
                 elif rtype == 1:
                     enum_desc(
                         tname,
                         fields,
                         factories,
-                        descriptions,
                     )
 
     return factories
