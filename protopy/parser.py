@@ -11,6 +11,7 @@ from protopy.wrapped import (
     state_ready,
     state_result,
     state_set_factory,
+    make_apr_pool,
 )
 
 _PB_TYPES = {
@@ -33,12 +34,22 @@ _PB_TYPES = {
 
 class DefParser:
 
-    def __init__(self, roots, enum_ctor=IntEnum, message_ctor=namedtuple):
+    def __init__(
+            self,
+            roots,
+            enum_ctor=IntEnum,
+            message_ctor=namedtuple,
+            mp=None,
+    ):
         self.enum_ctor = enum_ctor
         self.message_ctor = message_ctor
         self.roots = list(set([str(r).encode('utf-8') for r in roots]))
         self.files = {}
         self.defs = {}
+        if mp:
+            self.mp = mp
+        else:
+            self.mp = make_apr_pool()
 
     def parse(self, source, force=False):
         source = str(source).encode('utf-8')
@@ -51,6 +62,7 @@ class DefParser:
                     self.message_ctor,
                     self.enum_ctor,
                     kwlist,
+                    self.mp,
                 ),
             )
 
@@ -58,7 +70,8 @@ class DefParser:
 class BinParser:
 
     def __init__(self, roots):
-        self.def_parser = DefParser(roots)
+        self.mp = make_apr_pool()
+        self.def_parser = DefParser(roots, mp=self.mp)
         self.state = None
 
     def parse(self, source, message, buf):

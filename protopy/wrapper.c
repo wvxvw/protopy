@@ -30,10 +30,12 @@ static char state_result_docstring[] = "The object that was deserialized.";
 static char state_set_factory_docstring[] = "Specify the message class and dict "\
                                             "of definitions to use when parsing "\
                                             "binary messages stream.";
+static char make_apr_pool_docstring[] = "Create a new APR memory pool";
 
 static PyObject* proto_parse(PyObject* self, PyObject* args);
 static PyObject* proto_def_parse(PyObject* self, PyObject* args);
 static PyObject* apr_cleanup(PyObject* self, PyObject* args);
+static PyObject* make_apr_pool(PyObject* self, PyObject* args);
 
 static PyMethodDef module_methods[] = {
     {"proto_parse", proto_parse, METH_VARARGS, parse_docstring},
@@ -43,6 +45,7 @@ static PyMethodDef module_methods[] = {
     {"state_ready", state_ready, METH_VARARGS, state_ready_docstring},
     {"state_result", state_result, METH_VARARGS, state_result_docstring},
     {"state_set_factory", state_set_factory, METH_VARARGS, state_set_factory_docstring},
+    {"make_apr_pool", make_apr_pool, METH_VARARGS, make_apr_pool_docstring},
     {NULL, NULL, 0, NULL}
 };
 
@@ -64,6 +67,25 @@ PyMODINIT_FUNC PyInit_wrapped(void) {
 static PyObject* apr_cleanup(PyObject* self, PyObject* args) {
     apr_terminate();
     Py_RETURN_NONE;
+}
+
+void free_apr_pool(PyObject* capsule) {
+    if (capsule == Py_None) {
+        return;
+    }
+    apr_pool_t* mp = (apr_pool_t*)PyCapsule_GetPointer(capsule, NULL);
+    if (mp) {
+        apr_pool_destroy(mp);
+    }
+}
+
+static PyObject* make_apr_pool(PyObject* self, PyObject* args) {
+    apr_pool_t* mp;
+    if (apr_pool_create(&mp, NULL) != APR_SUCCESS) {
+        PyErr_SetString(PyExc_TypeError, "Couldn't create memory pool");
+        return NULL;
+    }
+    return PyCapsule_New(mp, NULL, free_apr_pool);
 }
 
 static PyObject* proto_parse(PyObject* self, PyObject* args) {
@@ -313,11 +335,12 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     PyObject* message_ctor;
     PyObject* enum_ctor;
     PyObject* pykeywords;
+    PyObject* mp_capsule;
     char* source;
 
     if (!PyArg_ParseTuple(
             args,
-            "yO!O!OOO",
+            "yO!O!OOOO",
             &source,
             &PyList_Type,
             &source_roots,
@@ -325,7 +348,8 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
             &parsed_files,
             &message_ctor,
             &enum_ctor,
-            &pykeywords)) {
+            &pykeywords,
+            &mp_capsule)) {
         return NULL;
     }
 
@@ -341,13 +365,12 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     list roots = pylist_to_list(source_roots);
     // TODO(olegs): This pool needs to be initialized per parser
     // instance.
-    apr_pool_t* mp = NULL;
-    apr_hash_t* parsed_defs;
-
-    if (apr_pool_create(&mp, NULL) != APR_SUCCESS) {
-        PyErr_SetString(PyExc_TypeError, "Couldn't create memory pool");
+    apr_pool_t* mp = PyCapsule_GetPointer(mp_capsule, NULL);
+    if (!mp) {
+        PyErr_Format(PyExc_ValueError, "APR memory pool wasn't initialized");
         return NULL;
     }
+    apr_hash_t* parsed_defs;
 
     char* error_message = NULL;
     size_t error_kind = 0;
@@ -381,7 +404,6 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
         }
         PyErr_SetString(error_class, error_message);
         free(error_message);
-        apr_pool_destroy(mp);
         return NULL;
     }
 
@@ -399,8 +421,6 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     PyDict_Update(parsed_files, description);
     Py_DECREF(description);
     Py_DECREF(types);
-
-    apr_pool_destroy(mp);
 
     return result;
 }
