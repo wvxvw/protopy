@@ -27,15 +27,18 @@ static char apr_cleanup_docstring[] = "Calls apr_terminate().";
 static char make_state_docstring[] = "Creates state capsule.";
 static char state_ready_docstring[] = "Returns True when state finished parsing.";
 static char state_result_docstring[] = "The object that was deserialized.";
-static char state_set_factory_docstring[] = "Specify the message class and dict "\
-                                            "of definitions to use when parsing "\
-                                            "binary messages stream.";
 static char make_apr_pool_docstring[] = "Create a new APR memory pool";
+static char apr_update_hash_docstring[] = "Merge two APR hash tables";
+static char apr_hash_contains_docstring[] = "Check if APR hash table contains a key";
+static char make_apr_hash_docstring[] = "Create new APR hash table";
 
 static PyObject* proto_parse(PyObject* self, PyObject* args);
 static PyObject* proto_def_parse(PyObject* self, PyObject* args);
 static PyObject* apr_cleanup(PyObject* self, PyObject* args);
 static PyObject* make_apr_pool(PyObject* self, PyObject* args);
+static PyObject* apr_update_hash(PyObject* self, PyObject* args);
+static PyObject* apr_hash_contains(PyObject* self, PyObject* args);
+static PyObject* make_apr_hash(PyObject* self, PyObject* args);
 
 static PyMethodDef module_methods[] = {
     {"proto_parse", proto_parse, METH_VARARGS, parse_docstring},
@@ -44,8 +47,10 @@ static PyMethodDef module_methods[] = {
     {"make_state", make_state, METH_VARARGS, make_state_docstring},
     {"state_ready", state_ready, METH_VARARGS, state_ready_docstring},
     {"state_result", state_result, METH_VARARGS, state_result_docstring},
-    {"state_set_factory", state_set_factory, METH_VARARGS, state_set_factory_docstring},
     {"make_apr_pool", make_apr_pool, METH_VARARGS, make_apr_pool_docstring},
+    {"apr_update_hash", apr_update_hash, METH_VARARGS, apr_update_hash_docstring},
+    {"apr_hash_contains", apr_hash_contains, METH_VARARGS, apr_hash_contains_docstring},
+    {"make_apr_hash", make_apr_hash, METH_VARARGS, make_apr_hash_docstring},
     {NULL, NULL, 0, NULL}
 };
 
@@ -69,6 +74,70 @@ static PyObject* apr_cleanup(PyObject* self, PyObject* args) {
     Py_RETURN_NONE;
 }
 
+void free_apr_hash(PyObject* capsule) { }
+
+static PyObject* make_apr_hash(PyObject* self, PyObject* args) {
+    PyObject* capsule;
+
+    if (!PyArg_ParseTuple(args, "O", &capsule)) {
+        return NULL;
+    }
+    apr_pool_t* mp = (apr_pool_t*)PyCapsule_GetPointer(capsule, NULL);
+    if (!mp) {
+        PyErr_Format(PyExc_ValueError, "Missing APR memory pool");
+        return NULL;
+    }
+    apr_hash_t* ht = apr_hash_make(mp);
+    return PyCapsule_New(ht, NULL, free_apr_hash);
+}
+
+static PyObject* apr_update_hash(PyObject* self, PyObject* args) {
+    PyObject* from_capsule;
+    PyObject* to_capsule;
+
+    if (!PyArg_ParseTuple(args, "OO", &to_capsule, &from_capsule)) {
+        return NULL;
+    }
+    apr_hash_t* from = (apr_hash_t*)PyCapsule_GetPointer(from_capsule, NULL);
+    if (!from) {
+        PyErr_Format(PyExc_ValueError, "Missing hash table to update from");
+        return NULL;
+    }
+    apr_hash_t* to = (apr_hash_t*)PyCapsule_GetPointer(to_capsule, NULL);
+    if (!from) {
+        PyErr_Format(PyExc_ValueError, "Missing hash table to update");
+        return NULL;
+    }
+    apr_pool_t* mp = apr_hash_pool_get(to);
+    apr_hash_t* result = apr_hash_overlay(mp, from, to);
+    PyCapsule_SetPointer(to_capsule, result);
+    Py_RETURN_NONE;
+}
+
+static PyObject* apr_hash_contains(PyObject* self, PyObject* args) {
+    PyObject* capsule;
+    char* key;
+
+    if (!PyArg_ParseTuple(args, "Oy", &capsule, &key)) {
+        return NULL;
+    }
+    apr_hash_t* ht = (apr_hash_t*)PyCapsule_GetPointer(capsule, NULL);
+    if (!ht) {
+        PyErr_Format(PyExc_ValueError, "Missing hash table");
+        return NULL;
+    }
+    byte* apr_key = cstr_bytes(key);
+    void* result = apr_hash_get(ht, apr_key, str_size(key) + 2);
+    if (result) {
+        free(apr_key);
+        Py_INCREF(Py_True);
+        return Py_True;
+    }
+    free(apr_key);
+    Py_INCREF(Py_False);
+    return Py_False;
+}
+
 void free_apr_pool(PyObject* capsule) {
     if (capsule == Py_None) {
         return;
@@ -89,14 +158,14 @@ static PyObject* make_apr_pool(PyObject* self, PyObject* args) {
 }
 
 static PyObject* proto_parse(PyObject* self, PyObject* args) {
-    parse_state* state;
+    parse_state_t* state;
     PyObject* in;
     PyObject* capsule;
     
     if (!PyArg_ParseTuple(args, "OO", &in, &capsule)) {
         return NULL;
     }
-    state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
+    state = (parse_state_t*)PyCapsule_GetPointer(capsule, NULL);
     if (state == NULL) {
         return NULL;
     }
@@ -407,20 +476,17 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
         return NULL;
     }
 
-    create_descriptors(parsed_defs, enum_ctor, message_ctor, pykeywords, mp);
+    apr_hash_t* result = create_descriptors(
+        parsed_defs,
+        enum_ctor,
+        message_ctor,
+        pykeywords,
+        mp);
     if (PyErr_Occurred()) {
         return NULL;
     }
-    PyObject* types = PyImport_ImportModule("protopy.types");
     PyObject* description = aprdict_to_pydict(mp, parsed_defs);
-    PyObject* result = PyObject_CallMethod(
-        types,
-        "create_descriptors",
-        "O",
-        description);
     PyDict_Update(parsed_files, description);
     Py_DECREF(description);
-    Py_DECREF(types);
-
-    return result;
+    return PyCapsule_New(result, NULL, free_apr_hash);
 }

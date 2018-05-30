@@ -3,16 +3,18 @@
 #include <inttypes.h>
 
 #include <Python.h>
+#include <apr_hash.h>
 
 #include "binparser.h"
 #include "pyhelpers.h"
+#include "descriptors.h"
 
 
 void free_state(PyObject* capsule) {
     if (capsule == Py_None) {
         return;
     }
-    parse_state* state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
+    parse_state_t* state = (parse_state_t*)PyCapsule_GetPointer(capsule, NULL);
     free(state);
 }
 
@@ -21,7 +23,7 @@ PyObject* state_ready(PyObject* self, PyObject* args) {
     if (!PyArg_ParseTuple(args, "O", &capsule)) {
         return NULL;
     }
-    parse_state* state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
+    parse_state_t* state = (parse_state_t*)PyCapsule_GetPointer(capsule, NULL);
     if (PyErr_Occurred()) {
         return NULL;
     }
@@ -38,48 +40,61 @@ PyObject* state_result(PyObject* self, PyObject* args) {
     if (!PyArg_ParseTuple(args, "O", &capsule)) {
         return NULL;
     }
-    parse_state* state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
-    if (PyErr_Occurred()) {
+    parse_state_t* state = (parse_state_t*)PyCapsule_GetPointer(capsule, NULL);
+    if (!state) {
         return NULL;
     }
     return state->out;
 }
 
 PyObject* make_state(PyObject* self, PyObject* args) {
-    parse_state* state = malloc(sizeof(parse_state));
+    apr_hash_t* factories;
+    char* pytype;
+    apr_pool_t* mp;
+    PyObject* factories_capsule;
+    PyObject* builtins;
+    PyObject* mp_capsule;
+
+    if (!PyArg_ParseTuple(
+            args,
+            "yOOO",
+            &pytype,
+            &factories_capsule,
+            &builtins,
+            &mp_capsule)) {
+        return NULL;
+    }
+
+    factories = (apr_hash_t*)PyCapsule_GetPointer(factories_capsule, NULL);
+    if (!factories) {
+        PyErr_Format(PyExc_ValueError, "Factories weren't initialized");
+        return NULL;
+    }
+
+    mp = (apr_pool_t*)PyCapsule_GetPointer(mp_capsule, NULL);
+    if (!mp) {
+        PyErr_Format(PyExc_ValueError, "APR memory wasn't initialized");
+        return NULL;
+    }
+
+    parse_state_t* state = malloc(sizeof(parse_state_t));
     state->pos = 0;
     state->out = Py_None;
     state->is_field = false;
+    state->pytype = cstr_bytes(pytype);
+    state->factories = factories;
+    state->builtin_types = builtins;
+    state->factory = NULL;
+    state->mp = mp;
+
     return PyCapsule_New(state, NULL, free_state);
 }
 
-PyObject* state_set_factory(PyObject* self, PyObject* args) {
-    parse_state* state;
-    PyObject* capsule;
-    PyObject* pytype;
-    PyObject* factories;
-    PyObject* builtins;
-
-    if (!PyArg_ParseTuple(args, "OOOO", &capsule, &pytype, &factories, &builtins)) {
-        return NULL;
-    }
-
-    state = (parse_state*)PyCapsule_GetPointer(capsule, NULL);
-    if (state == NULL) {
-        return NULL;
-    }
-    state->pytype = pytype;
-    state->factories = factories;
-    state->builtin_types = builtins;
-
-    Py_RETURN_NONE;
-}
-
-int64_t state_get_available(parse_state* const state) {
+int64_t state_get_available(parse_state_t* const state) {
     return state->len - state->pos;
 }
 
-size_t state_read(parse_state* const state, unsigned char** buf, size_t n) {
+size_t state_read(parse_state_t* const state, unsigned char** buf, size_t n) {
     *buf = &state->in[state->pos];
     if (state->len >= state->pos + (int64_t)n) {
         state->pos += (int64_t)n;
@@ -89,59 +104,79 @@ size_t state_read(parse_state* const state, unsigned char** buf, size_t n) {
     return state->len - state->pos;
 }
 
-vt_type_t value_type(parse_state* const state, PyObject* pbtype, PyObject* factory) {
-    if (PyList_CheckExact(pbtype)) {
-        return vt_repeated;
+// TODO(olegs): Half of the dealing with value types should go.
+vt_type_t value_type(parse_state_t* const state, byte* pbtype, factory_t* factory) {
+    if (factory && factory->vt_type != vt_default) {
+        return factory->vt_type;
     }
-    if (PyTuple_CheckExact(pbtype)) {
-        return vt_map;
-    }
-    PyObject* builtin = PyDict_GetItem(state->builtin_types, pbtype);
+    PyObject* key = PyBytes_FromStringAndSize((char*)pbtype + 2, str_size(pbtype));
+    PyObject* builtin = PyDict_GetItem(state->builtin_types, key);
+    Py_DECREF(key);
     if (builtin) {
         return (vt_type_t)PyLong_AsSsize_t(builtin);
     }
-    if (factory == NULL || factory == Py_None) {
-        PyErr_Format(PyExc_TypeError, "No definition for type: %A", pbtype);
-        return vt_error;
-    }
-    PyObject* kind = PyTuple_GetItem(factory, 0);
-    return (vt_type_t)PyLong_AsSsize_t(kind);
+    PyErr_Format(PyExc_TypeError, "No definition for type: %s", bytes_cstr(pbtype));
+    return vt_error;
 }
 
-PyObject* state_get_field_pytype(parse_state* const state) {
+byte* state_get_field_pytype(parse_state_t* const state) {
     if (state->is_field) {
         return state->pytype;
     }
-    PyObject* key = PyLong_FromSsize_t((Py_ssize_t)state->field);
-    PyObject* container_factory = PyDict_GetItem(state->factories, state->pytype);
-    if (container_factory == NULL) {
-        Py_DECREF(key);
-        PyErr_SetString(PyExc_TypeError, "Nonexistent type");
+
+    factory_t* f = apr_hash_get(state->factories, state->pytype, str_size(state->pytype) + 2);
+    if (!f) {
+        PyErr_Format(PyExc_TypeError, "Nonexistent type: %s", bytes_cstr(state->pytype));
         // invalid proto definition, trying to read non-existent type.
         return NULL;
     }
-    PyObject* tmap = PyTuple_GetItem(container_factory, 3);
-    PyObject* result = PyDict_GetItem(tmap, key);
+
+    byte* result = apr_hash_get(f->mapping, &state->field, sizeof(size_t));
     if (!result) {
         PyErr_Format(
             PyExc_TypeError,
-            "Encountered stray key: %A in message of type %A(%A)",
-            key,
-            state->pytype,
-            tmap);
+            "Encountered stray key: %zu in message of type %A",
+            state->field,
+            state->pytype);
     }
-    Py_DECREF(key);
     return result;
 }
 
-vt_type_t state_get_field_type(parse_state* const state) {
-    if (PyList_CheckExact(state->pytype)) {
-        return vt_repeated;
+vt_type_t state_get_field_type(parse_state_t* const state) {
+    factory_t* f = state->factory;
+
+    if (!f) {
+        f = apr_hash_get(
+            state->factories,
+            state->pytype,
+            str_size(state->pytype) + 2);
+        state->factory = f;
     }
-    if (PyTuple_CheckExact(state->pytype)) {
-        return vt_map;
+
+    if (!f) {
+        PyErr_Format(
+            PyExc_TypeError,
+            "Cannot find type: %s", bytes_cstr(state->pytype));
+        return vt_error;
     }
-    PyObject* field_type;
+
+    if (f->vt_type == vt_repeated || f->vt_type == vt_map) {
+        return f->vt_type;
+    }
+
+    byte* field_type = state->pytype;
+    vt_type_t maybe_type;
+
+    if (!state->is_field) {
+        f = apr_hash_get(state->factories, field_type, str_size(field_type) + 2);
+    }
+
+    field_info_t* info = apr_hash_get(f->mapping, &state->field, sizeof(size_t));
+    maybe_type = info->vt_type;
+
+    if (maybe_type != vt_default) {
+        return maybe_type;
+    }
 
     if (state->is_field) {
         field_type = state->pytype;
@@ -151,17 +186,18 @@ vt_type_t state_get_field_type(parse_state* const state) {
             return vt_error;
         }
     }
-    PyObject* factory = PyDict_GetItem(state->factories, field_type);
-    return value_type(state, field_type, factory);
+
+    maybe_type = value_type(state, field_type, f);
+    info->vt_type = maybe_type;
+    return maybe_type;
 }
 
-vt_type_t state_get_field_repeated_type(parse_state* const state) {
-    PyObject* inner = PyList_GetItem(state->pytype, 0);
-    PyObject* factory = PyDict_GetItem(state->factories, inner);
-    return value_type(state, inner, factory);
+vt_type_t state_get_field_repeated_type(parse_state_t* const state) {
+    factory_t* factory = apr_hash_get(state->factories, state->pytype, str_size(state->pytype));
+    return value_type(state, state->pytype, factory);
 }
 
-size_t parse_varint_impl(parse_state* const state, uint64_t value[2]) {
+size_t parse_varint_impl(parse_state_t* const state, uint64_t value[2]) {
     unsigned char* buf = NULL;
     unsigned char current;
     size_t bytes_read = 0;
@@ -189,7 +225,7 @@ size_t parse_varint_impl(parse_state* const state, uint64_t value[2]) {
     return 0;
 }
 
-size_t parse_zig_zag(parse_state* const state, uint64_t value[2], bool* is_neg) {
+size_t parse_zig_zag(parse_state_t* const state, uint64_t value[2], bool* is_neg) {
     size_t parsed = parse_varint_impl(state, value);
     *is_neg = (value[0] & 1) == 1;
     uint64_t high = value[1];
@@ -205,60 +241,56 @@ bool is_signed_vt(vt_type_t vt) {
     return vt == vt_sing32 || vt == vt_sing64;
 }
 
-PyObject* tuple_from_dict(PyObject* ftype, PyObject* factory, PyObject* values) {
-    PyObject* ttype = PyTuple_GetItem(factory, 1);
-    PyObject* fmapping = PyTuple_GetItem(factory, 2);
-    PyObject *key, *value;
-    Py_ssize_t pos = 0;
-    Py_ssize_t arg_len = 0;
-    Py_ssize_t field;
-    PyObject* result;
+PyObject* tuple_from_dict(factory_t* factory, apr_hash_t* values) {
 
-    if (PyDict_Size(fmapping) == 0) {
-        result = PyObject_Call(ttype, PyTuple_New(0), NULL);
-        if (result) {
-            Py_INCREF(result);
-        }
-        return result;
-    }
-
-    while (PyDict_Next(fmapping, &pos, &key, &value)) {
-        field = PyLong_AsSsize_t(value);
-        if (field > arg_len) {
-            arg_len = field;
-        }
-    }
-    PyObject* args = PyTuple_New(arg_len + 1);
-
-    pos = 0;
-    while (pos < arg_len + 1) {
-        Py_INCREF(Py_None);
-        PyTuple_SetItem(args, pos, Py_None);
-        pos++;
-    }
-
-    pos = 0;
-    while (PyDict_Next(values, &pos, &key, &value)) {
-        field = PyLong_AsSsize_t(PyDict_GetItem(fmapping, key));
-        PyTuple_SetItem(args, field, value);
-    }
-    result = PyObject_Call(ttype, args, NULL);
-    if (result) {
-        Py_INCREF(result);
-    }
-    return result;
+    Py_RETURN_NONE;
 }
 
-PyObject* enum_from_dict(PyObject* ftype, PyObject* factory, PyObject* value) {
-    PyObject* ttype = PyTuple_GetItem(factory, 1);
-    PyObject* fmapping = PyTuple_GetItem(factory, 2);
-    PyObject* args = PyDict_GetItem(fmapping, value);
-    PyObject* result = PyObject_CallFunctionObjArgs(ttype, args, NULL);
-    Py_INCREF(result);
-    return result;
-}
+// PyObject* tuple_from_dict(PyObject* ftype, PyObject* factory, PyObject* values) {
+//     PyObject* ttype = PyTuple_GetItem(factory, 1);
+//     PyObject* fmapping = PyTuple_GetItem(factory, 2);
+//     PyObject *key, *value;
+//     Py_ssize_t pos = 0;
+//     Py_ssize_t arg_len = 0;
+//     Py_ssize_t field;
+//     PyObject* result;
 
-size_t parse_varint(parse_state* const state) {
+//     if (PyDict_Size(fmapping) == 0) {
+//         result = PyObject_Call(ttype, PyTuple_New(0), NULL);
+//         if (result) {
+//             Py_INCREF(result);
+//         }
+//         return result;
+//     }
+
+//     while (PyDict_Next(fmapping, &pos, &key, &value)) {
+//         field = PyLong_AsSsize_t(value);
+//         if (field > arg_len) {
+//             arg_len = field;
+//         }
+//     }
+//     PyObject* args = PyTuple_New(arg_len + 1);
+
+//     pos = 0;
+//     while (pos < arg_len + 1) {
+//         Py_INCREF(Py_None);
+//         PyTuple_SetItem(args, pos, Py_None);
+//         pos++;
+//     }
+
+//     pos = 0;
+//     while (PyDict_Next(values, &pos, &key, &value)) {
+//         field = PyLong_AsSsize_t(PyDict_GetItem(fmapping, key));
+//         PyTuple_SetItem(args, field, value);
+//     }
+//     result = PyObject_Call(ttype, args, NULL);
+//     if (result) {
+//         Py_INCREF(result);
+//     }
+//     return result;
+// }
+
+size_t parse_varint(parse_state_t* const state) {
     uint64_t value[2] = { 0, 0 };
     vt_type_t vt = state_get_field_type(state);
     bool sign = false;
@@ -287,14 +319,20 @@ size_t parse_varint(parse_state* const state) {
         state->out = PyNumber_Negative(state->out);
     }
     if (vt == vt_enum) {
-        PyObject* enum_type = state_get_field_pytype(state);
-        PyObject* factory = PyDict_GetItem(state->factories, enum_type);
-        state->out = enum_from_dict(enum_type, factory, state->out);
+        factory_t* factory = apr_hash_get(
+            state->factories,
+            state->pytype,
+            str_size(state->pytype) + 2);
+        state->out = PyObject_CallFunctionObjArgs(
+            factory->ctor,
+            state->out,
+            NULL);
     }
+    Py_INCREF(state->out);
     return parsed;
 }
 
-size_t parse_fixed_64(parse_state* const state) {
+size_t parse_fixed_64(parse_state_t* const state) {
 #define FIXED_LENGTH 8
     unsigned char* buf = NULL;
     size_t read = 0;
@@ -326,8 +364,8 @@ size_t parse_fixed_64(parse_state* const state) {
 }
 
 void init_substate(
-    parse_state* substate,
-    parse_state* parent,
+    parse_state_t* substate,
+    parse_state_t* parent,
     unsigned char* bytes,
     uint64_t length) {
 
@@ -338,9 +376,10 @@ void init_substate(
     substate->pytype = state_get_field_pytype(parent);
     substate->is_field = false;
     substate->builtin_types = parent->builtin_types;
+    substate->mp = parent->mp;
 }
 
-size_t parse_length_delimited(parse_state* const state) {
+size_t parse_length_delimited(parse_state_t* const state) {
     uint64_t value[2] = { 0, 0 };
     size_t parsed = parse_varint_impl(state, value);
     // No reason to care for high bits, we aren't expecting strings of
@@ -348,7 +387,7 @@ size_t parse_length_delimited(parse_state* const state) {
     uint64_t length = value[0];
     unsigned char* bytes = NULL;
     size_t read = 0;
-    parse_state substate;
+    parse_state_t substate;
 
     if (state_read(state, &bytes, length) != length) {
         return 0;
@@ -388,17 +427,17 @@ size_t parse_length_delimited(parse_state* const state) {
     return parsed + read;
 }
 
-size_t parse_start_group(parse_state* const state) {
+size_t parse_start_group(parse_state_t* const state) {
     PyErr_SetString(PyExc_NotImplementedError, "Proto v2 not supported");
     return 0;
 }
 
-size_t parse_end_group(parse_state* const state) {
+size_t parse_end_group(parse_state_t* const state) {
     PyErr_SetString(PyExc_NotImplementedError, "Proto v2 not supported");
     return 0;
 }
 
-size_t parse_fixed_32(parse_state* const state) {
+size_t parse_fixed_32(parse_state_t* const state) {
 #define FIXED_LENGTH 4
     unsigned char* buf = NULL;
     size_t read = 0;
@@ -456,7 +495,7 @@ bool is_scalar(vt_type_t vt) {
     }
 }
 
-PyObject* parse_message(parse_state* const state) {
+PyObject* parse_message(parse_state_t* const state) {
     int64_t i = 0;
     size_t j = 0;
     PyObject* dict = PyDict_New();
@@ -500,16 +539,20 @@ PyObject* parse_message(parse_state* const state) {
         }
         Py_DECREF(key);
     }
-    PyObject* factory = PyDict_GetItem(state->factories, state->pytype);
+    factory_t* factory = apr_hash_get(
+        state->factories,
+        state->pytype,
+        str_size(state->pytype) + 2);
     if (!factory) {
         PyErr_Format(
             PyExc_TypeError,
-            "No definition for %A, (parsed: %A)",
-            state->pytype,
+            "No definition for %s, (parsed: %A)",
+            bytes_cstr(state->pytype),
             dict);
         return NULL;
     }
-    state->out = tuple_from_dict(state->pytype, factory, dict);
+    apr_hash_t* args = NULL;
+    state->out = tuple_from_dict(factory, args);
     Py_DECREF(dict);
     if (state->out != NULL) {
         Py_INCREF(state->out);
@@ -517,118 +560,122 @@ PyObject* parse_message(parse_state* const state) {
     return state->out;
 }
 
-PyObject* parse_map(parse_state* const state) {
-    PyObject* key_type = PyTuple_GetItem(state->pytype, 0);
-    PyObject* value_type = PyTuple_GetItem(state->pytype, 1);
-    PyObject* result = PyDict_New();
-    parse_handler handler;
+PyObject* parse_map(parse_state_t* const state) {
+    // PyObject* key_type = PyTuple_GetItem(state->pytype, 0);
+    // PyObject* value_type = PyTuple_GetItem(state->pytype, 1);
+    // PyObject* result = PyDict_New();
+    // parse_handler handler;
 
-    select_handler(state, &handler);
+    // select_handler(state, &handler);
 
-    if (state->field == 1) {
-        state->pytype = key_type;
-    } else {
-        state->pytype = value_type;
-    }
+    // if (state->field == 1) {
+    //     state->pytype = key_type;
+    // } else {
+    //     state->pytype = value_type;
+    // }
 
-    state->is_field = true;
+    // state->is_field = true;
 
-    (*handler)(state);
+    // (*handler)(state);
 
-    PyObject* key = Py_None;
-    PyObject* value = Py_None;
+    // PyObject* key = Py_None;
+    // PyObject* value = Py_None;
 
-    if (state->out != NULL) {
-        if (state->field == 1) {
-            key = state->out;
-        } else {
-            value = state->out;
-        }
-    } else {
-        Py_DECREF(result);
-        return NULL;
-    }
+    // if (state->out != NULL) {
+    //     if (state->field == 1) {
+    //         key = state->out;
+    //     } else {
+    //         value = state->out;
+    //     }
+    // } else {
+    //     Py_DECREF(result);
+    //     return NULL;
+    // }
 
-    select_handler(state, &handler);
-    if (state->field == 1) {
-        state->pytype = key_type;
-    } else {
-        state->pytype = value_type;
-    }
+    // select_handler(state, &handler);
+    // if (state->field == 1) {
+    //     state->pytype = key_type;
+    // } else {
+    //     state->pytype = value_type;
+    // }
 
-    (*handler)(state);
+    // (*handler)(state);
     
-    if (state->out != NULL) {
-        if (state->field == 1) {
-            key = state->out;
-        } else {
-            value = state->out;
-        }
-    } else {
-        Py_DECREF(result);
-        return NULL;
-    }
+    // if (state->out != NULL) {
+    //     if (state->field == 1) {
+    //         key = state->out;
+    //     } else {
+    //         value = state->out;
+    //     }
+    // } else {
+    //     Py_DECREF(result);
+    //     return NULL;
+    // }
 
-    PyDict_SetItem(result, key, value);
-    return result;
+    // PyDict_SetItem(result, key, value);
+    // return result;
+
+    Py_RETURN_NONE;
 }
 
-PyObject* parse_repeated(parse_state* const state) {
-    int64_t i = 0;
-    size_t j = 0;
-    PyObject* result = PyList_New(0);
-    PyObject* subresult;
-    vt_type_t rtype = state_get_field_repeated_type(state);
+PyObject* parse_repeated(parse_state_t* const state) {
+    // int64_t i = 0;
+    // size_t j = 0;
+    // PyObject* result = PyList_New(0);
+    // PyObject* subresult;
+    // vt_type_t rtype = state_get_field_repeated_type(state);
 
-    if (is_scalar(rtype)) {
-        parse_handler ph;
+    // if (is_scalar(rtype)) {
+    //     parse_handler ph;
 
-        switch (wiretype_of(rtype)) {
-            case wt_varint:
-                ph = &parse_varint;
-                break;
-            case wt_fixed32:
-                ph = &parse_fixed_32;
-                break;
-            case wt_fixed64:
-                ph = &parse_fixed_64;
-                break;
-            default:
-                ph = &parse_length_delimited;
-        }
-        while (i < state->len) {
-            j = ph(state);
-            if (j == 0) {
-                break;
-            }
-            i += (int64_t)j;
-            PyList_Append(result, state->out);
-            Py_DECREF(state->out);
-        }
-    } else if (rtype == vt_string) {
-        subresult = PyUnicode_FromStringAndSize((char*)state->in, (Py_ssize_t)state->len);
-        PyList_Append(result, subresult);
-        Py_DECREF(subresult);
-    } else if (rtype == vt_bytes) {
-        subresult = PyBytes_FromStringAndSize((char*)state->in, (Py_ssize_t)state->len);
-        PyList_Append(result, subresult);
-        Py_DECREF(subresult);
-    } else {
-        state->pytype = PyList_GetItem(state->pytype, 0);
+    //     switch (wiretype_of(rtype)) {
+    //         case wt_varint:
+    //             ph = &parse_varint;
+    //             break;
+    //         case wt_fixed32:
+    //             ph = &parse_fixed_32;
+    //             break;
+    //         case wt_fixed64:
+    //             ph = &parse_fixed_64;
+    //             break;
+    //         default:
+    //             ph = &parse_length_delimited;
+    //     }
+    //     while (i < state->len) {
+    //         j = ph(state);
+    //         if (j == 0) {
+    //             break;
+    //         }
+    //         i += (int64_t)j;
+    //         PyList_Append(result, state->out);
+    //         Py_DECREF(state->out);
+    //     }
+    // } else if (rtype == vt_string) {
+    //     subresult = PyUnicode_FromStringAndSize((char*)state->in, (Py_ssize_t)state->len);
+    //     PyList_Append(result, subresult);
+    //     Py_DECREF(subresult);
+    // } else if (rtype == vt_bytes) {
+    //     subresult = PyBytes_FromStringAndSize((char*)state->in, (Py_ssize_t)state->len);
+    //     PyList_Append(result, subresult);
+    //     Py_DECREF(subresult);
+    // } else {
+    //     state->pytype = PyList_GetItem(state->pytype, 0);
 
-        subresult = parse_message(state);
-        if (!subresult) {
-            return NULL;
-        }
-        PyList_Append(result, subresult);
-        Py_DECREF(subresult);
-    }
-    return result;
+    //     subresult = parse_message(state);
+    //     if (!subresult) {
+    //         return NULL;
+    //     }
+    //     PyList_Append(result, subresult);
+    //     Py_DECREF(subresult);
+    // }
+    // return result;
+
+    Py_RETURN_NONE;
 }
 
-size_t backtrack(parse_state* const state) { return 0; }
+size_t backtrack(parse_state_t* const state) { return 0; }
 
-size_t select_handler(parse_state* const state, parse_handler* handler) {
+size_t select_handler(parse_state_t* const state, parse_handler* handler) {
     if (state_get_available(state) == 0) {
         *handler = backtrack;
         return 0;
@@ -668,7 +715,7 @@ size_t select_handler(parse_state* const state, parse_handler* handler) {
     return parsed;
 }
 
-size_t parse(parse_state* const state) {
+size_t parse(parse_state_t* const state) {
     parse_handler handler;
     size_t parsed = select_handler(state, &handler);
     return parsed + (*handler)(state);

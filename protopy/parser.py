@@ -10,8 +10,10 @@ from protopy.wrapped import (
     make_state,
     state_ready,
     state_result,
-    state_set_factory,
     make_apr_pool,
+    apr_hash_contains,
+    apr_update_hash,
+    make_apr_hash,
 )
 
 _PB_TYPES = {
@@ -45,16 +47,17 @@ class DefParser:
         self.message_ctor = message_ctor
         self.roots = list(set([str(r).encode('utf-8') for r in roots]))
         self.files = {}
-        self.defs = {}
         if mp:
             self.mp = mp
         else:
             self.mp = make_apr_pool()
+        self.defs = make_apr_hash(self.mp)
 
     def parse(self, source, force=False):
         source = str(source).encode('utf-8')
         if source not in self.files or force:
-            self.defs.update(
+            apr_update_hash(
+                self.defs,
                 proto_def_parse(
                     source,
                     self.roots,
@@ -79,12 +82,11 @@ class BinParser:
 
         if not isinstance(message, bytes):
             message = str(message).encode('utf-8')
-        self.state = make_state()
-        state_set_factory(
-            self.state,
+        self.state = make_state(
             message,
             self.def_parser.defs,
             _PB_TYPES,
+            self.mp,
         )
         proto_parse(buf, self.state)
 

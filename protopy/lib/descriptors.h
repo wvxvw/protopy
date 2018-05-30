@@ -5,7 +5,34 @@
 #include <Python.h>
 
 #include "list.h"
-#include "binparser.h"
+
+typedef enum vt_type_t {
+    // varint
+    vt_int32  = 0,
+    vt_int64  = 1,
+    vt_uint32 = 2,
+    vt_uint64 = 3,
+    vt_sing32 = 4,
+    vt_sing64 = 5,
+    vt_bool   = 6,
+    vt_enum   = 7,
+    // 64 bit
+    vt_fixed64  = 8,
+    vt_sfixed64 = 9,
+    vt_double   = 10,
+    // length-delimited
+    vt_string   = 11,
+    vt_bytes    = 12,
+    vt_message  = 13,
+    vt_repeated = 14,
+    // 32 bit
+    vt_fixed32  = 15,
+    vt_sfixed32 = 16,
+    // not exposed to user
+    vt_error   = 17,
+    vt_default = 18,
+    vt_map = 19
+} vt_type_t;
 
 typedef struct _kv {
     vt_type_t key;
