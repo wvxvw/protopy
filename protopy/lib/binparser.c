@@ -358,26 +358,21 @@ size_t parse_length_delimited(parse_state* const state) {
     switch (vt) {
         case vt_string:
             state->out = PyUnicode_FromStringAndSize((char*)bytes, (Py_ssize_t)length);
-            Py_INCREF(state->out);
             break;
         case vt_bytes:
             state->out = PyBytes_FromStringAndSize((char*)bytes, (Py_ssize_t)length);
-            Py_INCREF(state->out);
             break;
         case vt_message:
             init_substate(&substate, state, bytes, length);
             state->out = parse_message(&substate);
-            Py_INCREF(state->out);
             break;
         case vt_repeated:
             init_substate(&substate, state, bytes, length);
             state->out = parse_repeated(&substate);
-            Py_INCREF(state->out);
             break;
         case vt_map:
             init_substate(&substate, state, bytes, length);
             state->out = parse_map(&substate);
-            Py_INCREF(state->out);
             break;
         default:
             if (!PyErr_Occurred()) {
@@ -386,7 +381,9 @@ size_t parse_length_delimited(parse_state* const state) {
                     "Unknown length delimited type");
             }
             state->out = Py_None;
-            Py_INCREF(state->out);
+    }
+    if (state->out) {
+        Py_INCREF(state->out);
     }
     return parsed + read;
 }

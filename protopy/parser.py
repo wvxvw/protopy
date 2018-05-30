@@ -2,6 +2,7 @@
 
 from collections import namedtuple
 from enum import IntEnum
+from keyword import kwlist
 
 from protopy.wrapped import (
     proto_def_parse,
@@ -49,6 +50,7 @@ class DefParser:
                     self.files,
                     self.message_ctor,
                     self.enum_ctor,
+                    kwlist,
                 ),
             )
 

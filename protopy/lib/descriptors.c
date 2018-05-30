@@ -16,12 +16,12 @@ void extract_type_name(
     size_t i = len;
 
     while (i > 0) {
+        i--;
         if (tname[i] == '.' || tname[i] == ':') {
             *package = sub_str(tname, i - 2);
             *pname = sub_str(tname + i - 1, len - i - 1);
             return;
         }
-        i--;
     }
     *pname = str_dup(tname);
     *package = str_dup(empty);
@@ -85,56 +85,40 @@ enum_desc(
     apr_hash_set(factories, ftype, str_size(ftype) + 2, factory);
 }
 
-// def message_desc(ftype, desc, factories, descriptions):
-//     # TODO(olegs): We need to handle package <-> message name
-//     # collision earlier
-//     ftype = ftype.replace(b':', b'.')
-//     if ftype in factories:
-//         return
+field_info_t*
+add_field_info(
+    byte* field_type,
+    size_t field_num,
+    size_t idx,
+    apr_hash_t* mapping,
+    apr_pool_t* mp) {
 
-//     fields = {}
-//     unresolved = {}
-//     tmapping = {}
-//     fields_list = []
-//     fmapping = {}
+    field_info_t* info = apr_palloc(mp, sizeof(field_info_t));
+    info->n = idx;
+    byte* pytype = apr_palloc(mp, str_size(field_type) + 2);
+    memcpy(pytype, field_type, str_size(field_type) + 2);
+    info->pytype = pytype;
+    info->vt_type = vt_default;
 
-//     for field in desc:
-//         field_vt = field[0]
-//         field_name = field[2].decode('utf-8')
-//         field_type = field[1]
-//         field_num = field[3]
+    size_t* key = apr_palloc(mp, sizeof(size_t));
+    *key = field_num;
+    apr_hash_set(mapping, key, sizeof(size_t), info);
+    return info;
+}
 
-//         if field_name not in fields:
-//             fields_list.append(field_name)
-//             fmapping[field_num] = len(fields_list) - 1
-//             fields[field_name] = len(fields_list) - 1
-//         else:
-//             fmapping[field_num] = fields[field_name]
-//         if field_vt == 7:
-//             tmapping[field_num] = field_type
-//         elif field_vt == 8:
-//             tmapping[field_num] = [field_type]
-//         elif field_vt == 9:
-//             tmapping[field_num] = _pb_key_types[field_type[0]], field_type[1]
-//         else:
-//             raise Exception('Unrecognized field type: {}'.format(field_vt))
+void add_pyfield(PyObject* fields, byte* field_name, apr_hash_t* keywords) {
+    Py_ssize_t len = str_size(field_name);
 
-//     module, name = extract_type_name(ftype)
-
-//     for i, f in enumerate(fields_list):
-//         # TODO(olegs): it is possible that the original fields were
-//         # also named pb_<somethign>
-//         if f in kwlist:
-//             fields_list[i] = 'pb_' + f
-//         elif f[0] == '_':
-//             fields_list[i] = 'pb' + f
-
-//     result = namedtuple(name, fields_list)
-//     result.__module__ = module
-//     factories[ftype] = tuple([13, result, fmapping, tmapping])
-
-void ensure_valid_names(PyObject* fields_list) {
-
+    if (apr_hash_get(keywords, field_name, len)) {
+        char* fname = (char*)(field_name + 2);
+        PyList_Append(fields, PyUnicode_FromStringAndSize(fname, len));
+    } else {
+        char* fname = malloc(len + 4);
+        memcpy(fname, "pb_", 3);
+        memcpy(fname + 3, field_name + 2, len);
+        fname[len + 3] = '\0';
+        PyList_Append(fields, PyUnicode_FromString(fname));
+    }
 }
 
 void
@@ -143,6 +127,7 @@ message_desc(
     const list desc,
     apr_hash_t* const factories,
     PyObject* message_ctor,
+    apr_hash_t* const keywords,
     apr_pool_t* const mp) {
 
     byte* norm_ftype = replace_str(ftype, ':', '.');
@@ -157,62 +142,61 @@ message_desc(
     byte* field_name;
     byte* field_type;
     size_t field_num;
-    size_t* key;
     size_t* idx;
-    byte* pytype;
     field_info_t* info;
+    list kv_type;
 
     while (!null(head)) {
         field = car(head);
         field_ast = SIZE_VAL(field);
-        field_type = STR_VAL(cdr(field));
         field_name = STR_VAL(cdr(cdr(field)));
         field_num = SIZE_VAL(cdr(cdr(cdr(field))));
 
         switch ((ast_type_t)field_ast) {
             case ast_field:
+                field_type = STR_VAL(cdr(field));
                 // TODO(olegs): Deduplicate
                 idx = apr_hash_get(fields, field_name, str_size(field_name) + 2);
                 if (idx) {
-                    info = apr_palloc(mp, sizeof(field_info_t));
-                    info->n = (size_t)idx;
-                    pytype = apr_palloc(mp, str_size(field_type) + 2);
-                    memcpy(pytype, field_type, str_size(field_type) + 2);
-                    info->pytype = pytype;
-                    info->vt_type = vt_default;
-                    key = apr_palloc(mp, sizeof(size_t));
-                    *key = field_num;
-                    apr_hash_set(mapping, key, sizeof(size_t), info);
+                    add_field_info(field_type, field_num, (size_t)idx, mapping, mp);
                 } else {
-                    info = apr_palloc(mp, sizeof(field_info_t));
-                    info->n = field_idx;
-                    pytype = apr_palloc(mp, str_size(field_type) + 2);
-                    memcpy(pytype, field_type, str_size(field_type) + 2);
-                    info->pytype = pytype;
-                    // We'll figure these out once we actually start parsing.
-                    info->vt_type = vt_default;
-                    key = apr_palloc(mp, sizeof(size_t));
-                    *key = field_num;
-                    apr_hash_set(mapping, key, sizeof(size_t), info);
+                    add_field_info(field_type, field_num, field_idx, mapping, mp);
                     apr_hash_set(fields, field_name, str_size(field_name) + 2, (void*)1);
 
-                    PyList_Append(
-                        fields_list,
-                        PyUnicode_FromStringAndSize(
-                            (char*)(field_name + 2),
-                            str_size(field_name)));
+                    add_pyfield(fields_list, field_name, keywords);
                     field_idx++;
                 }
                 break;
             case ast_repeated:
+                field_type = STR_VAL(cdr(field));
+                info = add_field_info(field_type, field_num, field_idx, mapping, mp);
+                apr_hash_set(fields, field_name, str_size(field_name) + 2, (void*)1);
+
+                info->vt_type = vt_repeated;
+                info->extra_type_info.elt = vt_default;
+
+                add_pyfield(fields_list, field_name, keywords);
+                field_idx++;
                 break;
             case ast_map:
+                kv_type = LIST_VAL(cdr(field));
+                field_type = empty;
+                info = add_field_info(field_type, field_num, field_idx, mapping, mp);
+                apr_hash_set(fields, field_name, str_size(field_name) + 2, (void*)1);
+
+                info->vt_type = vt_map;
+                info->extra_type_info.pair.key = (vt_type_t)SIZE_VAL(kv_type);
+                info->extra_type_info.pair.val = vt_default;
+                info->extra_type_info.pair.pyval = STR_VAL(cdr(kv_type));
+
+                add_pyfield(fields_list, field_name, keywords);
+                field_idx++;
                 break;
             default:
                 PyErr_Format(
                     PyExc_TypeError,
                     "Unrecognized field type: %i", field_ast);
-                break;
+                return;
         }
         head = cdr(head);
     }
@@ -221,57 +205,43 @@ message_desc(
     byte* package;
 
     extract_type_name(norm_ftype, &name, &package);
-    ensure_valid_names(fields_list);
 
-    printf("creating message constructor\n");
     PyObject* ctor = PyObject_CallFunctionObjArgs(
         message_ctor,
         PyUnicode_FromStringAndSize((char*)name + 2, str_size(name)),
         fields_list,
         NULL);
-    printf("creating message factory\n");
+
     factory_t* factory = apr_palloc(mp, sizeof(factory_t));
     factory->vt_type = vt_message;
     factory->mapping = mapping;
     factory->ctor = ctor;
-    printf("message_desc finished\n");
-    if (PyErr_Occurred()) {
-        PyErr_Print();
-    }
 }
 
-// def create_descriptors(descriptions):
-//     factories = {}
+apr_hash_t* pylist_to_apr_hash(PyObject* pylist, apr_pool_t* mp) {
+    apr_hash_t* result = apr_hash_make(mp);
+    Py_ssize_t len = PyList_Size(pylist);
 
-//     for file, desc in descriptions.items():
-//         for d in desc:
-//             if d:
-//                 rtype, tname, *fields = d
-//                 if rtype == 0:
-//                     message_desc(
-//                         tname,
-//                         fields,
-//                         factories,
-//                         descriptions,
-//                     )
-//                 elif rtype == 1:
-//                     enum_desc(
-//                         tname,
-//                         fields,
-//                         factories,
-//                         descriptions,
-//                     )
-
-//     return factories
+    while (len > 0) {
+        len--;
+        PyObject* str = PyList_GetItem(pylist, len);
+        char* content = PyUnicode_AsUTF8(str);
+        byte* key = cstr_bytes(content);
+        apr_hash_set(result, key, str_size(key) + 2, (void*)1);
+    }
+    return result;
+}
 
 apr_hash_t*
 create_descriptors(
     apr_hash_t* const descriptions,
     PyObject* enum_ctor,
     PyObject* message_ctor,
+    PyObject* pykeywords,
     apr_pool_t* const mp) {
 
     apr_hash_t* factories = apr_hash_make(mp);
+    apr_hash_t* keywords = pylist_to_apr_hash(pykeywords, mp);
     apr_hash_index_t* hi;
     void* val;
     const void* key;
@@ -287,23 +257,18 @@ create_descriptors(
 
         while (!null(file_desc)) {
             desc = LIST_VAL(file_desc);
-            printf("creating descryptor for: %s\n", str(desc));
-            // TODO(olegs): This shouldn't be needed, check yacc code
-            // and defparser to make sure this can be removed.
-            if (!null(desc)) {
-                rtype = SIZE_VAL(desc);
-                switch (rtype) {
-                    case 0:
-                        tname = STR_VAL(cdr(desc));
-                        fields = cdr(cdr(desc));
-                        message_desc(tname, fields, factories, message_ctor, mp);
-                        break;
-                    case 1:
-                        tname = STR_VAL(cdr(desc));
-                        fields = cdr(cdr(desc));
-                        enum_desc(tname, fields, factories, enum_ctor, mp);
-                        break;
-                }
+            rtype = SIZE_VAL(desc);
+            switch (rtype) {
+                case 0:
+                    tname = STR_VAL(cdr(desc));
+                    fields = cdr(cdr(desc));
+                    message_desc(tname, fields, factories, message_ctor, keywords, mp);
+                    break;
+                case 1:
+                    tname = STR_VAL(cdr(desc));
+                    fields = cdr(cdr(desc));
+                    enum_desc(tname, fields, factories, enum_ctor, mp);
+                    break;
             }
             file_desc = cdr(file_desc);
         }

@@ -312,18 +312,20 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     PyObject* parsed_files;
     PyObject* message_ctor;
     PyObject* enum_ctor;
+    PyObject* pykeywords;
     char* source;
 
     if (!PyArg_ParseTuple(
             args,
-            "yO!O!OO",
+            "yO!O!OOO",
             &source,
             &PyList_Type,
             &source_roots,
             &PyDict_Type,
             &parsed_files,
             &message_ctor,
-            &enum_ctor)) {
+            &enum_ctor,
+            &pykeywords)) {
         return NULL;
     }
 
@@ -383,7 +385,10 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
         return NULL;
     }
 
-    create_descriptors(parsed_defs, enum_ctor, message_ctor, mp);
+    create_descriptors(parsed_defs, enum_ctor, message_ctor, pykeywords, mp);
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
     PyObject* types = PyImport_ImportModule("protopy.types");
     PyObject* description = aprdict_to_pydict(mp, parsed_defs);
     PyObject* result = PyObject_CallMethod(
