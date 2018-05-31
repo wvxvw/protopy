@@ -142,18 +142,35 @@ byte* state_get_field_pytype(parse_state_t* const state) {
     return result;
 }
 
+void print_apr_hash(apr_hash_t* ht) {
+    apr_hash_index_t* hi;
+    void* val;
+    const void* key;
+    apr_pool_t* mp = apr_hash_pool_get(ht);
+
+    printf("print_apr_hash: %p\n", ht);
+
+    for (hi = apr_hash_first(mp, ht); hi; hi = apr_hash_next(hi)) {
+        apr_hash_this(hi, &key, NULL, &val);
+        printf("key: %s => %p\n", (char*)key, val);
+    }
+}
+
 vt_type_t state_get_field_type(parse_state_t* const state) {
     factory_t* f = state->factory;
 
     if (!f) {
+        printf("looking for factory for: %s/%zu\n", bytes_cstr(state->pytype), str_size(state->pytype));
         f = apr_hash_get(
             state->factories,
-            state->pytype,
-            str_size(state->pytype) + 2);
+            bytes_cstr(state->pytype),
+            APR_HASH_KEY_STRING);
+        printf("found factory: %p, type: %d\n", f, f->vt_type);
         state->factory = f;
     }
 
     if (!f) {
+        print_apr_hash(state->factories);
         PyErr_Format(
             PyExc_TypeError,
             "Cannot find type: %s", bytes_cstr(state->pytype));
@@ -164,30 +181,18 @@ vt_type_t state_get_field_type(parse_state_t* const state) {
         return f->vt_type;
     }
 
-    byte* field_type = state->pytype;
     vt_type_t maybe_type;
 
-    if (!state->is_field) {
-        f = apr_hash_get(state->factories, field_type, str_size(field_type) + 2);
-    }
-
     field_info_t* info = apr_hash_get(f->mapping, &state->field, sizeof(size_t));
+    printf("info: %p\n", info);
     maybe_type = info->vt_type;
 
     if (maybe_type != vt_default) {
         return maybe_type;
     }
 
-    if (state->is_field) {
-        field_type = state->pytype;
-    } else {
-        field_type = state_get_field_pytype(state);
-        if (PyErr_Occurred()) {
-            return vt_error;
-        }
-    }
-
-    maybe_type = value_type(state, field_type, f);
+    f = apr_hash_get(state->factories, bytes_cstr(info->pytype), APR_HASH_KEY_STRING);
+    maybe_type = value_type(state, info->pytype, f);
     info->vt_type = maybe_type;
     return maybe_type;
 }
@@ -242,66 +247,70 @@ bool is_signed_vt(vt_type_t vt) {
 }
 
 PyObject* tuple_from_dict(factory_t* factory, apr_hash_t* values) {
+    apr_hash_index_t* hi;
+    void* val;
+    const void* key;
+    apr_pool_t* mp = apr_hash_pool_get(values);
+    size_t max = 0;
+    PyObject* result;
 
-    Py_RETURN_NONE;
+    for (hi = apr_hash_first(mp, values); hi; hi = apr_hash_next(hi)) {
+        apr_hash_this(hi, &key, NULL, &val);
+        field_info_t* info = apr_hash_get(factory->mapping, key, sizeof(size_t));
+        printf("checking field: %s, %zu\n", bytes_cstr(info->pytype), info->n);
+        if (max < info->n) {
+            max = info->n;
+        }
+    }
+    printf("tuple_from_dict: numargs: %zu\n", max);
+    if (!max) {
+        result = PyObject_Call(factory->ctor, PyTuple_New(0), NULL);
+        if (result) {
+            Py_INCREF(result);
+            return result;
+        }
+    }
+
+    max++;
+    PyObject* args = PyTuple_New(max);
+
+    while (max > 0) {
+        max--;
+        Py_INCREF(Py_None);
+        PyTuple_SetItem(args, max, Py_None);
+    }
+
+    for (hi = apr_hash_first(mp, values); hi; hi = apr_hash_next(hi)) {
+        apr_hash_this(hi, &key, NULL, &val);
+        field_info_t* info = apr_hash_get(factory->mapping, key, sizeof(size_t));
+        printf("adding argument for field: %s, %zu\n", bytes_cstr(info->pytype), info->n);
+        PyTuple_SetItem(args, info->n, val);
+    }
+
+    print_obj("ctor: %s\n", factory->ctor);
+    print_obj("args: %s\n", args);
+    result = PyObject_Call(factory->ctor, args, NULL);
+    if (result) {
+        Py_INCREF(result);
+    }
+    return result;
 }
-
-// PyObject* tuple_from_dict(PyObject* ftype, PyObject* factory, PyObject* values) {
-//     PyObject* ttype = PyTuple_GetItem(factory, 1);
-//     PyObject* fmapping = PyTuple_GetItem(factory, 2);
-//     PyObject *key, *value;
-//     Py_ssize_t pos = 0;
-//     Py_ssize_t arg_len = 0;
-//     Py_ssize_t field;
-//     PyObject* result;
-
-//     if (PyDict_Size(fmapping) == 0) {
-//         result = PyObject_Call(ttype, PyTuple_New(0), NULL);
-//         if (result) {
-//             Py_INCREF(result);
-//         }
-//         return result;
-//     }
-
-//     while (PyDict_Next(fmapping, &pos, &key, &value)) {
-//         field = PyLong_AsSsize_t(value);
-//         if (field > arg_len) {
-//             arg_len = field;
-//         }
-//     }
-//     PyObject* args = PyTuple_New(arg_len + 1);
-
-//     pos = 0;
-//     while (pos < arg_len + 1) {
-//         Py_INCREF(Py_None);
-//         PyTuple_SetItem(args, pos, Py_None);
-//         pos++;
-//     }
-
-//     pos = 0;
-//     while (PyDict_Next(values, &pos, &key, &value)) {
-//         field = PyLong_AsSsize_t(PyDict_GetItem(fmapping, key));
-//         PyTuple_SetItem(args, field, value);
-//     }
-//     result = PyObject_Call(ttype, args, NULL);
-//     if (result) {
-//         Py_INCREF(result);
-//     }
-//     return result;
-// }
 
 size_t parse_varint(parse_state_t* const state) {
     uint64_t value[2] = { 0, 0 };
     vt_type_t vt = state_get_field_type(state);
     bool sign = false;
     size_t parsed;
+
+    if (vt == vt_error) {
+        return 0;
+    }
     
     if (is_signed_vt(vt)) {
         parsed = parse_zig_zag(state, value, &sign);
     } else {
         parsed = parse_varint_impl(state, value);
     }
-    // TODO(olegs): We probably need to decref all of the below...
     PyObject* low = PyLong_FromUnsignedLongLong((unsigned long long)value[0]);
     
     if (value[1] > 0) {
@@ -496,6 +505,76 @@ bool is_scalar(vt_type_t vt) {
 }
 
 PyObject* parse_message(parse_state_t* const state) {
+    int64_t i;
+    apr_hash_t* fields = apr_hash_make(state->mp);
+    bool read_key = true;
+    uint64_t value[2] = { 0, 0 };
+    size_t wiretype;
+
+    while (state->pos < state->len) {
+        i = state->pos;
+        if (read_key) {
+            parse_varint_impl(state, value);
+            wiretype = (size_t)(value[0] & 7);
+            state->field = (size_t)(value[0] >> 3);
+            printf("parsing field: %zu, wiretype: %zu, pytype: %s\n",
+                   state->field,
+                   wiretype,
+                   bytes_cstr(state->pytype));
+        } else {
+            switch (wiretype) {
+                case 0:
+                    parse_varint(state);
+                    break;
+                case 1:
+                    parse_fixed_64(state);
+                    break;
+                case 2:
+                    parse_length_delimited(state);
+                    break;
+                case 3:
+                    parse_start_group(state);
+                    break;
+                case 4:
+                    parse_end_group(state);
+                    break;
+                case 5:
+                    parse_fixed_32(state);
+                    break;
+                case 6:
+                case 7:
+                    PyErr_SetString(
+                        PyExc_NotImplementedError,
+                        "Invalid encoding, wire_type 6 and 7 are not defined");
+            }
+        }
+        if (i == state->pos || PyErr_Occurred()) {
+            break;
+        }
+        if (!read_key) {
+            if (wiretype != 2) {
+                size_t* key = apr_palloc(state->mp, sizeof(size_t));
+                *key = state->field;
+                apr_hash_set(fields, key, sizeof(size_t), state->out);
+                print_obj("parsed field value: %s\n", state->out);
+            } else {
+                // PyObject* val = apr_hash_get(fields, &state->field, sizeof(size_t));
+                size_t* key = apr_palloc(state->mp, sizeof(size_t));
+                *key = state->field;
+                apr_hash_set(fields, key, sizeof(size_t), state->out);
+            }
+        }
+        read_key = !read_key;
+    }
+    factory_t* f = apr_hash_get(
+        state->factories,
+        bytes_cstr(state->pytype),
+        APR_HASH_KEY_STRING);
+    state->out = tuple_from_dict(f, fields);
+    return state->out;
+}
+
+PyObject* _parse_message(parse_state_t* const state) {
     int64_t i = 0;
     size_t j = 0;
     PyObject* dict = PyDict_New();
@@ -671,52 +750,4 @@ PyObject* parse_repeated(parse_state_t* const state) {
     // return result;
 
     Py_RETURN_NONE;
-}
-
-size_t backtrack(parse_state_t* const state) { return 0; }
-
-size_t select_handler(parse_state_t* const state, parse_handler* handler) {
-    if (state_get_available(state) == 0) {
-        *handler = backtrack;
-        return 0;
-    }
-    uint64_t value[2] = { 0, 0 };
-    size_t parsed = parse_varint_impl(state, value);
-    size_t wire_type = (size_t)(value[0] & 7);
-
-    state->field = (size_t)(value[0] >> 3);
-
-    switch (wire_type) {
-        case 0:
-            *handler = parse_varint;
-            break;
-        case 1:
-            *handler = parse_fixed_64;
-            break;
-        case 2:
-            *handler = parse_length_delimited;
-            break;
-        case 3:
-            *handler = parse_start_group;
-            break;
-        case 4:
-            *handler = parse_end_group;
-            break;
-        case 5:
-            *handler = parse_fixed_32;
-            break;
-        case 6:
-        case 7:
-            *handler = backtrack;
-            PyErr_SetString(
-                PyExc_NotImplementedError,
-                "Invalid encoding, wire_type 6 and 7 are not defined");
-    }
-    return parsed;
-}
-
-size_t parse(parse_state_t* const state) {
-    parse_handler handler;
-    size_t parsed = select_handler(state, &handler);
-    return parsed + (*handler)(state);
 }

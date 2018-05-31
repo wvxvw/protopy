@@ -110,14 +110,14 @@ void add_pyfield(PyObject* fields, byte* field_name, apr_hash_t* keywords) {
     Py_ssize_t len = str_size(field_name);
 
     if (apr_hash_get(keywords, field_name, len)) {
-        char* fname = (char*)(field_name + 2);
-        PyList_Append(fields, PyUnicode_FromStringAndSize(fname, len));
-    } else {
         char* fname = malloc(len + 4);
         memcpy(fname, "pb_", 3);
         memcpy(fname + 3, field_name + 2, len);
         fname[len + 3] = '\0';
         PyList_Append(fields, PyUnicode_FromString(fname));
+    } else {
+        char* fname = (char*)(field_name + 2);
+        PyList_Append(fields, PyUnicode_FromStringAndSize(fname, len));
     }
 }
 
@@ -155,7 +155,6 @@ message_desc(
         switch ((ast_type_t)field_ast) {
             case ast_field:
                 field_type = STR_VAL(cdr(field));
-                // TODO(olegs): Deduplicate
                 idx = apr_hash_get(fields, field_name, str_size(field_name) + 2);
                 if (idx) {
                     add_field_info(field_type, field_num, (size_t)idx, mapping, mp);
@@ -211,11 +210,17 @@ message_desc(
         PyUnicode_FromStringAndSize((char*)name + 2, str_size(name)),
         fields_list,
         NULL);
+    PyObject_SetAttrString(
+        ctor,
+        "__module__",
+        PyUnicode_FromStringAndSize((char*)(package + 2), str_size(package)));
 
     factory_t* factory = apr_palloc(mp, sizeof(factory_t));
     factory->vt_type = vt_message;
     factory->mapping = mapping;
     factory->ctor = ctor;
+
+    apr_hash_set(factories, bytes_cstr(norm_ftype), APR_HASH_KEY_STRING, factory);
 }
 
 apr_hash_t* pylist_to_apr_hash(PyObject* pylist, apr_pool_t* mp) {
