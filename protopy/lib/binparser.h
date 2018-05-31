@@ -43,8 +43,6 @@ vt_type_t state_get_field_type(parse_state_t* const);
 
 size_t state_read(parse_state_t* const, unsigned char**, size_t);
 
-size_t parse(parse_state_t* const);
-
 size_t parse_varint(parse_state_t* const);
 
 size_t parse_fixed_64(parse_state_t* const);
@@ -62,8 +60,6 @@ PyObject* parse_message(parse_state_t* const);
 PyObject* parse_repeated(parse_state_t* const);
 
 PyObject* parse_map(parse_state_t* const);
-
-size_t select_handler(parse_state_t* const, parse_handler*);
 
 PyObject* make_state(PyObject*, PyObject*);
 

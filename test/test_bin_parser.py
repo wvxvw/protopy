@@ -1,12 +1,9 @@
 # -*- coding: utf-8 -*-
 from protopy.parser import BinParser
 from subprocess import Popen, PIPE
-from time import sleep
 
 import pkg_resources
 import os
-
-import pytest
 
 
 def generate_proto_binary(source, text, message='Test'):
@@ -419,21 +416,3 @@ def test_invalid_source_path():
         parser.parse(None, 'Test', content)
     except FileNotFoundError:
         pass
-
-
-def test_internal():
-    roots, test_proto, content = generate_proto_binary(
-        'np/v1/upload-np-data-service.proto',
-        b'''np_data_file_bytes: "\x01\x02\x03\x04\x05"''',
-        'np.v1.UploadNPDataRequest',
-    )
-    print('generated proto message: {}'.format(content))
-
-    result = BinParser(roots).parse(
-        test_proto,
-        'np.v1.UploadNPDataRequest',
-        content,
-    )
-
-    print('result: {}'.format(result))
-    assert result.np_data_file_bytes[2] == 3

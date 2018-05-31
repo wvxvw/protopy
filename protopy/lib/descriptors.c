@@ -107,9 +107,9 @@ add_field_info(
 }
 
 void add_pyfield(PyObject* fields, byte* field_name, apr_hash_t* keywords) {
-    Py_ssize_t len = str_size(field_name);
+    size_t len = str_size(field_name);
 
-    if (apr_hash_get(keywords, field_name, len)) {
+    if (apr_hash_get(keywords, bytes_cstr(field_name), APR_HASH_KEY_STRING)) {
         char* fname = malloc(len + 4);
         memcpy(fname, "pb_", 3);
         memcpy(fname + 3, field_name + 2, len);
@@ -210,6 +210,9 @@ message_desc(
         PyUnicode_FromStringAndSize((char*)name + 2, str_size(name)),
         fields_list,
         NULL);
+    if (!ctor) {
+        return;
+    }
     PyObject_SetAttrString(
         ctor,
         "__module__",
@@ -230,9 +233,8 @@ apr_hash_t* pylist_to_apr_hash(PyObject* pylist, apr_pool_t* mp) {
     while (len > 0) {
         len--;
         PyObject* str = PyList_GetItem(pylist, len);
-        char* content = PyUnicode_AsUTF8(str);
-        byte* key = cstr_bytes(content);
-        apr_hash_set(result, key, str_size(key) + 2, (void*)1);
+        char* key = PyUnicode_AsUTF8(str);
+        apr_hash_set(result, key, APR_HASH_KEY_STRING, (void*)1);
     }
     return result;
 }
@@ -274,6 +276,9 @@ create_descriptors(
                     fields = cdr(cdr(desc));
                     enum_desc(tname, fields, factories, enum_ctor, mp);
                     break;
+            }
+            if (PyErr_Occurred()) {
+                break;
             }
             file_desc = cdr(file_desc);
         }
