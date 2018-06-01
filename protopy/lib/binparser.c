@@ -104,21 +104,6 @@ size_t state_read(parse_state_t* const state, unsigned char** buf, size_t n) {
     return state->len - state->pos;
 }
 
-// TODO(olegs): Half of the dealing with value types should go.
-vt_type_t value_type(parse_state_t* const state, byte* pbtype, factory_t* factory) {
-    if (factory && factory->vt_type != vt_default) {
-        return factory->vt_type;
-    }
-    PyObject* key = PyBytes_FromStringAndSize((char*)pbtype + 2, str_size(pbtype));
-    PyObject* builtin = PyDict_GetItem(state->builtin_types, key);
-    Py_DECREF(key);
-    if (builtin) {
-        return (vt_type_t)PyLong_AsSsize_t(builtin);
-    }
-    PyErr_Format(PyExc_TypeError, "No definition for type: %s", bytes_cstr(pbtype));
-    return vt_error;
-}
-
 byte* state_get_field_pytype(parse_state_t* const state) {
     if (state->is_field) {
         return state->pytype;
@@ -171,52 +156,6 @@ void print_mapping(apr_hash_t* ht) {
         apr_hash_this(hi, &key, NULL, &val);
         printf("key: %zu => %p\n", *(size_t*)key, val);
     }
-}
-
-vt_type_t state_get_field_type(parse_state_t* const state) {
-    printf("looking for factory for: %s/%zu\n", bytes_cstr(state->pytype), str_size(state->pytype));
-    factory_t* f = apr_hash_get(
-        state->factories,
-        bytes_cstr(state->pytype),
-        APR_HASH_KEY_STRING);
-    printf("found factory: %p, type: %d\n", f, f->vt_type);
-
-    if (!f) {
-        print_factories(state->factories);
-        PyErr_Format(
-            PyExc_TypeError,
-            "Cannot find type: %s", bytes_cstr(state->pytype));
-        return vt_error;
-    }
-
-    if (f->vt_type == vt_repeated || f->vt_type == vt_map) {
-        return f->vt_type;
-    }
-
-    vt_type_t maybe_type;
-    field_info_t* info = apr_hash_get(f->mapping, &state->field, sizeof(size_t));
-    if (!info) {
-        print_mapping(f->mapping);
-        PyErr_Format(
-            PyExc_TypeError,
-            "Cannot find field %zu of type: %s", state->field, bytes_cstr(state->pytype));
-        return vt_error;
-    }
-    maybe_type = info->vt_type;
-
-    if (maybe_type != vt_default) {
-        return maybe_type;
-    }
-
-    f = apr_hash_get(state->factories, bytes_cstr(info->pytype), APR_HASH_KEY_STRING);
-    maybe_type = value_type(state, info->pytype, f);
-    info->vt_type = maybe_type;
-    return maybe_type;
-}
-
-vt_type_t state_get_field_repeated_type(parse_state_t* const state) {
-    factory_t* factory = apr_hash_get(state->factories, state->pytype, str_size(state->pytype));
-    return value_type(state, state->pytype, factory);
 }
 
 size_t parse_varint_impl(parse_state_t* const state, uint64_t value[2]) {
@@ -314,17 +253,12 @@ PyObject* tuple_from_dict(factory_t* factory, apr_hash_t* values) {
     return result;
 }
 
-size_t parse_varint(parse_state_t* const state) {
+size_t parse_varint(parse_state_t* const state, field_info_t* const info) {
     uint64_t value[2] = { 0, 0 };
-    vt_type_t vt = state_get_field_type(state);
     bool sign = false;
     size_t parsed;
 
-    if (vt == vt_error) {
-        return 0;
-    }
-    
-    if (is_signed_vt(vt)) {
+    if (is_signed_vt(info->vt_type)) {
         parsed = parse_zig_zag(state, value, &sign);
     } else {
         parsed = parse_varint_impl(state, value);
@@ -345,11 +279,13 @@ size_t parse_varint(parse_state_t* const state) {
     if (sign) {
         state->out = PyNumber_Negative(state->out);
     }
-    if (vt == vt_enum) {
+    if (info->vt_type == vt_enum) {
         factory_t* factory = apr_hash_get(
             state->factories,
-            state->pytype,
-            str_size(state->pytype) + 2);
+            bytes_cstr(info->pytype),
+            APR_HASH_KEY_STRING);
+        printf("found enum factory: %p for: %s\n", factory, bytes_cstr(state->pytype));
+        print_obj("enum ctor: %s\n", factory->ctor);
         state->out = PyObject_CallFunctionObjArgs(
             factory->ctor,
             state->out,
@@ -359,7 +295,7 @@ size_t parse_varint(parse_state_t* const state) {
     return parsed;
 }
 
-size_t parse_fixed_64(parse_state_t* const state) {
+size_t parse_fixed_64(parse_state_t* const state, field_info_t* const info) {
 #define FIXED_LENGTH 8
     unsigned char* buf = NULL;
     size_t read = 0;
@@ -374,7 +310,7 @@ size_t parse_fixed_64(parse_state_t* const state) {
         val |= (unsigned long long)buf[read];
     }
 
-    switch (state_get_field_type(state)) {
+    switch (info->vt_type) {
         case vt_error:
             return FIXED_LENGTH;
         case vt_fixed64:
@@ -409,7 +345,7 @@ void init_substate(
     substate->mp = parent->mp;
 }
 
-size_t parse_length_delimited(parse_state_t* const state) {
+size_t parse_length_delimited(parse_state_t* const state, field_info_t* const info) {
     uint64_t value[2] = { 0, 0 };
     size_t parsed = parse_varint_impl(state, value);
     // No reason to care for high bits, we aren't expecting strings of
@@ -423,9 +359,7 @@ size_t parse_length_delimited(parse_state_t* const state) {
         return 0;
     }
 
-    vt_type_t vt = state_get_field_type(state);
-    printf("parse_length_delimited: %d, length: %d\n", vt, (int)length);
-    switch (vt) {
+    switch (info->vt_type) {
         case vt_string:
             state->out = PyUnicode_FromStringAndSize((char*)bytes, (Py_ssize_t)length);
             break;
@@ -459,17 +393,17 @@ size_t parse_length_delimited(parse_state_t* const state) {
     return parsed + read;
 }
 
-size_t parse_start_group(parse_state_t* const state) {
+size_t parse_start_group(parse_state_t* const state, field_info_t* const info) {
     PyErr_SetString(PyExc_NotImplementedError, "Proto v2 not supported");
     return 0;
 }
 
-size_t parse_end_group(parse_state_t* const state) {
+size_t parse_end_group(parse_state_t* const state, field_info_t* const info) {
     PyErr_SetString(PyExc_NotImplementedError, "Proto v2 not supported");
     return 0;
 }
 
-size_t parse_fixed_32(parse_state_t* const state) {
+size_t parse_fixed_32(parse_state_t* const state, field_info_t* const info) {
 #define FIXED_LENGTH 4
     unsigned char* buf = NULL;
     size_t read = 0;
@@ -483,10 +417,9 @@ size_t parse_fixed_32(parse_state_t* const state) {
         val <<= 8;
         val |= (unsigned long)buf[read];
     }
-    vt_type_t vt = state_get_field_type(state);
-    if (vt == vt_fixed32) {
+    if (info->vt_type == vt_fixed32) {
         state->out = PyLong_FromUnsignedLong(val);
-    } else if (vt != vt_error) {
+    } else {
         if (val & 0x80000000) {
             state->out = PyLong_FromLong((long)val - 0xFFFFFFFF - 1);
         } else {
@@ -528,12 +461,44 @@ bool is_scalar(vt_type_t vt) {
     }
 }
 
+void resolve_type(parse_state_t* const state, field_info_t* info) {
+    PyObject* key = PyBytes_FromStringAndSize(
+        (char*)(info->pytype + 2),
+        str_size(info->pytype));
+    PyObject* builtin = PyDict_GetItem(state->builtin_types, key);
+    Py_DECREF(key);
+    if (builtin) {
+        info->vt_type = (vt_type_t)PyLong_AsSsize_t(builtin);
+    } else {
+        factory_t* f = apr_hash_get(
+            state->factories,
+            bytes_cstr(info->pytype),
+            APR_HASH_KEY_STRING);
+        if (f) {
+            info->vt_type = f->vt_type;
+        }
+    }
+    if (info->vt_type == vt_default) {
+        info->vt_type = vt_error;
+        print_factories(state->factories);
+        PyErr_Format(
+            PyExc_TypeError,
+            "No definition for type: %s", bytes_cstr(info->pytype));
+    }
+}
+
 PyObject* parse_message(parse_state_t* const state) {
     int64_t i;
     apr_hash_t* fields = apr_hash_make(state->mp);
     bool read_key = true;
     uint64_t value[2] = { 0, 0 };
     size_t wiretype = 0;
+    field_info_t* info = NULL;
+
+    state->factory = apr_hash_get(
+        state->factories,
+        bytes_cstr(state->pytype),
+        APR_HASH_KEY_STRING);
 
     while (state->pos < state->len) {
         i = state->pos;
@@ -543,6 +508,21 @@ PyObject* parse_message(parse_state_t* const state) {
             parse_varint_impl(state, value);
             wiretype = (size_t)(value[0] & 7);
             state->field = (size_t)(value[0] >> 3);
+            info = apr_hash_get(state->factory->mapping, &state->field, sizeof(size_t));
+            if (!info) {
+                PyErr_Format(
+                    PyExc_TypeError,
+                    "Don't know how to parse field %zu of %s",
+                    state->field,
+                    state->pytype);
+                break;
+            }
+            if (info->vt_type == vt_default) {
+                resolve_type(state, info);
+            }
+            if (info->vt_type == vt_error) {
+                break;
+            }
             printf("parsing field: %zu, wiretype: %zu, pytype: %s, varint: 0x%x\n",
                    state->field,
                    wiretype,
@@ -551,22 +531,22 @@ PyObject* parse_message(parse_state_t* const state) {
         } else {
             switch (wiretype) {
                 case 0:
-                    parse_varint(state);
+                    parse_varint(state, info);
                     break;
                 case 1:
-                    parse_fixed_64(state);
+                    parse_fixed_64(state, info);
                     break;
                 case 2:
-                    parse_length_delimited(state);
+                    parse_length_delimited(state, info);
                     break;
                 case 3:
-                    parse_start_group(state);
+                    parse_start_group(state, info);
                     break;
                 case 4:
-                    parse_end_group(state);
+                    parse_end_group(state, info);
                     break;
                 case 5:
-                    parse_fixed_32(state);
+                    parse_fixed_32(state, info);
                     break;
                 case 6:
                 case 7:
@@ -601,11 +581,7 @@ PyObject* parse_message(parse_state_t* const state) {
     if (PyErr_Occurred()) {
         return NULL;
     }
-    factory_t* f = apr_hash_get(
-        state->factories,
-        bytes_cstr(state->pytype),
-        APR_HASH_KEY_STRING);
-    state->out = tuple_from_dict(f, fields);
+    state->out = tuple_from_dict(state->factory, fields);
     return state->out;
 }
 

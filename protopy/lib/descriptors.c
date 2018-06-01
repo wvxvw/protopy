@@ -82,7 +82,7 @@ enum_desc(
     factory->mapping = mapping;
     factory->ctor = ctor;
 
-    apr_hash_set(factories, ftype, str_size(ftype) + 2, factory);
+    apr_hash_set(factories, bytes_cstr(norm_ftype), APR_HASH_KEY_STRING, factory);
 }
 
 field_info_t*
@@ -146,6 +146,7 @@ message_desc(
     field_info_t* info;
     list kv_type;
 
+    printf("message_desc for: %s\n", bytes_cstr(ftype));
     while (!null(head)) {
         field = car(head);
         field_ast = SIZE_VAL(field);
