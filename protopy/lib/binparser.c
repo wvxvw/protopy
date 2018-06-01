@@ -104,32 +104,6 @@ size_t state_read(parse_state_t* const state, unsigned char** buf, size_t n) {
     return state->len - state->pos;
 }
 
-byte* state_get_field_pytype(parse_state_t* const state) {
-    if (state->is_field) {
-        return state->pytype;
-    }
-
-    factory_t* f = apr_hash_get(
-        state->factories,
-        bytes_cstr(state->pytype),
-        APR_HASH_KEY_STRING);
-    if (!f) {
-        PyErr_Format(PyExc_TypeError, "Nonexistent type: %s", bytes_cstr(state->pytype));
-        // invalid proto definition, trying to read non-existent type.
-        return NULL;
-    }
-
-    field_info_t* info = apr_hash_get(f->mapping, &state->field, sizeof(size_t));
-    if (!info) {
-        PyErr_Format(
-            PyExc_TypeError,
-            "Encountered stray key: %zu in message of type %A",
-            state->field,
-            state->pytype);
-    }
-    return info->pytype;
-}
-
 void print_factories(apr_hash_t* ht) {
     apr_hash_index_t* hi;
     void* val;
@@ -174,14 +148,12 @@ size_t parse_varint_impl(parse_state_t* const state, uint64_t value[2]) {
             return read;
         }
         current = buf[0];
-        printf("parse_varint_impl: current: 0x%x\n", (int)current);
         if (read == 7) {
             index = 1;
         }
         value[index] |= ((current & 0x7F) << (read * 7));
         read++;
         if ((current >> 7) == 0) {
-            printf("parse_varint_impl: result: 0x%x\n", (int)value[0]);
             return read;
         }
     }
@@ -193,7 +165,7 @@ size_t parse_zig_zag(parse_state_t* const state, uint64_t value[2], bool* is_neg
     *is_neg = (value[0] & 1) == 1;
     uint64_t high = value[1];
     uint64_t low = value[0];
-    low = ((high & 1) << 63) | (low >> 1);
+    low = ((high & 1) << 63) | ((low + *is_neg) >> 1);
     high >>= 1;
     value[0] = low;
     value[1] = high;
@@ -216,6 +188,7 @@ PyObject* tuple_from_dict(factory_t* factory, apr_hash_t* values) {
         apr_hash_this(hi, &key, NULL, &val);
         field_info_t* info = apr_hash_get(factory->mapping, key, sizeof(size_t));
         printf("checking field: %s, %zu\n", bytes_cstr(info->pytype), info->n);
+        print_obj("argument to tuple: %s\n", val);
         if (max <= info->n) {
             max = info->n + 1;
         }
@@ -258,6 +231,10 @@ size_t parse_varint(parse_state_t* const state, field_info_t* const info) {
     bool sign = false;
     size_t parsed;
 
+    printf("checking signedness of: %s, %s, %d\n",
+           bytes_cstr(state->pytype),
+           bytes_cstr(info->pytype),
+           info->vt_type);
     if (is_signed_vt(info->vt_type)) {
         parsed = parse_zig_zag(state, value, &sign);
     } else {
@@ -298,11 +275,15 @@ size_t parse_varint(parse_state_t* const state, field_info_t* const info) {
 size_t parse_fixed_64(parse_state_t* const state, field_info_t* const info) {
 #define FIXED_LENGTH 8
     unsigned char* buf = NULL;
-    size_t read = 0;
+    size_t read = state_read(state, &buf, FIXED_LENGTH);
 
-    state_read(state, &buf, FIXED_LENGTH);
+    if (read < FIXED_LENGTH) {
+        PyErr_Format(
+            PyExc_ValueError,
+            "Not enough bytes to parse fixed64: %zu", read);
+        return read;
+    }
     unsigned long long val = 0;
-    read = FIXED_LENGTH;
     // ntohl only takes up to 32 bits
     while (read > 0) {
         read--;
@@ -311,8 +292,6 @@ size_t parse_fixed_64(parse_state_t* const state, field_info_t* const info) {
     }
 
     switch (info->vt_type) {
-        case vt_error:
-            return FIXED_LENGTH;
         case vt_fixed64:
             state->out = PyLong_FromUnsignedLongLong(val);
             break;
@@ -332,14 +311,15 @@ void init_substate(
     parse_state_t* substate,
     parse_state_t* parent,
     unsigned char* bytes,
-    uint64_t length) {
+    uint64_t length,
+    field_info_t* info) {
 
     substate->pos = 0;
     substate->in = bytes;
     substate->len = length;
     substate->factories = parent->factories;
-    substate->pytype = state_get_field_pytype(parent);
-    printf("substate->pytype: %s\n", bytes_cstr(substate->pytype));
+    substate->pytype = info->pytype;
+    printf("substate->pytype: %s, %d\n", bytes_cstr(substate->pytype), (int)length);
     substate->is_field = false;
     substate->builtin_types = parent->builtin_types;
     substate->mp = parent->mp;
@@ -348,15 +328,22 @@ void init_substate(
 size_t parse_length_delimited(parse_state_t* const state, field_info_t* const info) {
     uint64_t value[2] = { 0, 0 };
     size_t parsed = parse_varint_impl(state, value);
+
+    if (PyErr_Occurred()) {
+        return parsed;
+    }
     // No reason to care for high bits, we aren't expecting strings of
     // that length anyways.
     uint64_t length = value[0];
     unsigned char* bytes = NULL;
-    size_t read = 0;
+    size_t read = state_read(state, &bytes, length);
     parse_state_t substate;
 
-    if (state_read(state, &bytes, length) != length) {
-        return 0;
+    if (read != length) {
+        PyErr_Format(
+            PyExc_ValueError,
+            "Not enough bytes to parse length-delimited: %zu", read);
+        return read;
     }
 
     switch (info->vt_type) {
@@ -367,17 +354,17 @@ size_t parse_length_delimited(parse_state_t* const state, field_info_t* const in
             state->out = PyBytes_FromStringAndSize((char*)bytes, (Py_ssize_t)length);
             break;
         case vt_message:
-            init_substate(&substate, state, bytes, length);
+            init_substate(&substate, state, bytes, length, info);
             state->out = parse_message(&substate);
             break;
         case vt_repeated:
-            init_substate(&substate, state, bytes, length);
+            init_substate(&substate, state, bytes, length, info);
             printf("parsing repeated\n");
-            state->out = parse_repeated(&substate);
+            state->out = parse_repeated(&substate, info);
             break;
         case vt_map:
             printf("parsing map\n");
-            init_substate(&substate, state, bytes, length);
+            init_substate(&substate, state, bytes, length, info);
             state->out = parse_map(&substate);
             break;
         default:
@@ -406,12 +393,16 @@ size_t parse_end_group(parse_state_t* const state, field_info_t* const info) {
 size_t parse_fixed_32(parse_state_t* const state, field_info_t* const info) {
 #define FIXED_LENGTH 4
     unsigned char* buf = NULL;
-    size_t read = 0;
+    size_t read = state_read(state, &buf, FIXED_LENGTH);
 
-    state_read(state, &buf, FIXED_LENGTH);
+    if (read < FIXED_LENGTH) {
+        PyErr_Format(
+            PyExc_ValueError,
+            "Not enough bytes to parse fixed32: %zu", read);
+        return read;
+    }
     
     unsigned long val = 0;
-    read = FIXED_LENGTH;
     while (read > 0) {
         read--;
         val <<= 8;
@@ -461,7 +452,8 @@ bool is_scalar(vt_type_t vt) {
     }
 }
 
-void resolve_type(parse_state_t* const state, field_info_t* info) {
+// TODO(olegs): Deduplicate, pass pointer to relevant vt_type_t field
+void resolve_type(parse_state_t* const state, field_info_t* const info) {
     PyObject* key = PyBytes_FromStringAndSize(
         (char*)(info->pytype + 2),
         str_size(info->pytype));
@@ -480,6 +472,33 @@ void resolve_type(parse_state_t* const state, field_info_t* info) {
     }
     if (info->vt_type == vt_default) {
         info->vt_type = vt_error;
+        print_factories(state->factories);
+        PyErr_Format(
+            PyExc_TypeError,
+            "No definition for type: %s", bytes_cstr(info->pytype));
+    }
+}
+
+void resolve_repeated_type(parse_state_t* const state, field_info_t* const info) {
+    printf("resolve_repeated_type: %s\n", bytes_cstr(info->pytype));
+    PyObject* key = PyBytes_FromStringAndSize(
+        (char*)(info->pytype + 2),
+        str_size(info->pytype));
+    PyObject* builtin = PyDict_GetItem(state->builtin_types, key);
+    Py_DECREF(key);
+    if (builtin) {
+        info->extra_type_info.elt = (vt_type_t)PyLong_AsSsize_t(builtin);
+    } else {
+        factory_t* f = apr_hash_get(
+            state->factories,
+            bytes_cstr(info->pytype),
+            APR_HASH_KEY_STRING);
+        if (f) {
+            info->extra_type_info.elt = f->vt_type;
+        }
+    }
+    if (info->extra_type_info.elt == vt_default) {
+        info->extra_type_info.elt = vt_error;
         print_factories(state->factories);
         PyErr_Format(
             PyExc_TypeError,
@@ -519,15 +538,12 @@ PyObject* parse_message(parse_state_t* const state) {
             }
             if (info->vt_type == vt_default) {
                 resolve_type(state, info);
+            } else if (info->vt_type == vt_repeated) {
+                resolve_repeated_type(state, info);
             }
             if (info->vt_type == vt_error) {
                 break;
             }
-            printf("parsing field: %zu, wiretype: %zu, pytype: %s, varint: 0x%x\n",
-                   state->field,
-                   wiretype,
-                   bytes_cstr(state->pytype),
-                   (int)value[0]);
         } else {
             switch (wiretype) {
                 case 0:
@@ -566,13 +582,19 @@ PyObject* parse_message(parse_state_t* const state) {
             } else {
                 PyObject* val = apr_hash_get(fields, &state->field, sizeof(size_t));
                 if (val && PyList_CheckExact(val)) {
-                    PyList_Append(val, state->out);
+                    print_obj("appending to existing length-delimited: %s ", state->out);
+                    printf("to field: %zu of %s\n", state->field, bytes_cstr(state->pytype));
+                    PyList_Append(val, PyList_GetItem(state->out, 0));
+                    Py_DECREF(state->out);
                 } else if (val && PyDict_CheckExact(val)) {
                     PyDict_Update(val, state->out);
+                    Py_DECREF(state->out);
                 } else {
                     size_t* key = apr_palloc(state->mp, sizeof(size_t));
                     *key = state->field;
                     apr_hash_set(fields, key, sizeof(size_t), state->out);
+                    print_obj("adding new length-delimited: %s ", state->out);
+                    printf("to field: %zu of %s\n", state->field, bytes_cstr(state->pytype));
                 }
             }
         }
@@ -643,57 +665,63 @@ PyObject* parse_map(parse_state_t* const state) {
     Py_RETURN_NONE;
 }
 
-PyObject* parse_repeated(parse_state_t* const state) {
-    // int64_t i = 0;
-    // size_t j = 0;
-    // PyObject* result = PyList_New(0);
-    // PyObject* subresult;
-    // vt_type_t rtype = state_get_field_repeated_type(state);
+PyObject* parse_repeated(parse_state_t* const state, field_info_t* const info) {
+    int64_t i = 0;
+    size_t j = 0;
+    PyObject* result = PyList_New(0);
+    PyObject* subresult;
+    field_info_t rinfo;
+    rinfo.n = info->n;
+    rinfo.vt_type = info->extra_type_info.elt;
+    rinfo.pytype = info->pytype;
 
-    // if (is_scalar(rtype)) {
-    //     parse_handler ph;
+    printf("parse_repeated: rtype: %d, pytype: %s\n", rinfo.vt_type, bytes_cstr(info->pytype));
 
-    //     switch (wiretype_of(rtype)) {
-    //         case wt_varint:
-    //             ph = &parse_varint;
-    //             break;
-    //         case wt_fixed32:
-    //             ph = &parse_fixed_32;
-    //             break;
-    //         case wt_fixed64:
-    //             ph = &parse_fixed_64;
-    //             break;
-    //         default:
-    //             ph = &parse_length_delimited;
-    //     }
-    //     while (i < state->len) {
-    //         j = ph(state);
-    //         if (j == 0) {
-    //             break;
-    //         }
-    //         i += (int64_t)j;
-    //         PyList_Append(result, state->out);
-    //         Py_DECREF(state->out);
-    //     }
-    // } else if (rtype == vt_string) {
-    //     subresult = PyUnicode_FromStringAndSize((char*)state->in, (Py_ssize_t)state->len);
-    //     PyList_Append(result, subresult);
-    //     Py_DECREF(subresult);
-    // } else if (rtype == vt_bytes) {
-    //     subresult = PyBytes_FromStringAndSize((char*)state->in, (Py_ssize_t)state->len);
-    //     PyList_Append(result, subresult);
-    //     Py_DECREF(subresult);
-    // } else {
-    //     state->pytype = PyList_GetItem(state->pytype, 0);
+    if (is_scalar(rinfo.vt_type)) {
+        printf("parsing repeated scalar: %s\n", bytes_cstr(info->pytype));
+        parse_handler ph;
 
-    //     subresult = parse_message(state);
-    //     if (!subresult) {
-    //         return NULL;
-    //     }
-    //     PyList_Append(result, subresult);
-    //     Py_DECREF(subresult);
-    // }
-    // return result;
+        switch (wiretype_of(rinfo.vt_type)) {
+            case wt_varint:
+                ph = &parse_varint;
+                break;
+            case wt_fixed32:
+                ph = &parse_fixed_32;
+                break;
+            case wt_fixed64:
+                ph = &parse_fixed_64;
+                break;
+            default:
+                ph = &parse_length_delimited;
+        }
+        while (i < state->len) {
+            j = ph(state, &rinfo);
+            if (j == 0) {
+                break;
+            }
+            i += (int64_t)j;
+            PyList_Append(result, state->out);
+            Py_DECREF(state->out);
+        }
+    } else if (rinfo.vt_type == vt_string) {
+        subresult = PyUnicode_FromStringAndSize((char*)state->in, (Py_ssize_t)state->len);
+        PyList_Append(result, subresult);
+        print_obj("Parsing repeated string: %s\n", result);
+        Py_DECREF(subresult);
+    } else if (rinfo.vt_type == vt_bytes) {
+        subresult = PyBytes_FromStringAndSize((char*)state->in, (Py_ssize_t)state->len);
+        PyList_Append(result, subresult);
+        Py_DECREF(subresult);
+    } else {
+        state->pytype = info->pytype;
 
-    Py_RETURN_NONE;
+        subresult = parse_message(state);
+        if (!subresult) {
+            return NULL;
+        }
+        PyList_Append(result, subresult);
+        Py_DECREF(subresult);
+    }
+    print_obj("parsed repeated: %s\n", result);
+    return result;
 }

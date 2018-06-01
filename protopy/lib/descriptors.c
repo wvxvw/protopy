@@ -94,6 +94,7 @@ add_field_info(
     apr_pool_t* mp) {
 
     field_info_t* info = apr_palloc(mp, sizeof(field_info_t));
+    printf("mapping %s %zu -> %zu\n", bytes_cstr(field_type), field_num, idx);
     info->n = idx;
     byte* pytype = apr_palloc(mp, str_size(field_type) + 2);
     memcpy(pytype, field_type, str_size(field_type) + 2);
@@ -158,10 +159,12 @@ message_desc(
                 field_type = STR_VAL(cdr(field));
                 idx = apr_hash_get(fields, field_name, str_size(field_name) + 2);
                 if (idx) {
-                    add_field_info(field_type, field_num, (size_t)idx, mapping, mp);
+                    add_field_info(field_type, field_num, *idx, mapping, mp);
                 } else {
                     add_field_info(field_type, field_num, field_idx, mapping, mp);
-                    apr_hash_set(fields, field_name, str_size(field_name) + 2, (void*)1);
+                    size_t* key = apr_palloc(mp, sizeof(size_t));
+                    *key = field_idx;
+                    apr_hash_set(fields, field_name, str_size(field_name) + 2, key);
 
                     add_pyfield(fields_list, field_name, keywords);
                     field_idx++;

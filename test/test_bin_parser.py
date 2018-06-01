@@ -99,7 +99,7 @@ def test_repeated():
     roots, test_proto, content = generate_proto_binary(
         'test_repeated.proto',
         b'''simple_repeats: {
-            some_ints: [1, -1, 2, -2, 3, -3]
+            some_ints: [1, -1, 2, -2, 3, -3, 4, -4, 5, -5]
         }
         multiple_repeats: [{
             some_fixed: [1, -1, 2, -2, 3, -3]
