@@ -365,7 +365,7 @@ size_t parse_length_delimited(parse_state_t* const state, field_info_t* const in
         case vt_map:
             printf("parsing map\n");
             init_substate(&substate, state, bytes, length, info);
-            state->out = parse_map(&substate);
+            state->out = parse_map(&substate, info);
             break;
         default:
             if (!PyErr_Occurred()) {
@@ -452,57 +452,29 @@ bool is_scalar(vt_type_t vt) {
     }
 }
 
-// TODO(olegs): Deduplicate, pass pointer to relevant vt_type_t field
-void resolve_type(parse_state_t* const state, field_info_t* const info) {
+void resolve_type(parse_state_t* const state, byte* pytype, vt_type_t* vttype) {
     PyObject* key = PyBytes_FromStringAndSize(
-        (char*)(info->pytype + 2),
-        str_size(info->pytype));
+        (char*)(pytype + 2),
+        str_size(pytype));
     PyObject* builtin = PyDict_GetItem(state->builtin_types, key);
     Py_DECREF(key);
     if (builtin) {
-        info->vt_type = (vt_type_t)PyLong_AsSsize_t(builtin);
+        *vttype = (vt_type_t)PyLong_AsSsize_t(builtin);
     } else {
         factory_t* f = apr_hash_get(
             state->factories,
-            bytes_cstr(info->pytype),
+            bytes_cstr(pytype),
             APR_HASH_KEY_STRING);
         if (f) {
-            info->vt_type = f->vt_type;
+            *vttype = f->vt_type;
         }
     }
-    if (info->vt_type == vt_default) {
-        info->vt_type = vt_error;
+    if (*vttype == vt_default) {
+        *vttype = vt_error;
         print_factories(state->factories);
         PyErr_Format(
             PyExc_TypeError,
-            "No definition for type: %s", bytes_cstr(info->pytype));
-    }
-}
-
-void resolve_repeated_type(parse_state_t* const state, field_info_t* const info) {
-    printf("resolve_repeated_type: %s\n", bytes_cstr(info->pytype));
-    PyObject* key = PyBytes_FromStringAndSize(
-        (char*)(info->pytype + 2),
-        str_size(info->pytype));
-    PyObject* builtin = PyDict_GetItem(state->builtin_types, key);
-    Py_DECREF(key);
-    if (builtin) {
-        info->extra_type_info.elt = (vt_type_t)PyLong_AsSsize_t(builtin);
-    } else {
-        factory_t* f = apr_hash_get(
-            state->factories,
-            bytes_cstr(info->pytype),
-            APR_HASH_KEY_STRING);
-        if (f) {
-            info->extra_type_info.elt = f->vt_type;
-        }
-    }
-    if (info->extra_type_info.elt == vt_default) {
-        info->extra_type_info.elt = vt_error;
-        print_factories(state->factories);
-        PyErr_Format(
-            PyExc_TypeError,
-            "No definition for type: %s", bytes_cstr(info->pytype));
+            "No definition for type: %s", bytes_cstr(pytype));
     }
 }
 
@@ -537,9 +509,9 @@ PyObject* parse_message(parse_state_t* const state) {
                 break;
             }
             if (info->vt_type == vt_default) {
-                resolve_type(state, info);
+                resolve_type(state, info->pytype, &info->vt_type);
             } else if (info->vt_type == vt_repeated) {
-                resolve_repeated_type(state, info);
+                resolve_type(state, info->pytype, &info->extra_type_info.elt);
             }
             if (info->vt_type == vt_error) {
                 break;
@@ -607,62 +579,74 @@ PyObject* parse_message(parse_state_t* const state) {
     return state->out;
 }
 
-PyObject* parse_map(parse_state_t* const state) {
-    // PyObject* key_type = PyTuple_GetItem(state->pytype, 0);
-    // PyObject* value_type = PyTuple_GetItem(state->pytype, 1);
-    // PyObject* result = PyDict_New();
-    // parse_handler handler;
-
-    // select_handler(state, &handler);
-
-    // if (state->field == 1) {
-    //     state->pytype = key_type;
-    // } else {
-    //     state->pytype = value_type;
-    // }
-
-    // state->is_field = true;
-
-    // (*handler)(state);
-
-    // PyObject* key = Py_None;
-    // PyObject* value = Py_None;
-
-    // if (state->out != NULL) {
-    //     if (state->field == 1) {
-    //         key = state->out;
-    //     } else {
-    //         value = state->out;
-    //     }
-    // } else {
-    //     Py_DECREF(result);
-    //     return NULL;
-    // }
-
-    // select_handler(state, &handler);
-    // if (state->field == 1) {
-    //     state->pytype = key_type;
-    // } else {
-    //     state->pytype = value_type;
-    // }
-
-    // (*handler)(state);
+PyObject* parse_map(parse_state_t* const state, field_info_t* info) {
+    PyObject* result = PyDict_New();
+    uint64_t val[2] = { 0, 0 };
     
-    // if (state->out != NULL) {
-    //     if (state->field == 1) {
-    //         key = state->out;
-    //     } else {
-    //         value = state->out;
-    //     }
-    // } else {
-    //     Py_DECREF(result);
-    //     return NULL;
-    // }
+    field_info_t key_info;
+    field_info_t val_info;
+    field_info_t* current_info;
 
-    // PyDict_SetItem(result, key, value);
-    // return result;
+    PyObject* key = Py_None;
+    PyObject* value = Py_None;
+    size_t i = 0;
+    
+    key_info.vt_type = info->extra_type_info.pair.key;
+    val_info.vt_type = info->extra_type_info.pair.val;
+    val_info.pytype = info->extra_type_info.pair.pyval;
 
-    Py_RETURN_NONE;
+    while (i < 2) {
+        parse_varint_impl(state, val);
+        size_t wiretype = (size_t)(val[0] & 7);
+        state->field = (size_t)(val[0] >> 3);
+
+        if (state->field == 1) {
+            current_info = &key_info;
+        } else {
+            current_info = &val_info;
+        }
+
+        switch (wiretype) {
+            case 0:
+                parse_varint(state, current_info);
+                break;
+            case 1:
+                parse_fixed_64(state, current_info);
+                break;
+            case 2:
+                parse_length_delimited(state, current_info);
+                break;
+            case 3:
+                parse_start_group(state, current_info);
+                break;
+            case 4:
+                parse_end_group(state, current_info);
+                break;
+            case 5:
+                parse_fixed_32(state, current_info);
+                break;
+            case 6:
+            case 7:
+                PyErr_SetString(
+                    PyExc_NotImplementedError,
+                    "Invalid encoding, wire_type 6 and 7 are not defined");
+        }
+
+        if (PyErr_Occurred()) {
+            Py_DECREF(result);
+            return NULL;
+        }
+
+        if (state->field == 1) {
+            key = state->out;
+        } else {
+            value = state->out;
+        }
+        i++;
+    }
+
+    PyDict_SetItem(result, key, value);
+    return result;
 }
 
 PyObject* parse_repeated(parse_state_t* const state, field_info_t* const info) {

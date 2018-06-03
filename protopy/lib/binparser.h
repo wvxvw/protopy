@@ -57,7 +57,7 @@ PyObject* parse_message(parse_state_t* const);
 
 PyObject* parse_repeated(parse_state_t* const, field_info_t* const);
 
-PyObject* parse_map(parse_state_t* const);
+PyObject* parse_map(parse_state_t* const, field_info_t* const);
 
 PyObject* make_state(PyObject*, PyObject*);
 
@@ -65,6 +65,6 @@ PyObject* state_ready(PyObject*, PyObject*);
 
 PyObject* state_result(PyObject*, PyObject*);
 
-void resolve_type(parse_state_t* const, field_info_t*);
+void resolve_type(parse_state_t* const, byte*, vt_type_t*);
 
 #endif // BINPARSER_H_
