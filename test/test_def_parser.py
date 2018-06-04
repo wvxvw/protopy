@@ -52,3 +52,23 @@ def test_imported_oneof():
         for field in fields
         if not type(field[1]) is list
     )
+
+
+def test_iterate_defs():
+    roots = [
+        pkg_resources.resource_filename(__name__, './resources'),
+        pkg_resources.resource_filename(__name__, '.')
+    ]
+    test_proto = pkg_resources.resource_filename(
+        __name__,
+        './resources/test_imported_oneof.proto',
+    )
+    parser = DefParser(roots)
+    parser.parse(test_proto)
+
+    passed = False
+    for k, v in parser.definitions():
+        if k == b'resources.Test.EmbeddedMessage':
+            passed = True
+
+    assert passed

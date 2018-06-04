@@ -31,6 +31,8 @@ static char make_apr_pool_docstring[] = "Create a new APR memory pool";
 static char apr_update_hash_docstring[] = "Merge two APR hash tables";
 static char apr_hash_contains_docstring[] = "Check if APR hash table contains a key";
 static char make_apr_hash_docstring[] = "Create new APR hash table";
+static char apr_hash_iterator_docstring[] = "Create new iterator for APR hash table";
+static char apr_hash_get_docstring[] = "Fetch next pair from APR hash table";
 
 static PyObject* proto_parse(PyObject* self, PyObject* args);
 static PyObject* proto_def_parse(PyObject* self, PyObject* args);
@@ -39,6 +41,8 @@ static PyObject* make_apr_pool(PyObject* self, PyObject* args);
 static PyObject* apr_update_hash(PyObject* self, PyObject* args);
 static PyObject* apr_hash_contains(PyObject* self, PyObject* args);
 static PyObject* make_apr_hash(PyObject* self, PyObject* args);
+static PyObject* apr_hash_iterator(PyObject* self, PyObject* args);
+static PyObject* apr_hash_get_kv(PyObject* self, PyObject* args);
 
 static PyMethodDef module_methods[] = {
     {"proto_parse", proto_parse, METH_VARARGS, parse_docstring},
@@ -51,6 +55,8 @@ static PyMethodDef module_methods[] = {
     {"apr_update_hash", apr_update_hash, METH_VARARGS, apr_update_hash_docstring},
     {"apr_hash_contains", apr_hash_contains, METH_VARARGS, apr_hash_contains_docstring},
     {"make_apr_hash", make_apr_hash, METH_VARARGS, make_apr_hash_docstring},
+    {"apr_hash_iterator", apr_hash_iterator, METH_VARARGS, apr_hash_iterator_docstring},
+    {"apr_hash_get_kv", apr_hash_get_kv, METH_VARARGS, apr_hash_get_docstring},
     {NULL, NULL, 0, NULL}
 };
 
@@ -75,6 +81,52 @@ static PyObject* apr_cleanup(PyObject* self, PyObject* args) {
 }
 
 void free_apr_hash(PyObject* capsule) { }
+
+static PyObject* apr_hash_iterator(PyObject* self, PyObject* args) {
+    PyObject* capsule;
+
+    if (!PyArg_ParseTuple(args, "O", &capsule)) {
+        return NULL;
+    }
+    apr_hash_t* ht = (apr_hash_t*)PyCapsule_GetPointer(capsule, NULL);
+    if (!ht) {
+        PyErr_Format(PyExc_ValueError, "Missing hash table");
+        return NULL;
+    }
+    apr_pool_t* mp = apr_hash_pool_get(ht);
+    apr_hash_index_t* hi = apr_hash_first(mp, ht);
+    return PyCapsule_New(hi, NULL, free_apr_hash);
+}
+
+static PyObject* apr_hash_get_kv(PyObject* self, PyObject* args) {
+    PyObject* capsule;
+
+    if (!PyArg_ParseTuple(args, "O", &capsule)) {
+        return NULL;
+    }
+    void* maybe_hi = PyCapsule_GetPointer(capsule, NULL);
+    if (!maybe_hi || maybe_hi == 0xdeadbeef) {
+        PyErr_SetString(PyExc_StopIteration, "");
+        return NULL;
+    }
+    apr_hash_index_t* hi = (apr_hash_index_t*)maybe_hi;
+    PyObject* result = PyTuple_New(2);
+
+    const void* key;
+    void* val;
+    apr_hash_this(hi, &key, NULL, &val);
+    PyObject* pykey = PyBytes_FromString((char*)key);
+    PyObject* pyval = ((factory_t*)val)->ctor;
+    PyTuple_SetItem(result, 0, pykey);
+    PyTuple_SetItem(result, 1, pyval);
+    hi = apr_hash_next(hi);
+    if (!hi) {
+        PyCapsule_SetPointer(capsule, (void*)0xdeadbeef);
+    } else {
+        PyCapsule_SetPointer(capsule, hi);
+    }
+    return result;
+}
 
 static PyObject* make_apr_hash(PyObject* self, PyObject* args) {
     PyObject* capsule;

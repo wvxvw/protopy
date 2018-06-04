@@ -14,6 +14,8 @@ from protopy.wrapped import (
     apr_hash_contains,
     apr_update_hash,
     make_apr_hash,
+    apr_hash_iterator,
+    apr_hash_get_kv,
 )
 
 
@@ -35,6 +37,16 @@ class DefParser:
         else:
             self.mp = make_apr_pool()
         self.defs = make_apr_hash(self.mp)
+
+    def definitions(self):
+        it = apr_hash_iterator(self.defs)
+        while True:
+            k, v = apr_hash_get_kv(it)
+            if k is not None:
+                yield k, v
+
+    def has_definition(self, definition):
+        return apr_hash_contains(self.defs, str(definition).encode('utf-8'))
 
     def parse(self, source, force=False):
         source = str(source).encode('utf-8')
