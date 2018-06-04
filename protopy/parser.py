@@ -16,23 +16,6 @@ from protopy.wrapped import (
     make_apr_hash,
 )
 
-_PB_TYPES = {
-    b'int32': 0,
-    b'int64': 1,
-    b'uint32': 2,
-    b'uint64': 3,
-    b'sint32': 4,
-    b'sint64': 5,
-    b'bool': 6,
-    b'fixed64': 8,
-    b'sfixed64': 9,
-    b'double': 10,
-    b'string': 11,
-    b'bytes': 12,
-    b'fixed32': 15,
-    b'sfixed32': 16,
-}
-
 
 class DefParser:
 
@@ -85,7 +68,6 @@ class BinParser:
         self.state = make_state(
             message,
             self.def_parser.defs,
-            _PB_TYPES,
             self.mp,
         )
         proto_parse(buf, self.state)

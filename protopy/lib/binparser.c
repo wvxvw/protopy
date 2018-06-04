@@ -10,6 +10,25 @@
 #include "descriptors.h"
 
 
+static builtin_type_t builtin_types[BUILTIN_TYPES] = {
+    {(unsigned char*)"\0"       , vt_error},
+    {(unsigned char*)"\0"       , vt_error},
+    {(unsigned char*)"bool"     , vt_bool},
+    {(unsigned char*)"bytes"    , vt_bytes},
+    {(unsigned char*)"double"   , vt_double},
+    {(unsigned char*)"fixed32"  , vt_fixed32},
+    {(unsigned char*)"fixed64"  , vt_fixed64},
+    {(unsigned char*)"int32"    , vt_int32},
+    {(unsigned char*)"int64"    , vt_int64},
+    {(unsigned char*)"sfixed32" , vt_fixed32},
+    {(unsigned char*)"sfixed64" , vt_fixed64},
+    {(unsigned char*)"sint32"   , vt_sing32},
+    {(unsigned char*)"sint64"   , vt_sing64},
+    {(unsigned char*)"string"   , vt_string},
+    {(unsigned char*)"uint32"   , vt_uint32},
+    {(unsigned char*)"uint64"   , vt_uint64},
+};
+
 void free_state(PyObject* capsule) {
     if (capsule == Py_None) {
         return;
@@ -52,15 +71,13 @@ PyObject* make_state(PyObject* self, PyObject* args) {
     char* pytype;
     apr_pool_t* mp;
     PyObject* factories_capsule;
-    PyObject* builtins;
     PyObject* mp_capsule;
 
     if (!PyArg_ParseTuple(
             args,
-            "yOOO",
+            "yOO",
             &pytype,
             &factories_capsule,
-            &builtins,
             &mp_capsule)) {
         return NULL;
     }
@@ -83,7 +100,6 @@ PyObject* make_state(PyObject* self, PyObject* args) {
     state->is_field = false;
     state->pytype = cstr_bytes(pytype);
     state->factories = factories;
-    state->builtin_types = builtins;
     state->factory = NULL;
     state->mp = mp;
 
@@ -321,7 +337,6 @@ void init_substate(
     substate->pytype = info->pytype;
     printf("substate->pytype: %s, %d\n", bytes_cstr(substate->pytype), (int)length);
     substate->is_field = false;
-    substate->builtin_types = parent->builtin_types;
     substate->mp = parent->mp;
 }
 
@@ -452,15 +467,42 @@ bool is_scalar(vt_type_t vt) {
     }
 }
 
+vt_type_t vt_builtin(byte* type) {
+    size_t len = BUILTIN_TYPES;
+    size_t i = len >> 1;
+    size_t tlen = str_size(type) + 2;
+    size_t pos;
+    size_t step = i;
+    char a, b;
+    builtin_type_t* bt;
+
+    while (step > 0) {
+        bt = &builtin_types[i];
+        pos = 2;
+        do {
+            a = type[pos];
+            b = bt->name[pos - 2];
+            pos++;
+        } while (a == b && pos < tlen);
+        if (pos == tlen) {
+            return bt->value;
+        }
+        step >>= 1;
+        if (a > b) {
+            i += step;
+        } else {
+            i -= step;
+        }
+        if (i >= BUILTIN_TYPES) {
+            break;
+        }
+    }
+    return vt_default;
+}
+
 void resolve_type(parse_state_t* const state, byte* pytype, vt_type_t* vttype) {
-    PyObject* key = PyBytes_FromStringAndSize(
-        (char*)(pytype + 2),
-        str_size(pytype));
-    PyObject* builtin = PyDict_GetItem(state->builtin_types, key);
-    Py_DECREF(key);
-    if (builtin) {
-        *vttype = (vt_type_t)PyLong_AsSsize_t(builtin);
-    } else {
+    *vttype = vt_builtin(pytype);
+    if (*vttype == vt_default) {
         factory_t* f = apr_hash_get(
             state->factories,
             bytes_cstr(pytype),
@@ -512,6 +554,12 @@ PyObject* parse_message(parse_state_t* const state) {
                 resolve_type(state, info->pytype, &info->vt_type);
             } else if (info->vt_type == vt_repeated) {
                 resolve_type(state, info->pytype, &info->extra_type_info.elt);
+            } else if (info->vt_type == vt_map) {
+                resolve_type(state, info->pytype, &info->extra_type_info.pair.key);
+                resolve_type(
+                    state,
+                    info->extra_type_info.pair.pyval,
+                    &info->extra_type_info.pair.val);
             }
             if (info->vt_type == vt_error) {
                 break;

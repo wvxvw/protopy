@@ -30,7 +30,6 @@ typedef struct {
     factory_t* factory;
     byte* pytype;
     PyObject* out;
-    PyObject* builtin_types;
 } parse_state_t;
 
 typedef size_t (*parse_handler)(parse_state_t* const, field_info_t* const);
@@ -66,5 +65,14 @@ PyObject* state_ready(PyObject*, PyObject*);
 PyObject* state_result(PyObject*, PyObject*);
 
 void resolve_type(parse_state_t* const, byte*, vt_type_t*);
+
+typedef struct _builtin_type {
+    const unsigned char* name;
+    const vt_type_t value;
+} builtin_type_t;
+
+#define BUILTIN_TYPES 16
+
+vt_type_t vt_builtin(byte*);
 
 #endif // BINPARSER_H_
