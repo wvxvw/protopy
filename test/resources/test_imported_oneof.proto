@@ -4,7 +4,7 @@ package resources;
 
 import "resources/oneof.proto";
 import "resources/nested/oneof.proto";
-import "google/api/http.proto";
+import "foo/bar_enum.proto";
 
 message TestSimple {
     oneof simple {

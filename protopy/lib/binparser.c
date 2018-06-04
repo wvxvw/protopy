@@ -594,6 +594,7 @@ PyObject* parse_map(parse_state_t* const state, field_info_t* info) {
     val_info.pytype = info->extra_type_info.pair.pyval;
 
     while (i < 2) {
+        val[0] = val[1] = 0;
         parse_varint_impl(state, val);
         size_t wiretype = (size_t)(val[0] & 7);
         state->field = (size_t)(val[0] >> 3);
