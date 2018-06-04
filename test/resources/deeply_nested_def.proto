@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+message TopLevel {
+
+    message SecondLevel {
+        // this is the one missing
+        message ThirdLevel {
+            enum FourthLevel {
+                a = 0;
+                b = 1;
+            }
+
+            message FourthLevel1 {
+                enum Type {
+                    c = 0;
+                    d = 1;
+                    e = 2;
+                    f = 3;
+                    g = 4;
+                }
+                Type a = 1;
+                double b = 2;
+                string c = 3;
+            }
+
+            oneof d {
+                FourthLevel e = 1;
+                FourthLevel1 f = 2;
+            }
+        }
+
+
+        message ThirdLevel1 {
+            enum FourthLevel2 {
+                a = 0;
+                b = 1;
+                c = 2;
+            }
+            FourthLevel2 a = 1;
+            string b = 2;
+            string c = 3;
+            bool d = 4;
+        }
+
+        ThirdLevel a = 1;
+        ThirdLevel1 b = 2;
+        bool c = 3;
+    }
+
+    message SecondLevel2 {
+        enum ThirdLevel6 {
+            a = 0;
+            b = 1;
+        }
+
+        message ThirdLevel4 {
+            string a = 1;
+            string b = 2;
+        }
+
+        oneof a {
+            ThirdLevel6 b = 1;
+            ThirdLevel4 c = 2;
+        }
+
+    }
+
+    message SecondLevel3 {
+        enum ThirdLevel5 {
+            a = 0;
+            b = 1;
+            c = 2;
+        }
+
+        ThirdLevel5 d = 1;
+    }
+
+    message SecondLevel4 {
+        enum FourthLevel5 {
+            a = 0;
+            b = 1;
+        }
+
+        message FourthLevel6 {
+            int32 a = 1;
+        }
+
+        oneof a {
+            FourthLevel5 b = 1;
+            FourthLevel6 c = 2;
+        }
+    }
+
+    enum SecondLevel5 {
+        a = 0;
+        b = 1;
+        c = 2;
+    }
+
+    string a = 1;
+    string b = 2;
+
+    oneof c {
+        SecondLevel d = 3;
+        SecondLevel2 e = 4;
+        SecondLevel3 f = 5;
+        SecondLevel4 g = 6;
+    }
+
+    FirstLevel h = 7;
+    int32 j = 8;
+
+    bool k = 9;
+
+    SecondLevel5 m = 10;
+}

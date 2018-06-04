@@ -72,3 +72,24 @@ def test_iterate_defs():
             passed = True
 
     assert passed
+
+
+def test_deep_nesting():
+    roots = [
+        pkg_resources.resource_filename(__name__, './resources')
+    ]
+    test_proto = pkg_resources.resource_filename(
+        __name__,
+        './resources/deeply_nested_def.proto',
+    )
+    parser = DefParser(roots)
+    parser.parse(test_proto)
+
+    # 10 messages + 7 enums
+    defcount = 10 + 7
+    actual_defcount = 0
+    for k, v in parser.definitions():
+        print('def: {} => {}'.format(k, v))
+        actual_defcount += 1
+
+    assert defcount == actual_defcount

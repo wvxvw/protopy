@@ -600,7 +600,7 @@ byte* replace_str(const byte* s, byte a, byte b) {
     byte* result = str_dup(s);
     size_t i = str_size(s);
 
-    while (i > 0) {
+    while (i > 1) {
         i--;
         if (result[i] == a) {
             result[i] = b;

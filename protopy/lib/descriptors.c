@@ -9,8 +9,8 @@
 
 void extract_type_name(
     const byte* tname,
-    byte** pname,
-    byte** package) {
+    char** pname,
+    char** package) {
 
     size_t len = str_size(tname) + 2;
     size_t i = len;
@@ -18,13 +18,18 @@ void extract_type_name(
     while (i > 0) {
         i--;
         if (tname[i] == '.' || tname[i] == ':') {
-            *package = sub_str(tname, i - 2);
-            *pname = sub_str(tname + i - 1, len - i - 1);
+            *package = malloc((i - 2) * sizeof(char));
+            memcpy(*package, tname + 2, (i - 2));
+            (*package)[i - 2] = '\0';
+
+            *pname = malloc((len - i - 1) * sizeof(char));
+            memcpy(*pname, tname + i + 1, (len - i - 1));
+            (*pname)[len - i - 1] = '\0';
             return;
         }
     }
-    *pname = str_dup(tname);
-    *package = str_dup(empty);
+    *pname = bytes_cstr(tname);
+    *package = strdup("");
 }
 
 void
@@ -207,14 +212,16 @@ message_desc(
         head = cdr(head);
     }
 
-    byte* name;
-    byte* package;
+    char* name;
+    char* package;
 
     extract_type_name(norm_ftype, &name, &package);
 
+    printf("package+name: %s : %s\n", package, name);
+
     PyObject* ctor = PyObject_CallFunctionObjArgs(
         message_ctor,
-        PyUnicode_FromStringAndSize((char*)name + 2, str_size(name)),
+        PyUnicode_FromString(name),
         fields_list,
         NULL);
     if (!ctor) {
@@ -223,13 +230,14 @@ message_desc(
     PyObject_SetAttrString(
         ctor,
         "__module__",
-        PyUnicode_FromStringAndSize((char*)(package + 2), str_size(package)));
+        PyUnicode_FromString(package));
 
     factory_t* factory = apr_palloc(mp, sizeof(factory_t));
     factory->vt_type = vt_message;
     factory->mapping = mapping;
     factory->ctor = ctor;
 
+    printf("adding definition %s -> %s\n", bytes_cstr(ftype), bytes_cstr(norm_ftype));
     apr_hash_set(factories, bytes_cstr(norm_ftype), APR_HASH_KEY_STRING, factory);
 }
 
