@@ -20,8 +20,8 @@ static builtin_type_t builtin_types[BUILTIN_TYPES] = {
     {(unsigned char*)"fixed64"  , vt_fixed64},
     {(unsigned char*)"int32"    , vt_int32},
     {(unsigned char*)"int64"    , vt_int64},
-    {(unsigned char*)"sfixed32" , vt_fixed32},
-    {(unsigned char*)"sfixed64" , vt_fixed64},
+    {(unsigned char*)"sfixed32" , vt_sfixed32},
+    {(unsigned char*)"sfixed64" , vt_sfixed64},
     {(unsigned char*)"sint32"   , vt_sing32},
     {(unsigned char*)"sint64"   , vt_sing64},
     {(unsigned char*)"string"   , vt_string},
@@ -120,34 +120,6 @@ size_t state_read(parse_state_t* const state, unsigned char** buf, size_t n) {
     return state->len - state->pos;
 }
 
-void print_factories(apr_hash_t* ht) {
-    apr_hash_index_t* hi;
-    void* val;
-    const void* key;
-    apr_pool_t* mp = apr_hash_pool_get(ht);
-
-    printf("print_factories: %p\n", ht);
-
-    for (hi = apr_hash_first(mp, ht); hi; hi = apr_hash_next(hi)) {
-        apr_hash_this(hi, &key, NULL, &val);
-        printf("key: %s => %p\n", (char*)key, val);
-    }
-}
-
-void print_mapping(apr_hash_t* ht) {
-    apr_hash_index_t* hi;
-    void* val;
-    const void* key;
-    apr_pool_t* mp = apr_hash_pool_get(ht);
-
-    printf("print_mapping: %p\n", ht);
-
-    for (hi = apr_hash_first(mp, ht); hi; hi = apr_hash_next(hi)) {
-        apr_hash_this(hi, &key, NULL, &val);
-        printf("key: %zu => %p\n", *(size_t*)key, val);
-    }
-}
-
 size_t parse_varint_impl(parse_state_t* const state, uint64_t value[2]) {
     unsigned char* buf = NULL;
     unsigned char current;
@@ -200,16 +172,13 @@ PyObject* tuple_from_dict(factory_t* factory, apr_hash_t* values) {
     size_t max = 0;
     PyObject* result;
 
-    for (hi = apr_hash_first(mp, values); hi; hi = apr_hash_next(hi)) {
+    for (hi = apr_hash_first(mp, factory->mapping); hi; hi = apr_hash_next(hi)) {
         apr_hash_this(hi, &key, NULL, &val);
-        field_info_t* info = apr_hash_get(factory->mapping, key, sizeof(size_t));
-        printf("checking field: %s, %zu\n", bytes_cstr(info->pytype), info->n);
-        print_obj("argument to tuple: %s\n", val);
+        field_info_t* info = (field_info_t*)val;
         if (max <= info->n) {
             max = info->n + 1;
         }
     }
-    printf("tuple_from_dict: numargs: %zu\n", max);
     if (max == 0) {
         result = PyObject_Call(factory->ctor, PyTuple_New(0), NULL);
         if (result) {
@@ -229,12 +198,9 @@ PyObject* tuple_from_dict(factory_t* factory, apr_hash_t* values) {
     for (hi = apr_hash_first(mp, values); hi; hi = apr_hash_next(hi)) {
         apr_hash_this(hi, &key, NULL, &val);
         field_info_t* info = apr_hash_get(factory->mapping, key, sizeof(size_t));
-        printf("adding argument for field: %s, %zu\n", bytes_cstr(info->pytype), info->n);
         PyTuple_SetItem(args, info->n, val);
     }
 
-    print_obj("ctor: %s\n", factory->ctor);
-    print_obj("args: %s\n", args);
     result = PyObject_Call(factory->ctor, args, NULL);
     if (result) {
         Py_INCREF(result);
@@ -247,10 +213,6 @@ size_t parse_varint(parse_state_t* const state, field_info_t* const info) {
     bool sign = false;
     size_t parsed;
 
-    printf("checking signedness of: %s, %s, %d\n",
-           bytes_cstr(state->pytype),
-           bytes_cstr(info->pytype),
-           info->vt_type);
     if (is_signed_vt(info->vt_type)) {
         parsed = parse_zig_zag(state, value, &sign);
     } else {
@@ -277,8 +239,6 @@ size_t parse_varint(parse_state_t* const state, field_info_t* const info) {
             state->factories,
             bytes_cstr(info->pytype),
             APR_HASH_KEY_STRING);
-        printf("found enum factory: %p for: %s\n", factory, bytes_cstr(state->pytype));
-        print_obj("enum ctor: %s\n", factory->ctor);
         state->out = PyObject_CallFunctionObjArgs(
             factory->ctor,
             state->out,
@@ -335,7 +295,6 @@ void init_substate(
     substate->len = length;
     substate->factories = parent->factories;
     substate->pytype = info->pytype;
-    printf("substate->pytype: %s, %d\n", bytes_cstr(substate->pytype), (int)length);
     substate->is_field = false;
     substate->mp = parent->mp;
 }
@@ -374,11 +333,9 @@ size_t parse_length_delimited(parse_state_t* const state, field_info_t* const in
             break;
         case vt_repeated:
             init_substate(&substate, state, bytes, length, info);
-            printf("parsing repeated\n");
             state->out = parse_repeated(&substate, info);
             break;
         case vt_map:
-            printf("parsing map\n");
             init_substate(&substate, state, bytes, length, info);
             state->out = parse_map(&substate, info);
             break;
@@ -513,7 +470,6 @@ void resolve_type(parse_state_t* const state, byte* pytype, vt_type_t* vttype) {
     }
     if (*vttype == vt_default) {
         *vttype = vt_error;
-        print_factories(state->factories);
         PyErr_Format(
             PyExc_TypeError,
             "No definition for type: %s", bytes_cstr(pytype));
@@ -535,7 +491,6 @@ PyObject* parse_message(parse_state_t* const state) {
 
     while (state->pos < state->len) {
         i = state->pos;
-        printf("message position: %d\n", (int)i);
         if (read_key) {
             value[0] = value[1] = 0;
             parse_varint_impl(state, value);
@@ -555,7 +510,6 @@ PyObject* parse_message(parse_state_t* const state) {
             } else if (info->vt_type == vt_repeated) {
                 resolve_type(state, info->pytype, &info->extra_type_info.elt);
             } else if (info->vt_type == vt_map) {
-                resolve_type(state, info->pytype, &info->extra_type_info.pair.key);
                 resolve_type(
                     state,
                     info->extra_type_info.pair.pyval,
@@ -602,8 +556,6 @@ PyObject* parse_message(parse_state_t* const state) {
             } else {
                 PyObject* val = apr_hash_get(fields, &state->field, sizeof(size_t));
                 if (val && PyList_CheckExact(val)) {
-                    print_obj("appending to existing length-delimited: %s ", state->out);
-                    printf("to field: %zu of %s\n", state->field, bytes_cstr(state->pytype));
                     PyList_Append(val, PyList_GetItem(state->out, 0));
                     Py_DECREF(state->out);
                 } else if (val && PyDict_CheckExact(val)) {
@@ -613,8 +565,6 @@ PyObject* parse_message(parse_state_t* const state) {
                     size_t* key = apr_palloc(state->mp, sizeof(size_t));
                     *key = state->field;
                     apr_hash_set(fields, key, sizeof(size_t), state->out);
-                    print_obj("adding new length-delimited: %s ", state->out);
-                    printf("to field: %zu of %s\n", state->field, bytes_cstr(state->pytype));
                 }
             }
         }
@@ -707,10 +657,7 @@ PyObject* parse_repeated(parse_state_t* const state, field_info_t* const info) {
     rinfo.vt_type = info->extra_type_info.elt;
     rinfo.pytype = info->pytype;
 
-    printf("parse_repeated: rtype: %d, pytype: %s\n", rinfo.vt_type, bytes_cstr(info->pytype));
-
     if (is_scalar(rinfo.vt_type)) {
-        printf("parsing repeated scalar: %s\n", bytes_cstr(info->pytype));
         parse_handler ph;
 
         switch (wiretype_of(rinfo.vt_type)) {
@@ -738,7 +685,6 @@ PyObject* parse_repeated(parse_state_t* const state, field_info_t* const info) {
     } else if (rinfo.vt_type == vt_string) {
         subresult = PyUnicode_FromStringAndSize((char*)state->in, (Py_ssize_t)state->len);
         PyList_Append(result, subresult);
-        print_obj("Parsing repeated string: %s\n", result);
         Py_DECREF(subresult);
     } else if (rinfo.vt_type == vt_bytes) {
         subresult = PyBytes_FromStringAndSize((char*)state->in, (Py_ssize_t)state->len);
@@ -754,6 +700,5 @@ PyObject* parse_repeated(parse_state_t* const state, field_info_t* const info) {
         PyList_Append(result, subresult);
         Py_DECREF(subresult);
     }
-    print_obj("parsed repeated: %s\n", result);
     return result;
 }

@@ -94,7 +94,6 @@ add_field_info(
     apr_pool_t* mp) {
 
     field_info_t* info = apr_palloc(mp, sizeof(field_info_t));
-    printf("mapping %s %zu -> %zu\n", bytes_cstr(field_type), field_num, idx);
     info->n = idx;
     byte* pytype = apr_palloc(mp, str_size(field_type) + 2);
     memcpy(pytype, field_type, str_size(field_type) + 2);
@@ -146,8 +145,8 @@ message_desc(
     size_t* idx;
     field_info_t* info;
     list kv_type;
+    size_t* key;
 
-    printf("message_desc for: %s\n", bytes_cstr(ftype));
     while (!null(head)) {
         field = car(head);
         field_ast = SIZE_VAL(field);
@@ -162,7 +161,7 @@ message_desc(
                     add_field_info(field_type, field_num, *idx, mapping, mp);
                 } else {
                     add_field_info(field_type, field_num, field_idx, mapping, mp);
-                    size_t* key = apr_palloc(mp, sizeof(size_t));
+                    key = apr_palloc(mp, sizeof(size_t));
                     *key = field_idx;
                     apr_hash_set(fields, field_name, str_size(field_name) + 2, key);
 
@@ -171,9 +170,11 @@ message_desc(
                 }
                 break;
             case ast_repeated:
+                key = apr_palloc(mp, sizeof(size_t));
+                *key = field_idx;
                 field_type = STR_VAL(cdr(field));
                 info = add_field_info(field_type, field_num, field_idx, mapping, mp);
-                apr_hash_set(fields, field_name, str_size(field_name) + 2, (void*)1);
+                apr_hash_set(fields, field_name, str_size(field_name) + 2, key);
 
                 info->vt_type = vt_repeated;
                 info->extra_type_info.elt = vt_default;
@@ -182,10 +183,12 @@ message_desc(
                 field_idx++;
                 break;
             case ast_map:
+                key = apr_palloc(mp, sizeof(size_t));
+                *key = field_idx;
                 kv_type = LIST_VAL(cdr(field));
                 field_type = empty;
                 info = add_field_info(field_type, field_num, field_idx, mapping, mp);
-                apr_hash_set(fields, field_name, str_size(field_name) + 2, (void*)1);
+                apr_hash_set(fields, field_name, str_size(field_name) + 2, key);
 
                 info->vt_type = vt_map;
                 info->extra_type_info.pair.key = (vt_type_t)SIZE_VAL(kv_type);
