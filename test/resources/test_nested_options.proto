@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+service SomeService {
+    rpc SomeMethod (Whatever) returns (Whatever) {
+        option (google.api.http) = {
+            delete : "/some/url"
+            additional_bindings {
+                delete: "/another/url"
+            }
+        };
+    }
+}

@@ -11,8 +11,8 @@ OBJECTS := $(SOURCES:.c=.o)
 YACC_GENERATED := $(YACC_SOURCES:.y=.tab.c)
 LEX_GENERATED := $(LEX_SOURCES:.l=.lex.c)
 CFLAGS := -fno-diagnostics-color -Wall -Wno-unused-function -I. -fPIC -g3
-PYCFLAGS := $(shell python3.5-config --cflags)
-PYCLDFLAGS := $(shell python3.5-config --ldflags)
+PYCFLAGS := $(shell python3.6-config --cflags)
+PYCLDFLAGS := $(shell python3.6-config --ldflags)
 PROGRAM := protopy
 
 default: program

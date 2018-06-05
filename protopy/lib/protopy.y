@@ -207,7 +207,8 @@ literal : NEGINTEGER { MAYBE_ABORT; $$ = from_ints(1, atoi($1)); }
         | boolean
         | user_type ;
 
-option_kv : identifier ':' literal { $$ = NULL; } ;
+option_kv : identifier ':' literal { $$ = NULL; }
+          | option_name '{' option_kvs '}' { $$ = NULL; } ;
 
 option_kvs : option_kv
            | option_kvs option_kv ;

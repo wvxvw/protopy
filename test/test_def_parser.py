@@ -93,3 +93,15 @@ def test_deep_nesting():
         actual_defcount += 1
 
     assert defcount == actual_defcount
+
+
+def test_nested_otpions():
+    roots = [
+        pkg_resources.resource_filename(__name__, './resources')
+    ]
+    test_proto = pkg_resources.resource_filename(
+        __name__,
+        './resources/test_nested_options.proto',
+    )
+    parser = DefParser(roots)
+    parser.parse(test_proto)
