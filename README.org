@@ -1,0 +1,48 @@
+* About
+  This project is an attempt to re-implement Protocol Buffers parser
+  (both sources and binary) as a C extension for Python.
+
+  Only Version 3 of Protocol Buffers is and will be supported.  Only
+  Python 3 is and possibly future version will be supported.
+
+  Unfortunately, =protoc=, the official implementation of Protocol
+  Buffers accepts a lot more than the sepcification allows, in
+  particular, it accepts virtually any Protobuf v2 syntax in Protobuf
+  v3 source files.  This implementation tries to match this behavior.
+
+** Note
+   Imports are resolved differently in this implementation and in
+   =protoc=: this implementation allows parsing source files in
+   parallel, however, this resolves certain edge cases of =import=
+   statements differently from how =protoc= does it.  This is as
+   intended.
+
+** What's Different?
+   Protobuf was initially written for C++, where run-time code
+   generation is problematic.  When C++ approach was copied into other
+   languages, it may or may not have made sense there.  In particular,
+   in Python, having generated Python code for parsing messages
+   doesn't make much sense.  This is why this implementation doesn't
+   create descriptors and Python sources doing the deserialization.
+   All you need is to point the parser to the Protobuf source files.
+
+** GRPC
+   I have no plans supporting this feature, =service= and =rpc=
+   definitions are accepted by the parser but result in empty nodes.
+
+** Benchmarks
+   Planned, but haven't been done yet.
+
+* Progress
+  Many parts of the code are still of prototype quality, however, the
+  interface is more or less stable.
+
+** Priority Tasks
+   - Memory (de)allocation needs to be:
+     1. Done from APR pools.
+     2. More fine-grained pools.
+   - Naming needs work, some names use inconsistent conventions.
+   - Const correctness.  A lot of code lacks this.
+   - Revise how arguments are supplied to message constructors, maybe
+     we can shave some fat there by creating a tuple right away rather
+     than collecting them into a hash-table and then into a tuple.
