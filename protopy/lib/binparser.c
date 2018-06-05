@@ -97,7 +97,6 @@ PyObject* make_state(PyObject* self, PyObject* args) {
     parse_state_t* state = malloc(sizeof(parse_state_t));
     state->pos = 0;
     state->out = Py_None;
-    state->is_field = false;
     state->pytype = cstr_bytes(pytype);
     state->factories = factories;
     state->factory = NULL;
@@ -295,7 +294,6 @@ void init_substate(
     substate->len = length;
     substate->factories = parent->factories;
     substate->pytype = info->pytype;
-    substate->is_field = false;
     substate->mp = parent->mp;
 }
 

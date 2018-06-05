@@ -24,7 +24,6 @@ typedef struct {
     int64_t len;
     size_t field;
     unsigned char* in;
-    bool is_field;
     apr_hash_t* factories;
     apr_pool_t* mp;
     factory_t* factory;
