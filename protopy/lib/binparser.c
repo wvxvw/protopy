@@ -163,50 +163,6 @@ bool is_signed_vt(vt_type_t vt) {
     return vt == vt_sing32 || vt == vt_sing64;
 }
 
-PyObject* tuple_from_dict(factory_t* factory, apr_hash_t* values) {
-    apr_hash_index_t* hi;
-    void* val;
-    const void* key;
-    apr_pool_t* mp = apr_hash_pool_get(values);
-    size_t max = 0;
-    PyObject* result;
-
-    for (hi = apr_hash_first(mp, factory->mapping); hi; hi = apr_hash_next(hi)) {
-        apr_hash_this(hi, &key, NULL, &val);
-        field_info_t* info = (field_info_t*)val;
-        if (max <= info->n) {
-            max = info->n + 1;
-        }
-    }
-    if (max == 0) {
-        result = PyObject_Call(factory->ctor, PyTuple_New(0), NULL);
-        if (result) {
-            Py_INCREF(result);
-            return result;
-        }
-    }
-
-    PyObject* args = PyTuple_New(max);
-
-    while (max > 0) {
-        max--;
-        Py_INCREF(Py_None);
-        PyTuple_SetItem(args, max, Py_None);
-    }
-
-    for (hi = apr_hash_first(mp, values); hi; hi = apr_hash_next(hi)) {
-        apr_hash_this(hi, &key, NULL, &val);
-        field_info_t* info = apr_hash_get(factory->mapping, key, sizeof(size_t));
-        PyTuple_SetItem(args, info->n, val);
-    }
-
-    result = PyObject_Call(factory->ctor, args, NULL);
-    if (result) {
-        Py_INCREF(result);
-    }
-    return result;
-}
-
 size_t parse_varint(parse_state_t* const state, const field_info_t* const info) {
     uint64_t value[2] = { 0, 0 };
     bool sign = false;
@@ -474,9 +430,38 @@ void resolve_type(parse_state_t* const state, const byte* pytype, vt_type_t* vtt
     }
 }
 
+PyObject* prepare_args(parse_state_t* const state) {
+    factory_t* factory = state->factory;
+    apr_hash_index_t* hi;
+    void* val;
+    const void* key;
+    size_t max = 0;
+
+    for (hi = apr_hash_first(state->mp, factory->mapping); hi; hi = apr_hash_next(hi)) {
+        apr_hash_this(hi, &key, NULL, &val);
+        field_info_t* info = (field_info_t*)val;
+        if (max <= info->n) {
+            max = info->n + 1;
+        }
+    }
+
+    PyObject* result = PyTuple_New(max);
+
+    while (max > 0) {
+        max--;
+        Py_INCREF(Py_None);
+        PyTuple_SetItem(result, max, Py_None);
+    }
+    return result;
+}
+
+size_t field_to_arg(parse_state_t* const state) {
+    size_t* key = apr_hash_get(state->factory->mapping, &state->field, sizeof(size_t));
+    return *key;
+}
+
 PyObject* parse_message(parse_state_t* const state) {
     int64_t i;
-    apr_hash_t* fields = apr_hash_make(state->mp);
     bool read_key = true;
     uint64_t value[2] = { 0, 0 };
     size_t wiretype = 0;
@@ -486,6 +471,8 @@ PyObject* parse_message(parse_state_t* const state) {
         state->factories,
         bytes_cstr(state->pytype),
         APR_HASH_KEY_STRING);
+
+    PyObject* fields = prepare_args(state);
 
     while (state->pos < state->len) {
         i = state->pos;
@@ -547,12 +534,11 @@ PyObject* parse_message(parse_state_t* const state) {
             break;
         }
         if (!read_key) {
+            size_t key = field_to_arg(state);
             if (wiretype != 2) {
-                size_t* key = apr_palloc(state->mp, sizeof(size_t));
-                *key = state->field;
-                apr_hash_set(fields, key, sizeof(size_t), state->out);
+                PyTuple_SetItem(fields, key, state->out);
             } else {
-                PyObject* val = apr_hash_get(fields, &state->field, sizeof(size_t));
+                PyObject* val = PyTuple_GetItem(fields, key);
                 if (val && PyList_CheckExact(val)) {
                     PyList_Append(val, PyList_GetItem(state->out, 0));
                     Py_DECREF(state->out);
@@ -560,9 +546,7 @@ PyObject* parse_message(parse_state_t* const state) {
                     PyDict_Update(val, state->out);
                     Py_DECREF(state->out);
                 } else {
-                    size_t* key = apr_palloc(state->mp, sizeof(size_t));
-                    *key = state->field;
-                    apr_hash_set(fields, key, sizeof(size_t), state->out);
+                    PyTuple_SetItem(fields, key, state->out);
                 }
             }
         }
@@ -571,7 +555,10 @@ PyObject* parse_message(parse_state_t* const state) {
     if (PyErr_Occurred()) {
         return NULL;
     }
-    state->out = tuple_from_dict(state->factory, fields);
+    state->out = PyObject_Call(state->factory->ctor, fields, NULL);
+    if (state->out) {
+        Py_INCREF(state->out);
+    }
     return state->out;
 }
 
