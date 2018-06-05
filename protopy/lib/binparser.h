@@ -36,7 +36,7 @@ int64_t state_get_available(parse_state_t* const);
 
 vt_type_t state_get_repeated_type(parse_state_t* const);
 
-size_t state_read(parse_state_t* const, unsigned char**, size_t);
+size_t state_read(parse_state_t* const, const unsigned char**, size_t);
 
 size_t parse_varint(parse_state_t* const, const field_info_t* const);
 

@@ -105,7 +105,7 @@ PyObject* make_state(PyObject* self, PyObject* args) {
     return PyCapsule_New(state, NULL, free_state);
 }
 
-size_t state_read(parse_state_t* const state, unsigned char** buf, size_t n) {
+size_t state_read(parse_state_t* const state, const unsigned char** buf, size_t n) {
     *buf = &state->in[state->pos];
     if (state->len >= state->pos + (int64_t)n) {
         state->pos += (int64_t)n;
@@ -116,7 +116,7 @@ size_t state_read(parse_state_t* const state, unsigned char** buf, size_t n) {
 }
 
 size_t parse_varint_impl(parse_state_t* const state, uint64_t value[2]) {
-    unsigned char* buf = NULL;
+    const unsigned char* buf;
     unsigned char current;
     size_t bytes_read = 0;
     size_t read = 0;
@@ -201,7 +201,7 @@ size_t parse_varint(parse_state_t* const state, const field_info_t* const info) 
 
 size_t parse_fixed_64(parse_state_t* const state, const field_info_t* const info) {
 #define FIXED_LENGTH 8
-    unsigned char* buf = NULL;
+    const unsigned char* buf;
     size_t read = state_read(state, &buf, FIXED_LENGTH);
 
     if (read < FIXED_LENGTH) {
@@ -259,7 +259,7 @@ size_t parse_length_delimited(parse_state_t* const state, const field_info_t* co
     // No reason to care for high bits, we aren't expecting strings of
     // that length anyways.
     uint64_t length = value[0];
-    unsigned char* bytes = NULL;
+    const unsigned char* bytes;
     size_t read = state_read(state, &bytes, length);
     parse_state_t substate;
 
@@ -314,7 +314,7 @@ size_t parse_end_group(parse_state_t* const state, const field_info_t* const inf
 
 size_t parse_fixed_32(parse_state_t* const state, const field_info_t* const info) {
 #define FIXED_LENGTH 4
-    unsigned char* buf = NULL;
+    const unsigned char* buf;
     size_t read = state_read(state, &buf, FIXED_LENGTH);
 
     if (read < FIXED_LENGTH) {
