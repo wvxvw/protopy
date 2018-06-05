@@ -12,8 +12,8 @@ typedef enum vt_type_t {
     vt_int64  = 1,
     vt_uint32 = 2,
     vt_uint64 = 3,
-    vt_sing32 = 4,
-    vt_sing64 = 5,
+    vt_sint32 = 4,
+    vt_sint64 = 5,
     vt_bool   = 6,
     vt_enum   = 7,
     // 64 bit

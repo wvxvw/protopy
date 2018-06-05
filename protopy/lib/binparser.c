@@ -22,8 +22,8 @@ static builtin_type_t builtin_types[BUILTIN_TYPES] = {
     {(unsigned char*)"int64"    , vt_int64},
     {(unsigned char*)"sfixed32" , vt_sfixed32},
     {(unsigned char*)"sfixed64" , vt_sfixed64},
-    {(unsigned char*)"sint32"   , vt_sing32},
-    {(unsigned char*)"sint64"   , vt_sing64},
+    {(unsigned char*)"sint32"   , vt_sint32},
+    {(unsigned char*)"sint64"   , vt_sint64},
     {(unsigned char*)"string"   , vt_string},
     {(unsigned char*)"uint32"   , vt_uint32},
     {(unsigned char*)"uint64"   , vt_uint64},
@@ -156,7 +156,7 @@ size_t parse_zig_zag(parse_state_t* const state, uint64_t value[2], bool* is_neg
 }
 
 bool is_signed_vt(vt_type_t vt) {
-    return vt == vt_sing32 || vt == vt_sing64;
+    return vt == vt_sint32 || vt == vt_sint64;
 }
 
 size_t parse_varint(parse_state_t* const state, const field_info_t* const info) {
