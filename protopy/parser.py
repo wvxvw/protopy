@@ -19,6 +19,12 @@ from protopy.wrapped import (
 )
 
 
+def ensure_bytes(s):
+    if isinstance(s, bytes):
+        return s
+    return str(s).encode('utf-8')
+
+
 class DefParser:
 
     def __init__(
@@ -30,7 +36,7 @@ class DefParser:
     ):
         self.enum_ctor = enum_ctor
         self.message_ctor = message_ctor
-        self.roots = list(set([str(r).encode('utf-8') for r in roots]))
+        self.roots = list(set([ensure_bytes(r) for r in roots]))
         self.files = {}
         if mp:
             self.mp = mp
