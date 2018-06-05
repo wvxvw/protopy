@@ -58,7 +58,7 @@ typedef struct _factory {
     PyObject* ctor;
 } factory_t;
 
-void extract_type_name(const byte*, char**, char**);
+void extract_type_name(const byte*, apr_pool_t*, char**, char**);
 
 void
 enum_desc(

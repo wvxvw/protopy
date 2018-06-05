@@ -105,7 +105,7 @@ static PyObject* apr_hash_get_kv(PyObject* self, PyObject* args) {
         return NULL;
     }
     void* maybe_hi = PyCapsule_GetPointer(capsule, NULL);
-    if (!maybe_hi || maybe_hi == 0xdeadbeef) {
+    if (!maybe_hi || maybe_hi == (void*)0xdeadbeef) {
         PyErr_SetString(PyExc_StopIteration, "");
         return NULL;
     }

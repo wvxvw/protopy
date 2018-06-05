@@ -7,24 +7,47 @@
 #include "descriptors.h"
 #include "pyhelpers.h"
 
+byte* replace_str(const byte* s, byte a, byte b, apr_pool_t* mp) {
+    size_t i = str_size(s) + 2;
+    byte* result = apr_palloc(mp, i * sizeof(byte));
+
+    result[0] = s[0];
+    result[1] = s[1];
+    while (i > 2) {
+        i--;
+        if (s[i] == a) {
+            result[i] = b;
+        } else {
+            result[i] = s[i];
+        }
+    }
+    return result;
+}
+
 void extract_type_name(
     const byte* tname,
+    apr_pool_t* mp,
     char** pname,
     char** package) {
 
     size_t len = str_size(tname) + 2;
     size_t i = len;
 
+    char* extracted_name;
+    char* extracted_package;
+
     while (i > 0) {
         i--;
         if (tname[i] == '.' || tname[i] == ':') {
-            *package = malloc((i - 2) * sizeof(char));
-            memcpy(*package, tname + 2, (i - 2));
-            (*package)[i - 2] = '\0';
+            extracted_package = apr_palloc(mp, (i - 2) * sizeof(char));
+            memcpy(extracted_package, tname + 2, (i - 2));
+            extracted_package[i - 2] = '\0';
 
-            *pname = malloc((len - i - 1) * sizeof(char));
-            memcpy(*pname, tname + i + 1, (len - i - 1));
-            (*pname)[len - i - 1] = '\0';
+            extracted_name = apr_palloc(mp, (len - i - 1) * sizeof(char));
+            memcpy(extracted_name, tname + i + 1, (len - i - 1));
+            extracted_name[len - i - 1] = '\0';
+            *pname = extracted_name;
+            *package = extracted_package;
             return;
         }
     }
@@ -42,7 +65,7 @@ enum_desc(
 
     // TODO(olegs): In the future... we will allocate strings fro APR
     // pools, so managing their memory will be easier.
-    const byte* norm_ftype = replace_str(ftype, ':', '.');
+    byte* norm_ftype = replace_str(ftype, ':', '.', mp);
     // TODO(olegs): Maybe check if we already registered this type?
 
     size_t i = 0;
@@ -135,7 +158,7 @@ message_desc(
     apr_hash_t* const keywords,
     apr_pool_t* const mp) {
 
-    byte* norm_ftype = replace_str(ftype, ':', '.');
+    byte* norm_ftype = replace_str(ftype, ':', '.', mp);
     PyObject* fields_list = PyList_New(0);
     apr_hash_t* fields = apr_hash_make(mp);
     apr_hash_t* mapping = apr_hash_make(mp);
@@ -215,9 +238,7 @@ message_desc(
     char* name;
     char* package;
 
-    extract_type_name(norm_ftype, &name, &package);
-
-    printf("package+name: %s : %s\n", package, name);
+    extract_type_name(norm_ftype, mp, &name, &package);
 
     PyObject* ctor = PyObject_CallFunctionObjArgs(
         message_ctor,
@@ -237,7 +258,6 @@ message_desc(
     factory->mapping = mapping;
     factory->ctor = ctor;
 
-    printf("adding definition %s -> %s\n", bytes_cstr(ftype), bytes_cstr(norm_ftype));
     apr_hash_set(factories, bytes_cstr(norm_ftype), APR_HASH_KEY_STRING, factory);
 }
 

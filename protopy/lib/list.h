@@ -133,8 +133,6 @@ char* bytes_cstr(const byte*);
 
 byte* join_bytes(const byte*, const char, const byte*, bool);
 
-byte* replace_str(const byte* s, byte, byte);
-
 extern byte empty[2];
 
 #endif // LIST_H_
