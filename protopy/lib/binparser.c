@@ -235,9 +235,9 @@ size_t parse_fixed_64(parse_state_t* const state, const field_info_t* const info
 }
 
 void init_substate(
-    parse_state_t* substate,
-    parse_state_t* parent,
-    unsigned char* bytes,
+    parse_state_t* const substate,
+    parse_state_t* const parent,
+    const unsigned char* bytes,
     uint64_t length,
     const field_info_t* const info) {
 

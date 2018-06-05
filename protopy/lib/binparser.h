@@ -22,7 +22,7 @@ typedef struct {
     int64_t pos;
     int64_t len;
     size_t field;
-    unsigned char* in;
+    const unsigned char* in;
     apr_hash_t* factories;
     apr_pool_t* mp;
     factory_t* factory;
