@@ -18,7 +18,6 @@ wiretype_t wiretype_of(vt_type_t);
 
 bool is_scalar(vt_type_t);
 
-
 typedef struct {
     int64_t pos;
     int64_t len;
@@ -27,11 +26,11 @@ typedef struct {
     apr_hash_t* factories;
     apr_pool_t* mp;
     factory_t* factory;
-    byte* pytype;
+    const byte* pytype;
     PyObject* out;
 } parse_state_t;
 
-typedef size_t (*parse_handler)(parse_state_t* const, field_info_t* const);
+typedef size_t (*parse_handler)(parse_state_t* const, const field_info_t* const);
 
 int64_t state_get_available(parse_state_t* const);
 
@@ -39,23 +38,23 @@ vt_type_t state_get_repeated_type(parse_state_t* const);
 
 size_t state_read(parse_state_t* const, unsigned char**, size_t);
 
-size_t parse_varint(parse_state_t* const, field_info_t* const);
+size_t parse_varint(parse_state_t* const, const field_info_t* const);
 
-size_t parse_fixed_64(parse_state_t* const, field_info_t* const);
+size_t parse_fixed_64(parse_state_t* const, const field_info_t* const);
 
-size_t parse_length_delimited(parse_state_t* const, field_info_t* const);
+size_t parse_length_delimited(parse_state_t* const, const field_info_t* const);
 
-size_t parse_start_group(parse_state_t* const, field_info_t* const);
+size_t parse_start_group(parse_state_t* const, const field_info_t* const);
 
-size_t parse_end_group(parse_state_t* const, field_info_t* const);
+size_t parse_end_group(parse_state_t* const, const field_info_t* const);
 
-size_t parse_fixed_32(parse_state_t* const, field_info_t* const);
+size_t parse_fixed_32(parse_state_t* const, const field_info_t* const);
 
 PyObject* parse_message(parse_state_t* const);
 
-PyObject* parse_repeated(parse_state_t* const, field_info_t* const);
+PyObject* parse_repeated(parse_state_t* const, const field_info_t* const);
 
-PyObject* parse_map(parse_state_t* const, field_info_t* const);
+PyObject* parse_map(parse_state_t* const, const field_info_t* const);
 
 PyObject* make_state(PyObject*, PyObject*);
 
@@ -63,7 +62,7 @@ PyObject* state_ready(PyObject*, PyObject*);
 
 PyObject* state_result(PyObject*, PyObject*);
 
-void resolve_type(parse_state_t* const, byte*, vt_type_t*);
+void resolve_type(parse_state_t* const, const byte*, vt_type_t*);
 
 typedef struct _builtin_type {
     const unsigned char* name;
@@ -72,6 +71,6 @@ typedef struct _builtin_type {
 
 #define BUILTIN_TYPES 16
 
-vt_type_t vt_builtin(byte*);
+vt_type_t vt_builtin(const byte*);
 
 #endif // BINPARSER_H_

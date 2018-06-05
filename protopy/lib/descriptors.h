@@ -48,7 +48,7 @@ typedef union _type_info {
 typedef struct _field_info {
     size_t n;
     vt_type_t vt_type;
-    byte* pytype;
+    const byte* pytype;
     type_info_t extra_type_info;
 } field_info_t;
 

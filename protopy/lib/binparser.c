@@ -207,7 +207,7 @@ PyObject* tuple_from_dict(factory_t* factory, apr_hash_t* values) {
     return result;
 }
 
-size_t parse_varint(parse_state_t* const state, field_info_t* const info) {
+size_t parse_varint(parse_state_t* const state, const field_info_t* const info) {
     uint64_t value[2] = { 0, 0 };
     bool sign = false;
     size_t parsed;
@@ -247,7 +247,7 @@ size_t parse_varint(parse_state_t* const state, field_info_t* const info) {
     return parsed;
 }
 
-size_t parse_fixed_64(parse_state_t* const state, field_info_t* const info) {
+size_t parse_fixed_64(parse_state_t* const state, const field_info_t* const info) {
 #define FIXED_LENGTH 8
     unsigned char* buf = NULL;
     size_t read = state_read(state, &buf, FIXED_LENGTH);
@@ -287,7 +287,7 @@ void init_substate(
     parse_state_t* parent,
     unsigned char* bytes,
     uint64_t length,
-    field_info_t* info) {
+    const field_info_t* const info) {
 
     substate->pos = 0;
     substate->in = bytes;
@@ -297,7 +297,7 @@ void init_substate(
     substate->mp = parent->mp;
 }
 
-size_t parse_length_delimited(parse_state_t* const state, field_info_t* const info) {
+size_t parse_length_delimited(parse_state_t* const state, const field_info_t* const info) {
     uint64_t value[2] = { 0, 0 };
     size_t parsed = parse_varint_impl(state, value);
 
@@ -350,17 +350,17 @@ size_t parse_length_delimited(parse_state_t* const state, field_info_t* const in
     return parsed + read;
 }
 
-size_t parse_start_group(parse_state_t* const state, field_info_t* const info) {
+size_t parse_start_group(parse_state_t* const state, const field_info_t* const info) {
     PyErr_SetString(PyExc_NotImplementedError, "Proto v2 not supported");
     return 0;
 }
 
-size_t parse_end_group(parse_state_t* const state, field_info_t* const info) {
+size_t parse_end_group(parse_state_t* const state, const field_info_t* const info) {
     PyErr_SetString(PyExc_NotImplementedError, "Proto v2 not supported");
     return 0;
 }
 
-size_t parse_fixed_32(parse_state_t* const state, field_info_t* const info) {
+size_t parse_fixed_32(parse_state_t* const state, const field_info_t* const info) {
 #define FIXED_LENGTH 4
     unsigned char* buf = NULL;
     size_t read = state_read(state, &buf, FIXED_LENGTH);
@@ -422,7 +422,7 @@ bool is_scalar(vt_type_t vt) {
     }
 }
 
-vt_type_t vt_builtin(byte* type) {
+vt_type_t vt_builtin(const byte* type) {
     size_t len = BUILTIN_TYPES;
     size_t i = len >> 1;
     size_t tlen = str_size(type) + 2;
@@ -455,7 +455,7 @@ vt_type_t vt_builtin(byte* type) {
     return vt_default;
 }
 
-void resolve_type(parse_state_t* const state, byte* pytype, vt_type_t* vttype) {
+void resolve_type(parse_state_t* const state, const byte* pytype, vt_type_t* vttype) {
     *vttype = vt_builtin(pytype);
     if (*vttype == vt_default) {
         factory_t* f = apr_hash_get(
@@ -575,7 +575,7 @@ PyObject* parse_message(parse_state_t* const state) {
     return state->out;
 }
 
-PyObject* parse_map(parse_state_t* const state, field_info_t* info) {
+PyObject* parse_map(parse_state_t* const state, const field_info_t* info) {
     PyObject* result = PyDict_New();
     uint64_t val[2] = { 0, 0 };
     
@@ -646,7 +646,7 @@ PyObject* parse_map(parse_state_t* const state, field_info_t* info) {
     return result;
 }
 
-PyObject* parse_repeated(parse_state_t* const state, field_info_t* const info) {
+PyObject* parse_repeated(parse_state_t* const state, const field_info_t* const info) {
     int64_t i = 0;
     size_t j = 0;
     PyObject* result = PyList_New(0);
@@ -654,7 +654,7 @@ PyObject* parse_repeated(parse_state_t* const state, field_info_t* const info) {
     field_info_t rinfo;
     rinfo.n = info->n;
     rinfo.vt_type = info->extra_type_info.elt;
-    rinfo.pytype = info->pytype;
+    *(const byte**)(&rinfo.pytype) = info->pytype;
 
     if (is_scalar(rinfo.vt_type)) {
         parse_handler ph;
