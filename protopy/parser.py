@@ -55,7 +55,7 @@ class DefParser:
         return apr_hash_contains(self.defs, str(definition).encode('utf-8'))
 
     def parse(self, source, force=False):
-        source = str(source).encode('utf-8')
+        source = ensure_bytes(source)
         if source not in self.files or force:
             apr_update_hash(
                 self.defs,
