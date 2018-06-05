@@ -634,10 +634,12 @@ PyObject* parse_repeated(parse_state_t* const state, const field_info_t* const i
     size_t j = 0;
     PyObject* result = PyList_New(0);
     PyObject* subresult;
-    field_info_t rinfo;
-    rinfo.n = info->n;
-    rinfo.vt_type = info->extra_type_info.elt;
-    *(const byte**)(&rinfo.pytype) = info->pytype;
+    field_info_t rinfo = {
+        info->n,
+        info->extra_type_info.elt,
+        info->pytype,
+        { }
+    };
 
     if (is_scalar(rinfo.vt_type)) {
         parse_handler ph;
