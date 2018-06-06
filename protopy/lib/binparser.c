@@ -169,16 +169,20 @@ size_t parse_varint(parse_state_t* const state, const field_info_t* const info) 
     } else {
         parsed = parse_varint_impl(state, value);
     }
+    if (PyErr_Occurred()) {
+        return parsed;
+    }
     PyObject* low = PyLong_FromUnsignedLongLong((unsigned long long)value[0]);
-    
+
+    // TODO(olegs): This part requires testing
     if (value[1] > 0) {
         PyObject* high = PyLong_FromUnsignedLongLong((unsigned long long)value[1]);
         PyObject* shift = PyLong_FromLong(64L);
         PyObject* high_shifted = PyNumber_Lshift(high, shift);
+        state->out = PyNumber_Or(low, high_shifted);
         Py_DECREF(low);
         Py_DECREF(high);
         Py_DECREF(shift);
-        state->out = PyNumber_Or(low, high_shifted);
     } else {
         state->out = low;
     }
@@ -190,12 +194,15 @@ size_t parse_varint(parse_state_t* const state, const field_info_t* const info) 
             state->factories,
             bytes_cstr(info->pytype),
             APR_HASH_KEY_STRING);
+        Py_INCREF(factory->ctor);
         state->out = PyObject_CallFunctionObjArgs(
             factory->ctor,
             state->out,
             NULL);
     }
-    Py_INCREF(state->out);
+    if (state->out) {
+        Py_INCREF(state->out);
+    }
     return parsed;
 }
 
@@ -551,6 +558,7 @@ PyObject* parse_message(parse_state_t* const state) {
     if (PyErr_Occurred()) {
         return NULL;
     }
+    Py_INCREF(state->factory->ctor);
     state->out = PyObject_Call(state->factory->ctor, fields, NULL);
     if (state->out) {
         Py_INCREF(state->out);
