@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from protopy.parser import BinParser
+from protopy.parser import BinParser, simple_enum
 from subprocess import Popen, PIPE
 
 import pkg_resources
@@ -93,6 +93,25 @@ def test_enum():
     print('result: {}'.format(result))
     TestEnum = type(result.test_1)
     assert result.test_1 == TestEnum['TEST_MEMBER_3']
+
+
+def test_simple_enum():
+    roots, test_proto, content = generate_proto_binary(
+        'test_enum.proto',
+        b'''test_1: 33
+            test_2: 2
+            test_3: 0
+            test_4: 5
+        ''',
+    )
+    print('generated proto message: {}'.format(content))
+
+    parser = BinParser(roots)
+    parser.def_parser.enum_ctor = simple_enum
+    result = parser.parse(test_proto, 'Test', content)
+
+    print('result: {}'.format(result))
+    assert result.test_1 == 'TestEnum.TEST_MEMBER_3'
 
 
 def test_repeated():

@@ -3,6 +3,7 @@
 from collections import namedtuple
 from enum import IntEnum
 from keyword import kwlist
+from os import path
 
 from protopy.wrapped import (
     proto_def_parse,
@@ -23,6 +24,15 @@ def ensure_bytes(s):
     if isinstance(s, bytes):
         return s
     return str(s).encode('utf-8')
+
+
+def simple_enum(name, fields):
+    inverse = {v: '{}.{}'.format(name, k) for k, v in fields.items()}
+
+    def ctor(n):
+        return inverse[n]
+
+    return ctor
 
 
 class DefParser:
@@ -56,19 +66,25 @@ class DefParser:
 
     def parse(self, source, force=False):
         source = ensure_bytes(source)
-        if source not in self.files or force:
-            apr_update_hash(
-                self.defs,
-                proto_def_parse(
-                    source,
-                    self.roots,
-                    self.files,
-                    self.message_ctor,
-                    self.enum_ctor,
-                    kwlist,
-                    self.mp,
-                ),
-            )
+        if not force:
+            if source in self.files:
+                return
+            for r in self.roots:
+                if path.join(r, source) in self.files:
+                    return
+
+        apr_update_hash(
+            self.defs,
+            proto_def_parse(
+                source,
+                self.roots,
+                self.files,
+                self.message_ctor,
+                self.enum_ctor,
+                kwlist,
+                self.mp,
+            ),
+        )
 
 
 class BinParser:
