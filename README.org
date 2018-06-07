@@ -46,3 +46,6 @@
    - Revise how arguments are supplied to message constructors, maybe
      we can shave some fat there by creating a tuple right away rather
      than collecting them into a hash-table and then into a tuple.
+   - Rewrite =setup.py= so that it also builds the lexer and the
+     parser (maybe, conditionally), then get rid of =main.c= and few
+     more junk files in =lib=.
