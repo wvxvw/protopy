@@ -385,6 +385,9 @@ proto_def_parse_produce(
             }
         } else {
             i = finished_thread(&progress);
+            // FIXME(olegs): Seems like we may miss a finished thread here,
+            // if both finish roughly at the same time.
+            // Plus, split this in a separate function.
             if (i < progress.nthreads) {
                 if (strcmp(thds_args[i]->error, "")) {
                     *error_message = thds_args[i]->error;
