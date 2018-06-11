@@ -715,17 +715,17 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     int res = yylex_init(&yyscanner);
     if (res) {
         args->error = strdup("Couldn't initialize scanner");
-        args->error_kind = MEMORY_ERROR;
+        args->error_kind = memory_error;
         return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
     switch (resolved_source(args->source, args->roots, &source)) {
         case 2:
             args->error = error_message_2("Must be regular file '%s'", args->source);
-            args->error_kind = FS_ERROR;
+            args->error_kind = fs_error;
             return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
         case 1:
             args->error = error_message_3("Couldn't find '%s' in '%s'", args->source, args->roots);
-            args->error_kind = FS_ERROR;
+            args->error_kind = fs_error;
             return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
 
@@ -738,7 +738,7 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
         } else {
             args->error = error_message_3("Couldn't open '%s' in '%s'", args->source, args->roots);
         }
-        args->error_kind = FS_ERROR;
+        args->error_kind = fs_error;
         return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
 
@@ -769,7 +769,7 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
 
     if (status != 0) {
         args->error = error_message_1("Couldn't parse '%s'", source);
-        args->error_kind = PARSER_ERROR;
+        args->error_kind = parser_error;
         return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
 

@@ -9,25 +9,32 @@
 
 #include "list.h"
 
-#define FS_ERROR 0
-#define PARSER_ERROR 1
-#define MEMORY_ERROR 2
-
 typedef struct parsing_progress_t {
     size_t nthreads;
     bool* thds_statuses;
     apr_thread_t** thds;
 } parsing_progress_t;
 
+typedef enum error_kind_t {
+    memory_error = 0,
+    fs_error = 1,
+    parser_error = 2
+} error_kind_t;
+
 typedef struct parse_def_args_t {
     const char* source;
     list roots;
     list result;
     char* error;
-    size_t error_kind;
+    error_kind_t error_kind;
     size_t thread_id;
     parsing_progress_t* progress;
 } parse_def_args_t;
+
+typedef struct error_info_t {
+    char* message;
+    error_kind_t kind;
+} error_info_t;
 
 // TODO(olegs): It would be better if protopy.y also used this.
 typedef enum ast_type_t {

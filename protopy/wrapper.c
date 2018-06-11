@@ -245,7 +245,7 @@ static PyObject* proto_parse(PyObject* self, PyObject* args) {
 size_t available_thread_pos(parsing_progress_t* progress) {
     size_t i = 0;
     while (i < progress->nthreads) {
-        if (!progress->thds_statuses[i]) {
+        if (!progress->thds_statuses[i] && !progress->thds[i]) {
             break;
         }
         i++;
@@ -256,7 +256,7 @@ size_t available_thread_pos(parsing_progress_t* progress) {
 size_t finished_thread(parsing_progress_t* progress) {
     size_t i = 0;
     while (i < progress->nthreads) {
-        if (!progress->thds_statuses[i] && progress->thds[i] != NULL) {
+        if (!progress->thds_statuses[i] && progress->thds[i]) {
             break;
         }
         i++;
@@ -337,7 +337,7 @@ start_defparser_thread(
 
     def_args->roots = roots;
     def_args->source = source;
-    def_args->error = "";
+    def_args->error = NULL;
     def_args->result = NULL;
     def_args->thread_id = i;
     def_args->progress = progress;
@@ -346,14 +346,54 @@ start_defparser_thread(
     apr_thread_create(&progress->thds[i], NULL, parse_one_def, def_args, mp);
 }
 
+list
+process_finished_threads(
+    parsing_progress_t* progress,
+    parse_def_args_t** thds_args,
+    apr_hash_t* defs,
+    apr_hash_t* builtins,
+    error_info_t* einfo,
+    apr_pool_t* mp) {
+
+    size_t i = finished_thread(progress);
+    list deps = nil;
+
+    if (i < progress->nthreads) {
+        if (thds_args[i]->error != NULL) {
+            einfo->message = thds_args[i]->error;
+            einfo->kind = thds_args[i]->error_kind;
+            apr_status_t rv;
+            apr_thread_join(&rv, progress->thds[i]);
+            progress->thds[i] = NULL;
+
+            size_t j;
+            for (j = 0; j < progress->nthreads; j++) {
+                if (progress->thds[j] != NULL) {
+                    apr_thread_join(&rv, progress->thds[j]);
+                }
+            }
+            return nil;
+        }
+        apr_status_t rv;
+        apr_thread_join(&rv, progress->thds[i]);
+        progress->thds[i] = NULL;
+        deps = imports(thds_args[i]->result);
+        apr_hash_t* declarations = apr_hash_make(mp);
+        list normalized = normalize_messages(thds_args[i]->result, mp);
+        collect_declarations(normalized, declarations);
+        list parsed = normalize_types(normalized, declarations, builtins, deps, mp);
+        apr_hash_set(defs, thds_args[i]->source, APR_HASH_KEY_STRING, parsed);
+    }
+    return deps;
+}
+
 static apr_hash_t*
 proto_def_parse_produce(
     list sources,
     list roots,
     size_t nthreads,
     apr_pool_t* mp,
-    char** error_message,
-    size_t* error_kind) {
+    error_info_t* einfo) {
 
     parsing_progress_t progress;
     size_t i = 0;
@@ -372,64 +412,33 @@ proto_def_parse_produce(
 
         i = available_thread_pos(&progress);
 
-        if (i < progress.nthreads && !null(sources)) {
-            while (!null(sources)) {
-                char* source = bytes_cstr(car(sources));
-                sources = cdr(sources);
-                if (!apr_hash_get(result, source, strlen(source))) {
-                    start_defparser_thread(&progress, thds_args, i, source, roots, mp);
-                    break;
-                } else {
-                    free(source);
-                }
+        while (!null(sources) && i < progress.nthreads) {
+            char* source = bytes_cstr(car(sources));
+            sources = cdr(sources);
+            if (!apr_hash_get(result, source, APR_HASH_KEY_STRING)) {
+                apr_hash_set(result, source, APR_HASH_KEY_STRING, (void*)true);
+                start_defparser_thread(&progress, thds_args, i, source, roots, mp);
+            } else {
+                free(source);
             }
-        } else {
-            i = finished_thread(&progress);
-            // FIXME(olegs): Seems like we may miss a finished thread here,
-            // if both finish roughly at the same time.
-            // Plus, split this in a separate function.
-            if (i < progress.nthreads) {
-                if (strcmp(thds_args[i]->error, "")) {
-                    *error_message = thds_args[i]->error;
-                    *error_kind = thds_args[i]->error_kind;
-                    del(sources);
-                    sources = nil;
-                    apr_status_t rv;
-                    apr_thread_join(&rv, progress.thds[i]);
-                    progress.thds[i] = NULL;
-
-                    size_t j;
-                    for (j = 0; j < progress.nthreads; j++) {
-                        if (progress.thds[j] != NULL) {
-                            apr_thread_join(&rv, progress.thds[j]);
-                        }
-                    }
-                    break;
-                }
-                apr_status_t rv;
-                apr_thread_join(&rv, progress.thds[i]);
-                progress.thds[i] = NULL;
-                list deps = imports(thds_args[i]->result);
-                list new_sources = append(sources, deps);
-                del(sources);
-                sources = new_sources;
-                apr_hash_t* declarations = apr_hash_make(mp);
-                list normalized = normalize_messages(thds_args[i]->result, mp);
-                collect_declarations(normalized, declarations);
-                apr_hash_set(
-                    result,
-                    thds_args[i]->source,
-                    strlen(thds_args[i]->source),
-                    normalize_types(
-                        normalized,
-                        declarations,
-                        builtins,
-                        deps,
-                        mp));
-                del(deps);
-            } else if (null(sources) || all_threads_busy(&progress)) {
-                apr_sleep(100);
-            }
+            i = available_thread_pos(&progress);
+        }
+        list extras = process_finished_threads(
+            &progress,
+            thds_args,
+            result,
+            builtins,
+            einfo,
+            mp);
+        if (einfo->message) {
+            del(sources);
+            break;
+        }
+        list new_sources = append(sources, extras);
+        del(sources);
+        sources = new_sources;
+        if (null(sources) || all_threads_busy(&progress)) {
+            apr_sleep(100);
         }
     }
 
@@ -496,38 +505,33 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     }
     apr_hash_t* parsed_defs;
 
-    char* error_message = NULL;
-    size_t error_kind = 0;
+    error_info_t einfo;
+    einfo.message = NULL;
     PyObject* error_class;
 
     Py_BEGIN_ALLOW_THREADS;
 
-    parsed_defs = proto_def_parse_produce(
-        cons_str(source, strlen(source), nil),
-        roots,
-        (size_t)nthreads,
-        mp,
-        &error_message,
-        &error_kind);
+    list sources = cons_str(source, strlen(source), nil);
+    parsed_defs = proto_def_parse_produce(sources, roots, (size_t)nthreads, mp, &einfo);
 
     del(roots);
 
     Py_END_ALLOW_THREADS;
 
-    if (error_message != NULL) {
-        switch (error_kind) {
-            case FS_ERROR:
+    if (einfo.message != NULL) {
+        switch (einfo.kind) {
+            case fs_error:
                 error_class = PyExc_FileNotFoundError;
                 break;
-            case PARSER_ERROR:
+            case parser_error:
                 error_class = PyExc_SyntaxError;
                 break;
             default:
                 error_class = PyExc_MemoryError;
                 break;
         }
-        PyErr_SetString(error_class, error_message);
-        free(error_message);
+        PyErr_SetString(error_class, einfo.message);
+        free(einfo.message);
         return NULL;
     }
 
