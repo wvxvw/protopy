@@ -288,13 +288,13 @@ char* mapconcat(mapconcat_fn_t fn, list elts, char* sep) {
     schunks = malloc(sizeof(char) * (total - sep_len + 1));
     total = 0;
 
-    void* val;
+    byte* val;
 
     while (!null(chunks)) {
-        val = car(chunks);
-        strcpy(schunks + total, (char*)(val + 2));
-        total += str_size((byte*)val);
-        strcpy(schunks + total, sep);
+        val = STR_VAL(chunks);
+        memcpy(schunks + total, val + 2, str_size(val));
+        total += str_size(val);
+        memcpy(schunks + total, sep, sep_len);
         total += sep_len;
         chunks = cdr(chunks);
     }

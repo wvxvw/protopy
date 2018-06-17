@@ -89,15 +89,11 @@ uint64     { return UINT64; }
 weak       { return WEAK; }
 
 [a-zA-Z_][a-zA-Z0-9_]* {
-    if (yytext) {
-        yylval->string = strdup(yytext);
-    } else {
-        yylval->string = strdup("");
-    }
+    yylval->string = strdup(yytext);
     return IDENTIFIER;
 }
 
-[(){}=\[\];:,<>\.] { return *yytext; }
+[(){}=\[\];:,<>\.] { return yytext[0]; }
 [ \n\t\r]+
 [/][*]([^*]|[*][^/])*[*][/]
 [/][/].*
