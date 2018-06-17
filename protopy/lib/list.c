@@ -31,13 +31,8 @@ list cons_str(const char* val, const size_t s, const list old) {
     byte* bval = malloc((s + 2) * sizeof(byte));
     bval[0] = (byte)(s >> 8);
     bval[1] = (byte)(s & 0xFF);
-    size_t i = 0;
 
-    while (i < s) {
-        bval[i + 2] = val[i];
-        i++;
-    }
-
+    memcpy(bval + 2, val, s);
     return cons(bval, tstr, old);
 }
 
@@ -224,24 +219,6 @@ copier copier_of(list elts) {
     return type_of(elts)->c;
 }
 
-list from_ints(size_t n, ...) {
-    va_list args;
-    va_start(args, n);
-
-    size_t i;
-    list result = nil;
-    int* pval;
-
-    for (i = 0; i < n; i++) {
-        pval = malloc(sizeof(int));
-        *pval = va_arg(args, int);
-        result = cons(pval, tint, result);
-    }
-    va_end(args);
-    
-    return result;
-}
-
 list from_strings(size_t n, ...) {
     va_list args;
     va_start(args, n);
@@ -327,24 +304,18 @@ char* mapconcat(mapconcat_fn_t fn, list elts, char* sep) {
 
 char* to_str(list elts) {
     if (null(elts)) {
-        return "nil";
+        return strdup("nil");
     }
-    char* result;
-    size_t len;
     
     switch (elts->t) {
         case tstr:
-            len = str_size((byte*)car(elts));
-            result = malloc((len + 1) * sizeof(char));
-            memcpy(result, car(elts) + 2, len);
-            result[len] = '\0';
-            return result;
+            return bytes_cstr(car(elts));
         case tint:
             return int_str(car(elts));
         case tlist:
             return str((list)car(elts));
     }
-    return "type error";
+    return strdup("type error");
 }
 
 char* str(list elts) {

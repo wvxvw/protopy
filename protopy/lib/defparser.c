@@ -495,7 +495,7 @@ void rename_extracted_types(apr_pool_t* mp, list inner, list normalized) {
 list inner_messages(list message, list* normalized, byte* prefix, apr_pool_t* mp) {
     byte* message_type = (byte*)car(message);
     size_t mt_len = str_size(message_type);
-    list processed = cons_str((char*)(message_type + 2), mt_len, from_ints(1, 0));
+    list processed = cons_str((char*)(message_type + 2), mt_len, cons_int(0, sizeof(int), nil));
     list fields = cdr(message);
     list field;
     ast_type_t field_type;

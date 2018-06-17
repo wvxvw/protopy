@@ -195,14 +195,14 @@ keyword : built_in_type
 identifier : keyword | IDENTIFIER ;
 
 
-boolean : BOOL_TRUE { MAYBE_ABORT; $$ = from_ints(1, 1); }
-        | BOOL_FALSE { MAYBE_ABORT; $$ = from_ints(1, 0); };
+boolean : BOOL_TRUE { MAYBE_ABORT; $$ = cons_int(1, sizeof(int), nil); }
+        | BOOL_FALSE { MAYBE_ABORT; $$ = cons_int(0, sizeof(int), nil); };
 
 
 positive_int : POSINTEGER { MAYBE_ABORT; $$ = (size_t)atoi($1); } ;
 
-literal : NEGINTEGER { MAYBE_ABORT; $$ = from_ints(1, atoi($1)); }
-        | positive_int { MAYBE_ABORT; $$ = from_ints(1, $1); }
+literal : NEGINTEGER { MAYBE_ABORT; $$ = cons_int(atoi($1), sizeof(int), nil); }
+        | positive_int { MAYBE_ABORT; $$ = cons_int($1, sizeof(int), nil); }
         | string_literal
         | boolean
         | user_type ;
@@ -238,7 +238,7 @@ field_label : REQUIRED { MAYBE_ABORT; $$ = 1; }
 field : field_label type identifier '=' positive_int field_options ';' {
     MAYBE_ABORT;
     char* tname = mapconcat(to_str, $2, ".");
-    list pos = from_ints(1, $5);
+    list pos = cons_int($5, sizeof(int), nil);
     list idf = cons_str($3, strlen($3), pos);
     int ftag;
 
@@ -257,7 +257,7 @@ field : field_label type identifier '=' positive_int field_options ';' {
 oneof_field : type identifier '=' positive_int field_options ';' {
     MAYBE_ABORT;
     char* tname = mapconcat(to_str, $1, ".");
-    list pos = from_ints(1, $4);
+    list pos = cons_int($4, sizeof(int), nil);
     list idf = cons_str($2, strlen($2), pos);
     $$ = tag(7, cons_str(tname, strlen(tname), idf));
     del($1);
@@ -443,6 +443,7 @@ rpc_type : STREAM type { MAYBE_ABORT; $$ = $2; }
 
 
 rpc_options : '{' OPTION option_def '}' { MAYBE_ABORT; $$ = NULL; }
+            | '{' '}' { MAYBE_ABORT; $$ = NULL; }
             | %empty { MAYBE_ABORT; $$ = NULL; } ;
 
 

@@ -65,8 +65,6 @@ list reverse(list);
 
 void del(list);
 
-list from_ints(size_t, ...);
-
 list from_strings(size_t, ...);
 
 list from_lists(size_t, ...);

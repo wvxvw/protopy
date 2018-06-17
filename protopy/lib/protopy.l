@@ -89,7 +89,11 @@ uint64     { return UINT64; }
 weak       { return WEAK; }
 
 [a-zA-Z_][a-zA-Z0-9_]* {
-    yylval->string = strdup(yytext);
+    if (yytext) {
+        yylval->string = strdup(yytext);
+    } else {
+        yylval->string = strdup("");
+    }
     return IDENTIFIER;
 }
 

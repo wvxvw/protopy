@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+service MainFXSSIService {
+
+    rpc GetSSIData (SSIRequest) returns (SSIGeneralReply) {
+            option (google.api.http) = {
+    		    get : "/v1/ssi/enrichment"
+    	    };
+    }
+
+    rpc GetSSIDataStream (stream SSIRequest) returns (stream SSIGeneralReply) {
+
+    }
+
+    rpc GetSSIDataBatchStream (stream SSIBatchRequest) returns (stream SSIBatchReply) {
+
+    }
+
+
+    rpc GetSSIDataBatchRequest (SSIBatchRequest) returns (SSIBatchReply) {
+        option (google.api.http) = {
+    		    get : "/v1/ssi/batch/enrichment"
+    	    };
+    }
+}

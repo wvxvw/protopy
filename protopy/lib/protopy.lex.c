@@ -685,7 +685,7 @@ static const flex_int16_t yy_rule_linenum[46] =
        60,   61,   62,   63,   64,   65,   66,   67,   68,   69,
        70,   71,   72,   73,   74,   75,   76,   77,   78,   79,
        80,   81,   82,   83,   84,   85,   86,   87,   88,   89,
-       91,   96,   97,   98,   99
+       91,  100,  101,  102,  103
     } ;
 
 /* The intent behind this definition is that it'll catch
@@ -1384,38 +1384,42 @@ case 41:
 YY_RULE_SETUP
 #line 91 "protopy.l"
 {
-    yylval->string = strdup(yytext);
+    if (yytext) {
+        yylval->string = strdup(yytext);
+    } else {
+        yylval->string = strdup("");
+    }
     return IDENTIFIER;
 }
 	YY_BREAK
 case 42:
 YY_RULE_SETUP
-#line 96 "protopy.l"
+#line 100 "protopy.l"
 { return *yytext; }
 	YY_BREAK
 case 43:
 /* rule 43 can match eol */
 YY_RULE_SETUP
-#line 97 "protopy.l"
+#line 101 "protopy.l"
 
 	YY_BREAK
 case 44:
 /* rule 44 can match eol */
 YY_RULE_SETUP
-#line 98 "protopy.l"
+#line 102 "protopy.l"
 
 	YY_BREAK
 case 45:
 YY_RULE_SETUP
-#line 99 "protopy.l"
+#line 103 "protopy.l"
 
 	YY_BREAK
 case 46:
 YY_RULE_SETUP
-#line 101 "protopy.l"
+#line 105 "protopy.l"
 ECHO;
 	YY_BREAK
-#line 1419 "protopy.lex.c"
+#line 1423 "protopy.lex.c"
 case YY_STATE_EOF(INITIAL):
 	yyterminate();
 
@@ -2718,7 +2722,7 @@ void yyfree (void * ptr , yyscan_t yyscanner)
 
 /* %ok-for-header */
 
-#line 101 "protopy.l"
+#line 105 "protopy.l"
 
 
 int yywrap(yyscan_t yyscanner)

@@ -105,3 +105,15 @@ def test_nested_otpions():
     )
     parser = DefParser(roots)
     parser.parse(test_proto)
+
+
+def test_rpc():
+    roots = [
+        pkg_resources.resource_filename(__name__, './resources')
+    ]
+    test_proto = pkg_resources.resource_filename(
+        __name__,
+        './resources/test_rpc.proto',
+    )
+    parser = DefParser(roots)
+    parser.parse(test_proto)

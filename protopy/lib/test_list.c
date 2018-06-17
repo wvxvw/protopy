@@ -42,8 +42,6 @@ int main(int argc, char** argv) {
     del(elts);
     del(elts2);
 
-    list ints = from_ints(5, 1, 2, 3, 4, 5);
-    printf("ints: %s\n", str(ints));
     list strings = from_strings(3, "foo", "bar", "baz");
     printf("strings: %s\n", str(strings));
     list lists = from_lists(2, ints, strings);
@@ -88,16 +86,6 @@ int main(int argc, char** argv) {
     del(rest_rope);
     read = rope_read(rope, buf, 15, &rest_rope);
     printf("rope_read(rope): %zu, %s, %s\n", read, buf, str(rest_rope));
-
-    list repeated_fives = from_ints(5, 5, 5, 5, 5, 5);
-    list repeated_nines = from_ints(5, 9, 9, 9, 9, 9);
-    list sorted_ints = from_ints(5, 1, 2, 4, 3, 5);
-    list sorted = sort_unique(append(sorted_ints, append(repeated_fives, repeated_nines)), int_cmp);
-    printf("sort_unique(append(repeated_fives, repeated_nines)): %s\n", str(sorted));
-    del(repeated_fives);
-    del(repeated_nines);
-    del(sorted_ints);
-    printf("sorted after deleting sources: %s\n", str(sorted));
 
     list weird_characters = cons_str(
         "\x10{\"\t\t\xd7\x11\x00\x00\x00\x00\x00\x00*\x07\x08\x87\x01\xa0\x01\xb1\x05",
