@@ -94,7 +94,7 @@ do {                                            \
 %type <object> string_literal oneof enum message service message_field 
                top_level s boolean literal message_block service_body
                service_body_part rpc top_levels enum_field enum_fields
-               option_name type user_type rpc_type
+               option_name type user_type user_type_tail rpc_type
                import field package_name package oneof_field oneof_fields
                map_field option_name_suffix option_name_body;
 
@@ -138,14 +138,17 @@ package : PACKAGE package_name ';' {
 syntax : SYNTAX '=' string_literal ';' { MAYBE_ABORT; $$ = NULL; } ;
 
 
-user_type : IDENTIFIER {
+user_type_tail : IDENTIFIER {
     MAYBE_ABORT;
     $$ = cons_str($1, strlen($1), nil);
 }
-          | user_type '.' IDENTIFIER  {
+          | user_type_tail '.' IDENTIFIER  {
     MAYBE_ABORT;
     $$ = cons_str($3, strlen($3), $1);
 } ;
+
+user_type : '.' user_type_tail { $$ = $2; }
+          | user_type_tail ;
 
 
 built_in_type : BOOL     { MAYBE_ABORT; $$ = "bool";       }
