@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+message Wrapper {
+    string wrapped_type = 1;
+    bytes wrapped_payload = 2;
+}
+
+message Wrapped {
+    string test = 1;
+}

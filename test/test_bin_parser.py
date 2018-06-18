@@ -435,3 +435,52 @@ def test_invalid_source_path():
         parser.parse(None, 'Test', content)
     except FileNotFoundError:
         pass
+
+
+def test_replace_ctor():
+    roots, test_proto, content = generate_proto_binary(
+        'test_wrapped.proto',
+        b'test: "abcdefg"',
+        'Wrapped'
+    )
+    print('generated proto message: {}'.format(content))
+    roots, test_proto, content = generate_proto_binary(
+        'test_wrapped.proto',
+        b'''
+        wrapped_type: "Wrapped"
+        wrapped_payload: "%s"
+        ''' % repr(content).encode('utf-8')[2:-1],
+        'Wrapper'
+    )
+
+    parser = BinParser(roots)
+
+    class ModifiedWrapper:
+
+        original = None
+
+        def __init__(self, *args):
+            print('modified init')
+            raw = ModifiedWrapper.original(*args)
+            self.payload = parser.parse(
+                test_proto,
+                raw.wrapped_type,
+                raw.wrapped_payload,
+            )
+            self.wrapped_type = raw.wrapped_type
+            print('modified init finished')
+
+    result = parser.parse(test_proto, 'Wrapper', content)
+    print('result before: {}'.format(result))
+    assert result.wrapped_type == 'Wrapped'
+
+    ModifiedWrapper.original = parser.def_parser.find_definition(b'Wrapper')
+    print('ModifiedWrapper.original: {}'.format(ModifiedWrapper.original))
+    parser.def_parser.update_definition(b'Wrapper', ModifiedWrapper)
+
+    result = parser.parse(test_proto, 'Wrapper', content)
+    for k, v in parser.def_parser.definitions():
+        print('def: {} => {}'.format(k, v))
+    print('result after: {}'.format(result))
+    assert result.wrapped_type == 'Wrapped'
+    assert result.payload.test == 'abcdefg'

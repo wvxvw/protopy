@@ -26,7 +26,7 @@ typedef struct {
     apr_hash_t* factories;
     apr_pool_t* mp;
     factory_t* factory;
-    const byte* pytype;
+    const char* pytype;
     PyObject* out;
 } parse_state_t;
 
@@ -59,8 +59,6 @@ PyObject* parse_map(parse_state_t* const, const field_info_t* const);
 PyObject* make_state(PyObject*, PyObject*);
 
 PyObject* state_ready(PyObject*, PyObject*);
-
-PyObject* state_result(PyObject*, PyObject*);
 
 void resolve_type(parse_state_t* const, const byte*, vt_type_t*);
 

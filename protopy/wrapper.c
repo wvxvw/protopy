@@ -26,23 +26,24 @@ static char parse_def_docstring[] = "Parse Protobuf definition.";
 static char apr_cleanup_docstring[] = "Calls apr_terminate().";
 static char make_state_docstring[] = "Creates state capsule.";
 static char state_ready_docstring[] = "Returns True when state finished parsing.";
-static char state_result_docstring[] = "The object that was deserialized.";
 static char make_apr_pool_docstring[] = "Create a new APR memory pool";
 static char apr_update_hash_docstring[] = "Merge two APR hash tables";
-static char apr_hash_contains_docstring[] = "Check if APR hash table contains a key";
+static char apr_hash_find_docstring[] = "Retrieve a value from APR hash table";
 static char make_apr_hash_docstring[] = "Create new APR hash table";
 static char apr_hash_iterator_docstring[] = "Create new iterator for APR hash table";
 static char apr_hash_get_docstring[] = "Fetch next pair from APR hash table";
+static char apr_hash_replace_docstring[] = "Replace or add a value to APR hash table ";
 
 static PyObject* proto_parse(PyObject* self, PyObject* args);
 static PyObject* proto_def_parse(PyObject* self, PyObject* args);
 static PyObject* apr_cleanup(PyObject* self, PyObject* args);
 static PyObject* make_apr_pool(PyObject* self, PyObject* args);
 static PyObject* apr_update_hash(PyObject* self, PyObject* args);
-static PyObject* apr_hash_contains(PyObject* self, PyObject* args);
+static PyObject* apr_hash_find(PyObject* self, PyObject* args);
 static PyObject* make_apr_hash(PyObject* self, PyObject* args);
 static PyObject* apr_hash_iterator(PyObject* self, PyObject* args);
 static PyObject* apr_hash_get_kv(PyObject* self, PyObject* args);
+static PyObject* apr_hash_replace(PyObject* self, PyObject* args);
 
 static PyMethodDef module_methods[] = {
     {"proto_parse", proto_parse, METH_VARARGS, parse_docstring},
@@ -50,13 +51,13 @@ static PyMethodDef module_methods[] = {
     {"apr_cleanup", apr_cleanup, METH_VARARGS, apr_cleanup_docstring},
     {"make_state", make_state, METH_VARARGS, make_state_docstring},
     {"state_ready", state_ready, METH_VARARGS, state_ready_docstring},
-    {"state_result", state_result, METH_VARARGS, state_result_docstring},
     {"make_apr_pool", make_apr_pool, METH_VARARGS, make_apr_pool_docstring},
     {"apr_update_hash", apr_update_hash, METH_VARARGS, apr_update_hash_docstring},
-    {"apr_hash_contains", apr_hash_contains, METH_VARARGS, apr_hash_contains_docstring},
+    {"apr_hash_find", apr_hash_find, METH_VARARGS, apr_hash_find_docstring},
     {"make_apr_hash", make_apr_hash, METH_VARARGS, make_apr_hash_docstring},
     {"apr_hash_iterator", apr_hash_iterator, METH_VARARGS, apr_hash_iterator_docstring},
     {"apr_hash_get_kv", apr_hash_get_kv, METH_VARARGS, apr_hash_get_docstring},
+    {"apr_hash_replace", apr_hash_replace, METH_VARARGS, apr_hash_replace_docstring},
     {NULL, NULL, 0, NULL}
 };
 
@@ -81,6 +82,31 @@ static PyObject* apr_cleanup(PyObject* self, PyObject* args) {
 }
 
 void free_apr_hash(PyObject* capsule) { }
+
+static PyObject* apr_hash_replace(PyObject* self, PyObject* args) {
+    PyObject* capsule;
+    char* key;
+    factory_t* val;
+    PyObject* pyval;
+
+    if (!PyArg_ParseTuple(args, "OyO", &capsule, &key, &pyval)) {
+        return NULL;
+    }
+    apr_hash_t* ht = (apr_hash_t*)PyCapsule_GetPointer(capsule, NULL);
+    if (!ht) {
+        PyErr_Format(PyExc_ValueError, "Missing hash table");
+        return NULL;
+    }
+    // TODO(olegs): Maybe decref previous value if it existed?
+    val = (factory_t*)apr_hash_get(ht, key, APR_HASH_KEY_STRING);
+    if (val) {
+        val->ctor = pyval;
+    } else {
+        PyErr_Format(PyExc_KeyError, "Types %s is not registered", key);
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
 
 static PyObject* apr_hash_iterator(PyObject* self, PyObject* args) {
     PyObject* capsule;
@@ -167,10 +193,11 @@ static PyObject* apr_update_hash(PyObject* self, PyObject* args) {
     Py_RETURN_NONE;
 }
 
-static PyObject* apr_hash_contains(PyObject* self, PyObject* args) {
+static PyObject* apr_hash_find(PyObject* self, PyObject* args) {
     PyObject* capsule;
     char* key;
 
+    // TODO(olegs): Do we need to free key?
     if (!PyArg_ParseTuple(args, "Oy", &capsule, &key)) {
         return NULL;
     }
@@ -179,16 +206,13 @@ static PyObject* apr_hash_contains(PyObject* self, PyObject* args) {
         PyErr_Format(PyExc_ValueError, "Missing hash table");
         return NULL;
     }
-    byte* apr_key = cstr_bytes(key);
-    void* result = apr_hash_get(ht, apr_key, str_size(key) + 2);
+    void* result = apr_hash_get(ht, key, APR_HASH_KEY_STRING);
     if (result) {
-        free(apr_key);
-        Py_INCREF(Py_True);
-        return Py_True;
+        PyObject* pyresult = ((factory_t*)result)->ctor;
+        Py_INCREF(pyresult);
+        return pyresult;
     }
-    free(apr_key);
-    Py_INCREF(Py_False);
-    return Py_False;
+    Py_RETURN_NONE;
 }
 
 void free_apr_pool(PyObject* capsule) {

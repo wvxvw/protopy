@@ -54,18 +54,6 @@ PyObject* state_ready(PyObject* self, PyObject* args) {
     return Py_True;
 }
 
-PyObject* state_result(PyObject* self, PyObject* args) {
-    PyObject* capsule;
-    if (!PyArg_ParseTuple(args, "O", &capsule)) {
-        return NULL;
-    }
-    parse_state_t* state = (parse_state_t*)PyCapsule_GetPointer(capsule, NULL);
-    if (!state) {
-        return NULL;
-    }
-    return state->out;
-}
-
 PyObject* make_state(PyObject* self, PyObject* args) {
     apr_hash_t* factories;
     char* pytype;
@@ -97,7 +85,7 @@ PyObject* make_state(PyObject* self, PyObject* args) {
     parse_state_t* state = malloc(sizeof(parse_state_t));
     state->pos = 0;
     state->out = Py_None;
-    state->pytype = cstr_bytes(pytype);
+    state->pytype = pytype;
     state->factories = factories;
     state->factory = NULL;
     state->mp = mp;
@@ -252,7 +240,7 @@ void init_substate(
     substate->in = bytes;
     substate->len = length;
     substate->factories = parent->factories;
-    substate->pytype = info->pytype;
+    substate->pytype = bytes_cstr(info->pytype);
     substate->mp = parent->mp;
 }
 
@@ -472,7 +460,7 @@ PyObject* parse_message(parse_state_t* const state) {
 
     state->factory = apr_hash_get(
         state->factories,
-        bytes_cstr(state->pytype),
+        state->pytype,
         APR_HASH_KEY_STRING);
 
     PyObject* fields = prepare_args(state);
@@ -683,7 +671,7 @@ PyObject* parse_repeated(parse_state_t* const state, const field_info_t* const i
         PyList_Append(result, subresult);
         Py_DECREF(subresult);
     } else {
-        state->pytype = info->pytype;
+        state->pytype = bytes_cstr(info->pytype);
 
         subresult = parse_message(state);
         if (!subresult) {

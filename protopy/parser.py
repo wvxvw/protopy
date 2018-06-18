@@ -10,9 +10,9 @@ from protopy.wrapped import (
     proto_parse,
     make_state,
     state_ready,
-    state_result,
     make_apr_pool,
-    apr_hash_contains,
+    apr_hash_find,
+    apr_hash_replace,
     apr_update_hash,
     make_apr_hash,
     apr_hash_iterator,
@@ -61,8 +61,11 @@ class DefParser:
             if k is not None:
                 yield k, v
 
-    def has_definition(self, definition):
-        return apr_hash_contains(self.defs, str(definition).encode('utf-8'))
+    def find_definition(self, definition):
+        return apr_hash_find(self.defs, ensure_bytes(definition))
+
+    def update_definition(self, definition, new):
+        apr_hash_replace(self.defs, ensure_bytes(definition), new)
 
     def parse(self, source, force=False):
         source = ensure_bytes(source)
@@ -104,8 +107,8 @@ class BinParser:
             self.def_parser.defs,
             self.mp,
         )
-        proto_parse(buf, self.state)
+        result = proto_parse(buf, self.state)
 
         if not state_ready(self.state):
             raise RuntimeError('Parser did not finish')
-        return state_result(self.state)
+        return result
