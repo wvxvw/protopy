@@ -633,7 +633,7 @@ extern int yylex \
 #undef yyTABLES_NAME
 #endif
 
-#line 105 "protopy.l"
+#line 101 "protopy.l"
 
 
 #line 640 "protopy.lex.h"

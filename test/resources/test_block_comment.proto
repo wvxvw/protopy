@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package eventsourcing;
+
+import "nested/oneof.proto";
+/**
+    Start Service specific imports
+**********************************************/
+import "foo/bar.proto";
+/***********************************************
+    End Service specific imports
+*/
+
+option java_package = "foo.bar.baz";
+option java_multiple_files = true;
+option (scalapb.options) = {
+  package_name: "foo.bar.baz"
+  flat_package: true
+};
+
+// Command to event sourcing from client
+message TestCommand {
+    oneof user_command {
+        /**
+            Start Service specific commands
+        **********************************************/
+        foo.bar.Baz org_create_request = 1;
+        foo.bar.Baz org_update_request = 2;
+        foo.bar.Baz org_tree_create_request = 3;
+
+        foo.bar.Baz org_create_request_v2 = 4;
+        foo.bar.Baz org_update_request_v2 = 5;
+        foo.bar.Baz org_tree_create_request_v2 = 6;
+        /***********************************************
+            End Service specific commands
+        */
+    }
+}

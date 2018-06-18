@@ -117,3 +117,15 @@ def test_rpc():
     )
     parser = DefParser(roots)
     parser.parse(test_proto)
+
+
+def test_block_comment():
+    roots = [
+        pkg_resources.resource_filename(__name__, './resources')
+    ]
+    test_proto = pkg_resources.resource_filename(
+        __name__,
+        './resources/test_block_comment.proto',
+    )
+    parser = DefParser(roots)
+    parser.parse(test_proto)
