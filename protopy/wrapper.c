@@ -101,6 +101,7 @@ static PyObject* apr_hash_replace(PyObject* self, PyObject* args) {
     val = (factory_t*)apr_hash_get(ht, key, APR_HASH_KEY_STRING);
     if (val) {
         val->ctor = pyval;
+        Py_INCREF(val->ctor);
     } else {
         PyErr_Format(PyExc_KeyError, "Types %s is not registered", key);
         return NULL;

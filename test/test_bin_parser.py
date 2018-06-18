@@ -484,3 +484,80 @@ def test_replace_ctor():
     print('result after: {}'.format(result))
     assert result.wrapped_type == 'Wrapped'
     assert result.payload.test == 'abcdefg'
+
+
+def test_replace_func():
+    roots, test_proto, content = generate_proto_binary(
+        'test_wrapped.proto',
+        b'test: "abcdefg"',
+        'Wrapped'
+    )
+    print('generated proto message: {}'.format(content))
+    roots, test_proto, content = generate_proto_binary(
+        'test_wrapped.proto',
+        b'''
+        wrapped_type: "Wrapped"
+        wrapped_payload: "%s"
+        ''' % repr(content).encode('utf-8')[2:-1],
+        'Wrapper'
+    )
+
+    parser = BinParser(roots)
+
+    result = parser.parse(test_proto, 'Wrapper', content)
+    print('result before: {}'.format(result))
+    assert result.wrapped_type == 'Wrapped'
+
+    original = parser.def_parser.find_definition(b'Wrapper')
+    print('original: {}'.format(original))
+
+    def replacement(*args):
+        print('replacement')
+        return {'replaced': original(*args)}
+    parser.def_parser.update_definition(b'Wrapper', replacement)
+
+    result = parser.parse(test_proto, 'Wrapper', content)
+    print('result after: {}'.format(result))
+    assert result['replaced'].wrapped_type == 'Wrapped'
+
+
+def test_replace_method():
+    roots, test_proto, content = generate_proto_binary(
+        'test_wrapped.proto',
+        b'test: "abcdefg"',
+        'Wrapped'
+    )
+    print('generated proto message: {}'.format(content))
+    roots, test_proto, content = generate_proto_binary(
+        'test_wrapped.proto',
+        b'''
+        wrapped_type: "Wrapped"
+        wrapped_payload: "%s"
+        ''' % repr(content).encode('utf-8')[2:-1],
+        'Wrapper'
+    )
+
+    parser = BinParser(roots)
+
+    result = parser.parse(test_proto, 'Wrapper', content)
+    print('result before: {}'.format(result))
+    assert result.wrapped_type == 'Wrapped'
+
+    original = parser.def_parser.find_definition(b'Wrapper')
+    print('original: {}'.format(original))
+
+    class Replacement:
+
+        def __init__(self, original):
+            self.original = original
+
+        def replacement(self, *args):
+            print('replacement')
+            return {'replaced': self.original(*args)}
+
+    rp = Replacement(original)
+    parser.def_parser.update_definition(b'Wrapper', rp.replacement)
+
+    result = parser.parse(test_proto, 'Wrapper', content)
+    print('result after: {}'.format(result))
+    assert result['replaced'].wrapped_type == 'Wrapped'
