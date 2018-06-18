@@ -240,12 +240,18 @@ message_desc(
 
     extract_type_name(norm_ftype, mp, &name, &package);
 
+    Py_INCREF(message_ctor);
     PyObject* ctor = PyObject_CallFunctionObjArgs(
         message_ctor,
         PyUnicode_FromString(name),
         fields_list,
         NULL);
     if (!ctor) {
+        PyErr_Format(
+            PyExc_TypeError,
+            "Couldn't create constructor of %A, %s",
+            message_ctor,
+            name);
         return;
     }
     PyObject_SetAttrString(
@@ -313,7 +319,7 @@ create_descriptors(
                     break;
             }
             if (PyErr_Occurred()) {
-                break;
+                return NULL;
             }
             file_desc = cdr(file_desc);
         }

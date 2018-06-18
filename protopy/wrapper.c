@@ -572,6 +572,10 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     if (PyErr_Occurred()) {
         return NULL;
     }
+    if (!result) {
+        PyErr_SetString(PyExc_SystemError, "Error creating descriptors");
+        return NULL;
+    }
     PyObject* description = aprdict_to_pydict(mp, parsed_defs);
     PyDict_Update(parsed_files, description);
     Py_DECREF(description);
