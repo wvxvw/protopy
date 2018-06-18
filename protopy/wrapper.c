@@ -117,6 +117,7 @@ static PyObject* apr_hash_get_kv(PyObject* self, PyObject* args) {
     apr_hash_this(hi, &key, NULL, &val);
     PyObject* pykey = PyBytes_FromString((char*)key);
     PyObject* pyval = ((factory_t*)val)->ctor;
+    Py_INCREF(pyval);
     PyTuple_SetItem(result, 0, pykey);
     PyTuple_SetItem(result, 1, pyval);
     hi = apr_hash_next(hi);
@@ -456,8 +457,10 @@ PyObject* aprdict_to_pydict(apr_pool_t* mp, apr_hash_t* ht) {
     for (hi = apr_hash_first(mp, ht); hi; hi = apr_hash_next(hi)) {
         apr_hash_this(hi, &key, NULL, &val);
         PyObject* pykey = PyBytes_FromString((char*)key);
-        PyDict_SetItem(result, pykey, list_to_pylist((list)val));
+        PyObject* pyval = list_to_pylist((list)val);
+        PyDict_SetItem(result, pykey, pyval);
         Py_DECREF(pykey);
+        Py_DECREF(pyval);
     }
     return result;
 }
