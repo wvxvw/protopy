@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+from sys import platform
 # from distutils.core import setup, Extension
 from setuptools import setup, Extension
 
@@ -14,6 +15,11 @@ apr_lib_candidates = (
 
 apr_lib = None
 
+if platform == 'win32':
+    apr_lib = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        'include/apr',
+    )
 for lib in apr_lib_candidates:
     if os.path.isdir(lib):
         apr_lib = lib
