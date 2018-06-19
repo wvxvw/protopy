@@ -1,8 +1,18 @@
 #include <stdio.h>
 #include <string.h>
+#ifdef _WIN32
+#include <malloc.h>
+#define ALLOCA _malloca
+#else
 #include <alloca.h>
+#define ALLOCA alloca
+#endif
 #include <assert.h>
+#ifndef _WIN32
 #include <unistd.h>
+#else
+typedef long long int64_t;
+#endif
 
 #include <Python.h>
 #include <apr_general.h>
@@ -423,7 +433,7 @@ proto_def_parse_produce(
 
     parsing_progress_t progress;
     size_t i = 0;
-    parse_def_args_t** thds_args = alloca(sizeof(parse_def_args_t*) * nthreads);
+    parse_def_args_t** thds_args = ALLOCA(sizeof(parse_def_args_t*) * nthreads);
     apr_hash_t* result = apr_hash_make(mp);
     apr_hash_t* builtins = built_in_types(mp);
 

@@ -6,10 +6,12 @@
 #include "list.h"
 
 
-#ifdef __cplusplus
+#ifdef _WIN32
 // TODO(olegs): Find a better way to prevent protopy.lex.h from
 // including unistd.h
 #define YY_NO_UNISTD_H
+typedef long long int64_t;
+typedef unsigned long long uint64_t;
 #endif
 
 #include "protopy.lex.h"

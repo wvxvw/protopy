@@ -5,13 +5,16 @@
 // to make protopy.tab.h to include it, so whenever we use it, we need
 // to first include list.h...
 #include "list.h"
+
+#ifdef _WIN32
+#define YY_NO_UNISTD_H
+typedef long long int64_t;
+typedef unsigned long long uint64_t;
+#endif
+
 #include "protopy.tab.h"
 
 #ifdef __cplusplus
-// TODO(olegs): This is the wrong type of test, but for now, I don't care, just
-// need to get this to compile on MS Windows...
-typedef unsigned long long int64_t;
-
 extern "C" {
 #endif
 
