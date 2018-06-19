@@ -1215,7 +1215,7 @@ YY_RULE_SETUP
 case 7:
 YY_RULE_SETUP
 #line 56 "protopy.l"
-{ return BOOL; }
+{ return TBOOL; }
 	YY_BREAK
 case 8:
 YY_RULE_SETUP
@@ -1250,12 +1250,12 @@ YY_RULE_SETUP
 case 14:
 YY_RULE_SETUP
 #line 63 "protopy.l"
-{ return INT32; }
+{ return TINT32; }
 	YY_BREAK
 case 15:
 YY_RULE_SETUP
 #line 64 "protopy.l"
-{ return INT64; }
+{ return TINT64; }
 	YY_BREAK
 case 16:
 YY_RULE_SETUP
@@ -1285,7 +1285,7 @@ YY_RULE_SETUP
 case 21:
 YY_RULE_SETUP
 #line 70 "protopy.l"
-{ return OPTIONAL; }
+{ return TOPTIONAL; }
 	YY_BREAK
 case 22:
 YY_RULE_SETUP
@@ -1370,12 +1370,12 @@ YY_RULE_SETUP
 case 38:
 YY_RULE_SETUP
 #line 87 "protopy.l"
-{ return UINT32; }
+{ return TUINT32; }
 	YY_BREAK
 case 39:
 YY_RULE_SETUP
 #line 88 "protopy.l"
-{ return UINT64; }
+{ return TUINT64; }
 	YY_BREAK
 case 40:
 YY_RULE_SETUP

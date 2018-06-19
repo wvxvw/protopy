@@ -9,6 +9,10 @@
 #define STR_VAL(x) (byte*)car(x)
 #define LIST_VAL(x) (list)car(x)
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef unsigned char byte;
 
 typedef enum type {
@@ -132,5 +136,9 @@ char* bytes_cstr(const byte*);
 byte* join_bytes(const byte*, const char, const byte*, bool);
 
 extern byte empty[2];
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // LIST_H_

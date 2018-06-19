@@ -53,21 +53,21 @@
 true  { return BOOL_TRUE; }
 false { return BOOL_FALSE; }
 
-bool       { return BOOL; }
+bool       { return TBOOL; }
 enum       { return ENUM; }
 extensions { return EXTENSIONS; }
 extend     { return EXTEND; }
 fixed32    { return FIXED32; }
 fixed64    { return FIXED64; }
 import     { return IMPORT; }
-int32      { return INT32; }
-int64      { return INT64; }
+int32      { return TINT32; }
+int64      { return TINT64; }
 max        { return MAX; }
 message    { return MESSAGE; }
 map        { return MAP; }
 oneof      { return ONEOF; }
 option     { return OPTION; }
-optional   { return OPTIONAL; }
+optional   { return TOPTIONAL; }
 package    { return PACKAGE; }
 public     { return PUBLIC; }
 required   { return REQUIRED; }
@@ -84,8 +84,8 @@ string     { return STRING; }
 stream     { return STREAM; }
 syntax     { return SYNTAX; }
 to         { return TO; }
-uint32     { return UINT32; }
-uint64     { return UINT64; }
+uint32     { return TUINT32; }
+uint64     { return TUINT64; }
 weak       { return WEAK; }
 
 [a-zA-Z_][a-zA-Z0-9_]* {

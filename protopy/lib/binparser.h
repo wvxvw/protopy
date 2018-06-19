@@ -7,6 +7,10 @@
 #include "list.h"
 #include "descriptors.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum wiretype_t {
     wt_varint = 0,
     wt_fixed32 = 1,
@@ -70,5 +74,9 @@ typedef struct _builtin_type {
 #define BUILTIN_TYPES 16
 
 vt_type_t vt_builtin(const byte*);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // BINPARSER_H_

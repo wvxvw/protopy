@@ -4,6 +4,14 @@
 #include "defparser.h"
 #include "helpers.h"
 #include "list.h"
+
+
+#ifdef __cplusplus
+// TODO(olegs): Find a better way to prevent protopy.lex.h from
+// including unistd.h
+#define YY_NO_UNISTD_H
+#endif
+
 #include "protopy.lex.h"
 #include "protopy.tab.h"
 

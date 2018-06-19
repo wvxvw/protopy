@@ -6,6 +6,10 @@
 
 #include "list.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum vt_type_t {
     // varint
     vt_int32  = 0,
@@ -85,5 +89,9 @@ create_descriptors(
     PyObject*,
     PyObject*,
     apr_pool_t* const);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // DESCRIPTIORS_H_

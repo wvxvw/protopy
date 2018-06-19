@@ -554,7 +554,7 @@ PyObject* parse_message(parse_state_t* const state) {
     return state->out;
 }
 
-PyObject* parse_map(parse_state_t* const state, const field_info_t* info) {
+PyObject* parse_map(parse_state_t* const state, const field_info_t* const info) {
     PyObject* result = PyDict_New();
     uint64_t val[2] = { 0, 0 };
     
@@ -634,7 +634,7 @@ PyObject* parse_repeated(parse_state_t* const state, const field_info_t* const i
         info->n,
         info->extra_type_info.elt,
         info->pytype,
-        { }
+        { vt_default }
     };
 
     if (is_scalar(rinfo.vt_type)) {

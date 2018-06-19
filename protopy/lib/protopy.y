@@ -40,7 +40,7 @@ do {                                            \
     void* nothing;
 }
 %start s;
-%token BOOL;
+%token TBOOL;
 %token BOOL_FALSE;
 %token BOOL_TRUE;
 %token ENUM;
@@ -49,14 +49,14 @@ do {                                            \
 %token FIXED32;
 %token FIXED64;
 %token IMPORT;
-%token INT32;
-%token INT64;
+%token TINT32;
+%token TINT64;
 %token MAP;
 %token MAX;
 %token MESSAGE;
 %token ONEOF;
 %token OPTION;
-%token OPTIONAL;
+%token TOPTIONAL;
 %token PACKAGE;
 %token PUBLIC;
 %token REPEATED;
@@ -74,19 +74,19 @@ do {                                            \
 %token STRING_LITERAL;
 %token SYNTAX;
 %token TO;
-%token UINT32;
-%token UINT64;
+%token TUINT32;
+%token TUINT64;
 %token WEAK;
 
 %token POSINTEGER;
 %token NEGINTEGER;
 %token IDENTIFIER;
 
-%type <keyword>  BOOL ENUM EXTENSIONS BOOL_FALSE FIXED32 FIXED64 IMPORT INT32
-                 INT64 MAP MAX MESSAGE ONEOF OPTION OPTIONAL PACKAGE PUBLIC
+%type <keyword>  TBOOL ENUM EXTENSIONS BOOL_FALSE FIXED32 FIXED64 IMPORT TINT32
+                 TINT64 MAP MAX MESSAGE ONEOF OPTION TOPTIONAL PACKAGE PUBLIC
                  REPEATED REQUIRED RESERVED RETURNS RPC SERVICE SFIXED32
-                 SFIXED64 SINT32 SINT64 STREAM SYNTAX TO BOOL_TRUE UINT32
-                 UINT64 WEAK STRING;
+                 SFIXED64 SINT32 SINT64 STREAM SYNTAX TO BOOL_TRUE TUINT32
+                 TUINT64 WEAK STRING;
 
 %type <string>  POSINTEGER NEGINTEGER IDENTIFIER
                 keyword identifier built_in_type STRING_LITERAL option_name_body_part;
@@ -151,18 +151,18 @@ user_type : '.' user_type_tail { $$ = $2; }
           | user_type_tail ;
 
 
-built_in_type : BOOL     { MAYBE_ABORT; $$ = "bool";       }
+built_in_type : TBOOL    { MAYBE_ABORT; $$ = "bool";       }
               | FIXED32  { MAYBE_ABORT; $$ = "fixed32";    }
               | FIXED64  { MAYBE_ABORT; $$ = "fixed64";    }
-              | INT32    { MAYBE_ABORT; $$ = "int32";      }
-              | INT64    { MAYBE_ABORT; $$ = "int64";      }
+              | TINT32   { MAYBE_ABORT; $$ = "int32";      }
+              | TINT64   { MAYBE_ABORT; $$ = "int64";      }
               | SFIXED32 { MAYBE_ABORT; $$ = "sfixed32";   }
               | SFIXED64 { MAYBE_ABORT; $$ = "sfixed64";   }
               | SINT32   { MAYBE_ABORT; $$ = "sint32";     }
               | SINT64   { MAYBE_ABORT; $$ = "sint64";     }
               | STRING   { MAYBE_ABORT; $$ = "string";     }
-              | UINT32   { MAYBE_ABORT; $$ = "uint32";     }
-              | UINT64   { MAYBE_ABORT; $$ = "uint64";     } ;
+              | TUINT32  { MAYBE_ABORT; $$ = "uint32";     }
+              | TUINT64  { MAYBE_ABORT; $$ = "uint64";     } ;
 
 
 type : built_in_type {
@@ -180,7 +180,7 @@ keyword : built_in_type
         | MAP        { MAYBE_ABORT; $$ = "map";        }
         | ONEOF      { MAYBE_ABORT; $$ = "oneof";      }
         | OPTION     { MAYBE_ABORT; $$ = "option";     }
-        | OPTIONAL   { MAYBE_ABORT; $$ = "optional";   }
+        | TOPTIONAL  { MAYBE_ABORT; $$ = "optional";   }
         | PACKAGE    { MAYBE_ABORT; $$ = "package";    }
         | PUBLIC     { MAYBE_ABORT; $$ = "public";     }
         | REQUIRED   { MAYBE_ABORT; $$ = "required";   }
@@ -232,10 +232,10 @@ field_options_body : assignment | field_options_body ',' assignment ;
 field_options : '[' field_options_body ']' | %empty;
 
 
-field_label : REQUIRED { MAYBE_ABORT; $$ = 1; }
-            | REPEATED { MAYBE_ABORT; $$ = 2; }
-            | OPTIONAL { MAYBE_ABORT; $$ = 3; }
-            | %empty   { MAYBE_ABORT; $$ = 0; } ;
+field_label : REQUIRED  { MAYBE_ABORT; $$ = 1; }
+            | REPEATED  { MAYBE_ABORT; $$ = 2; }
+            | TOPTIONAL { MAYBE_ABORT; $$ = 3; }
+            | %empty    { MAYBE_ABORT; $$ = 0; } ;
 
 
 field : field_label type identifier '=' positive_int field_options ';' {
@@ -282,17 +282,17 @@ oneof : ONEOF identifier '{' oneof_fields '}' {
 } ;
 
 
-key_type : INT32    { MAYBE_ABORT; $$ = 0;  }
-         | INT64    { MAYBE_ABORT; $$ = 1;  }
-         | UINT32   { MAYBE_ABORT; $$ = 2;  }
-         | UINT64   { MAYBE_ABORT; $$ = 3;  }
+key_type : TINT32   { MAYBE_ABORT; $$ = 0;  }
+         | TINT64   { MAYBE_ABORT; $$ = 1;  }
+         | TUINT32  { MAYBE_ABORT; $$ = 2;  }
+         | TUINT64  { MAYBE_ABORT; $$ = 3;  }
          | SINT32   { MAYBE_ABORT; $$ = 4;  }
          | SINT64   { MAYBE_ABORT; $$ = 5;  }
          | FIXED32  { MAYBE_ABORT; $$ = 6;  }
          | FIXED64  { MAYBE_ABORT; $$ = 7;  }
          | SFIXED32 { MAYBE_ABORT; $$ = 8;  }
          | SFIXED64 { MAYBE_ABORT; $$ = 9;  }
-         | BOOL     { MAYBE_ABORT; $$ = 10; }
+         | TBOOL    { MAYBE_ABORT; $$ = 10; }
          | STRING   { MAYBE_ABORT; $$ = 11; } ;
 
 

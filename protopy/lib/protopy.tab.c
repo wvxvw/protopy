@@ -123,7 +123,7 @@ extern int yydebug;
 # define YYTOKENTYPE
   enum yytokentype
   {
-    BOOL = 258,
+    TBOOL = 258,
     BOOL_FALSE = 259,
     BOOL_TRUE = 260,
     ENUM = 261,
@@ -132,14 +132,14 @@ extern int yydebug;
     FIXED32 = 264,
     FIXED64 = 265,
     IMPORT = 266,
-    INT32 = 267,
-    INT64 = 268,
+    TINT32 = 267,
+    TINT64 = 268,
     MAP = 269,
     MAX = 270,
     MESSAGE = 271,
     ONEOF = 272,
     OPTION = 273,
-    OPTIONAL = 274,
+    TOPTIONAL = 274,
     PACKAGE = 275,
     PUBLIC = 276,
     REPEATED = 277,
@@ -157,8 +157,8 @@ extern int yydebug;
     STRING_LITERAL = 289,
     SYNTAX = 290,
     TO = 291,
-    UINT32 = 292,
-    UINT64 = 293,
+    TUINT32 = 292,
+    TUINT64 = 293,
     WEAK = 294,
     POSINTEGER = 295,
     NEGINTEGER = 296,
@@ -166,7 +166,7 @@ extern int yydebug;
   };
 #endif
 /* Tokens.  */
-#define BOOL 258
+#define TBOOL 258
 #define BOOL_FALSE 259
 #define BOOL_TRUE 260
 #define ENUM 261
@@ -175,14 +175,14 @@ extern int yydebug;
 #define FIXED32 264
 #define FIXED64 265
 #define IMPORT 266
-#define INT32 267
-#define INT64 268
+#define TINT32 267
+#define TINT64 268
 #define MAP 269
 #define MAX 270
 #define MESSAGE 271
 #define ONEOF 272
 #define OPTION 273
-#define OPTIONAL 274
+#define TOPTIONAL 274
 #define PACKAGE 275
 #define PUBLIC 276
 #define REPEATED 277
@@ -200,8 +200,8 @@ extern int yydebug;
 #define STRING_LITERAL 289
 #define SYNTAX 290
 #define TO 291
-#define UINT32 292
-#define UINT64 293
+#define TUINT32 292
+#define TUINT64 293
 #define WEAK 294
 #define POSINTEGER 295
 #define NEGINTEGER 296
@@ -564,12 +564,12 @@ static const yytype_uint16 yyrline[] =
    First, the terminals, then, starting at YYNTOKENS, nonterminals.  */
 static const char *const yytname[] =
 {
-  "$end", "error", "$undefined", "BOOL", "BOOL_FALSE", "BOOL_TRUE",
-  "ENUM", "EXTENSIONS", "EXTEND", "FIXED32", "FIXED64", "IMPORT", "INT32",
-  "INT64", "MAP", "MAX", "MESSAGE", "ONEOF", "OPTION", "OPTIONAL",
+  "$end", "error", "$undefined", "TBOOL", "BOOL_FALSE", "BOOL_TRUE",
+  "ENUM", "EXTENSIONS", "EXTEND", "FIXED32", "FIXED64", "IMPORT", "TINT32",
+  "TINT64", "MAP", "MAX", "MESSAGE", "ONEOF", "OPTION", "TOPTIONAL",
   "PACKAGE", "PUBLIC", "REPEATED", "REQUIRED", "RESERVED", "RETURNS",
   "RPC", "SERVICE", "SFIXED32", "SFIXED64", "SINT32", "SINT64", "STREAM",
-  "STRING", "STRING_LITERAL", "SYNTAX", "TO", "UINT32", "UINT64", "WEAK",
+  "STRING", "STRING_LITERAL", "SYNTAX", "TO", "TUINT32", "TUINT64", "WEAK",
   "POSINTEGER", "NEGINTEGER", "IDENTIFIER", "';'", "'.'", "'='", "':'",
   "'{'", "'}'", "','", "'['", "']'", "'<'", "'>'", "'('", "')'", "$accept",
   "string_literal", "import_kind", "import", "package_name", "package",
