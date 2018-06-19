@@ -240,12 +240,12 @@ message_desc(
 
     extract_type_name(norm_ftype, mp, &name, &package);
 
-    Py_INCREF(message_ctor);
-    PyObject* ctor = PyObject_CallFunctionObjArgs(
-        message_ctor,
-        PyUnicode_FromString(name),
-        fields_list,
-        NULL);
+    Py_INCREF(fields_list);
+    PyObject* args = PyTuple_New(2);
+    PyTuple_SetItem(args, 0, PyUnicode_FromString(name));
+    PyTuple_SetItem(args, 1, fields_list);
+    PyObject* ctor = PyObject_Call(message_ctor, args, NULL);
+    Py_DECREF(args);
     if (!ctor) {
         PyErr_Format(
             PyExc_TypeError,
