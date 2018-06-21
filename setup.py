@@ -52,6 +52,7 @@ setup(
             [
                 'protopy/lib/descriptors.c',
                 'protopy/lib/binparser.c',
+                'protopy/lib/serializer.c',
                 'protopy/lib/defparser.c',
                 'protopy/lib/protopy.lex.c',
                 'protopy/lib/protopy.tab.c',

@@ -29,6 +29,7 @@ typedef long long int64_t;
 #include "lib/defparser.h"
 #include "lib/list.h"
 #include "lib/descriptors.h"
+#include "lib/serializer.h"
 
 
 static char module_docstring[] = "Protobuf decoder and encoder.";
@@ -44,17 +45,18 @@ static char make_apr_hash_docstring[] = "Create new APR hash table";
 static char apr_hash_iterator_docstring[] = "Create new iterator for APR hash table";
 static char apr_hash_get_docstring[] = "Fetch next pair from APR hash table";
 static char apr_hash_replace_docstring[] = "Replace or add a value to APR hash table ";
+static char proto_serialize_docstring[] = "Serialize Python object to Protobuf";
 
-static PyObject* proto_parse(PyObject* self, PyObject* args);
-static PyObject* proto_def_parse(PyObject* self, PyObject* args);
-static PyObject* apr_cleanup(PyObject* self, PyObject* args);
-static PyObject* make_apr_pool(PyObject* self, PyObject* args);
-static PyObject* apr_update_hash(PyObject* self, PyObject* args);
-static PyObject* apr_hash_find(PyObject* self, PyObject* args);
-static PyObject* make_apr_hash(PyObject* self, PyObject* args);
-static PyObject* apr_hash_iterator(PyObject* self, PyObject* args);
-static PyObject* apr_hash_get_kv(PyObject* self, PyObject* args);
-static PyObject* apr_hash_replace(PyObject* self, PyObject* args);
+static PyObject* proto_parse(PyObject*, PyObject*);
+static PyObject* proto_def_parse(PyObject*, PyObject*);
+static PyObject* apr_cleanup(PyObject*, PyObject*);
+static PyObject* make_apr_pool(PyObject*, PyObject*);
+static PyObject* apr_update_hash(PyObject*, PyObject*);
+static PyObject* apr_hash_find(PyObject*, PyObject*);
+static PyObject* make_apr_hash(PyObject*, PyObject*);
+static PyObject* apr_hash_iterator(PyObject*, PyObject*);
+static PyObject* apr_hash_get_kv(PyObject*, PyObject*);
+static PyObject* apr_hash_replace(PyObject*, PyObject*);
 
 static PyMethodDef module_methods[] = {
     {"proto_parse", proto_parse, METH_VARARGS, parse_docstring},
@@ -69,6 +71,7 @@ static PyMethodDef module_methods[] = {
     {"apr_hash_iterator", apr_hash_iterator, METH_VARARGS, apr_hash_iterator_docstring},
     {"apr_hash_get_kv", apr_hash_get_kv, METH_VARARGS, apr_hash_get_docstring},
     {"apr_hash_replace", apr_hash_replace, METH_VARARGS, apr_hash_replace_docstring},
+    {"proto_serialize", proto_serialize, METH_VARARGS, proto_serialize_docstring},
     {NULL, NULL, 0, NULL}
 };
 
