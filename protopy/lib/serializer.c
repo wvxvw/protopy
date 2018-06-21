@@ -4,9 +4,47 @@
 #include "list.h"
 #include "serializer.h"
 #include "binparser.h"
+#include "pyhelpers.h"
 
 byte* serialize_varint(PyObject* message, bool sign) {
-    return NULL;
+    PyObject* converted = PyNumber_Long(message);
+    if (!converted) {
+        return NULL;
+    }
+    size_t nbytes = 0;
+    size_t i;
+    byte* result;
+
+    if (sign) {
+        long long v = PyLong_AsLongLong(converted);
+        long long vc = v;
+        do {
+            nbytes++;
+            vc >>= 7;
+        } while (vc);
+        result = NULL;
+    } else {
+        unsigned long long v = PyLong_AsUnsignedLongLong(converted);
+        unsigned long long vc = v;
+        do {
+            nbytes++;
+            vc >>= 7;
+        } while (vc);
+        result = malloc((2 + nbytes) * sizeof(byte));
+        result[0] = (byte)(nbytes >> 8);
+        result[1] = (byte)(nbytes & 0xFF);
+        i = 2;
+        nbytes += 2;
+        while (i < nbytes) {
+            result[i] = (byte)(v & 0x7F);
+            v >>= 7;
+            if (v) {
+                result[i] = result[i] | 0x80;
+            }
+            i++;
+        }
+    }
+    return result;
 }
 
 byte* serialize_64_fixed(PyObject* message, bool sign) {

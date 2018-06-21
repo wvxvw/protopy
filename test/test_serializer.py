@@ -52,3 +52,23 @@ def test_simple_serialize():
     serializer = Serializer(parser)
 
     assert serializer.serialize(result, 'Test') == content
+
+
+def test_integer():
+    roots, test_proto, content = generate_proto_binary(
+        'test.proto',
+        b'test: 123\ntest_whatever: "123456"',
+    )
+    print('generated proto message: {}'.format(content))
+
+    parser = BinParser(roots)
+    result = parser.parse(test_proto, 'Test', content)
+
+    print('result: {}'.format(result))
+    assert result.test == 123
+    serializer = Serializer(parser)
+
+    assert serializer.serialize(result.test, 'int32') \
+        == chr(123).encode('utf-8')
+
+    assert serializer.serialize(123456, 'int32') == b'\xc0\xc4\x07'
