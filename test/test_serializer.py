@@ -100,6 +100,7 @@ def test_signed_integer():
 
     parser = BinParser(roots)
     result = parser.parse(test_proto, 'SimpleTypes', content)
+    print('result: {}'.format(result))
     serializer = Serializer(parser)
 
     assert serializer.serialize(result.tint32, 'int32') \
@@ -117,4 +118,10 @@ def test_signed_integer():
     assert serializer.serialize(result.tbool, 'bool') \
         == b'\x01'
     assert serializer.serialize(result.tfixed64, 'fixed64') \
-        == b'\x01'
+        == b'\x15_\xd0\xacK\x9b\xb6\x01'
+    assert serializer.serialize(result.tsfixed64, 'sfixed64') \
+        == b'\xeb\xa0/S\xb4dI\xfe'
+    assert serializer.serialize(result.tfixed32, 'fixed32') \
+        == b'@\xe2\x01\x00'
+    assert serializer.serialize(result.tsfixed32, 'sfixed32') \
+        == b'\xc0\x1d\xfe\xff'

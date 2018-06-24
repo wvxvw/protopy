@@ -9,6 +9,7 @@
 byte* serialize_varint(PyObject* message, bool sign) {
     PyObject* converted = PyNumber_Long(message);
     if (!converted) {
+        Py_DECREF(converted);
         return NULL;
     }
     size_t nbytes = 0;
@@ -30,6 +31,7 @@ byte* serialize_varint(PyObject* message, bool sign) {
     } else {
         vu = PyLong_AsUnsignedLongLong(converted);
     }
+    Py_DECREF(converted);
     unsigned long long vc = vu;
     do {
         nbytes++;
@@ -52,7 +54,33 @@ byte* serialize_varint(PyObject* message, bool sign) {
 }
 
 byte* serialize_64_fixed(PyObject* message, bool sign) {
-    return NULL;
+    PyObject* converted = PyNumber_Long(message);
+    if (!converted) {
+        Py_DECREF(converted);
+        return NULL;
+    }
+    unsigned long long vu;
+    if (sign) {
+        vu = (unsigned long long)PyLong_AsLongLong(converted);
+    } else {
+        vu = PyLong_AsUnsignedLongLong(converted);
+    }
+    Py_DECREF(converted);
+
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+
+    byte* result = malloc(10 * sizeof(byte));
+    result[0] = 0;
+    result[1] = 8;
+    size_t i;
+
+    for (i = 2; i < 10; i++) {
+        result[i] = (byte)(vu & 0xFF);
+        vu >>= 8;
+    }
+    return result;
 }
 
 byte* serialize_length_delimited(PyObject* message, bool unicode) {
@@ -60,7 +88,33 @@ byte* serialize_length_delimited(PyObject* message, bool unicode) {
 }
 
 byte* serialize_32_fixed(PyObject* message, bool sign) {
-    return NULL;
+    PyObject* converted = PyNumber_Long(message);
+    if (!converted) {
+        Py_DECREF(converted);
+        return NULL;
+    }
+    unsigned long vu;
+    if (sign) {
+        vu = (unsigned long)PyLong_AsLong(converted);
+    } else {
+        vu = PyLong_AsUnsignedLong(converted);
+    }
+    Py_DECREF(converted);
+
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+
+    byte* result = malloc(6 * sizeof(byte));
+    result[0] = 0;
+    result[1] = 4;
+    size_t i;
+
+    for (i = 2; i < 6; i++) {
+        result[i] = (byte)(vu & 0xFF);
+        vu >>= 8;
+    }
+    return result;
 }
 
 byte* proto_serialize_builtin(vt_type_t vt, apr_hash_t* const defs, PyObject* message) {
