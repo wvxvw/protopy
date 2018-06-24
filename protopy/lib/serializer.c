@@ -6,33 +6,12 @@
 #include "binparser.h"
 #include "pyhelpers.h"
 
-byte* serialize_varint(PyObject* message, bool sign) {
-    PyObject* converted = PyNumber_Long(message);
-    if (!converted) {
-        Py_DECREF(converted);
-        return NULL;
-    }
-    size_t nbytes = 0;
-    size_t i;
-    byte* result;
-    long long v;
-    unsigned long long vu;
-
-    if (sign) {
-        v = PyLong_AsLongLong(converted);
-        if (v < 0) {
-            v = -v;
-            v <<= 1;
-            v--;
-        } else {
-            v <<= 1;
-        }
-        vu = (unsigned long long)v;
-    } else {
-        vu = PyLong_AsUnsignedLongLong(converted);
-    }
-    Py_DECREF(converted);
+byte* serialize_varint_impl(unsigned long long vu) {
     unsigned long long vc = vu;
+    size_t nbytes = 0;
+    byte* result;
+    size_t i;
+
     do {
         nbytes++;
         vc >>= 7;
@@ -51,6 +30,32 @@ byte* serialize_varint(PyObject* message, bool sign) {
         i++;
     }
     return result;
+}
+
+byte* serialize_varint(PyObject* message, bool sign) {
+    PyObject* converted = PyNumber_Long(message);
+    if (!converted) {
+        Py_DECREF(converted);
+        return NULL;
+    }
+    long long v;
+    unsigned long long vu;
+
+    if (sign) {
+        v = PyLong_AsLongLong(converted);
+        if (v < 0) {
+            v = -v;
+            v <<= 1;
+            v--;
+        } else {
+            v <<= 1;
+        }
+        vu = (unsigned long long)v;
+    } else {
+        vu = PyLong_AsUnsignedLongLong(converted);
+    }
+    Py_DECREF(converted);
+    return serialize_varint_impl(vu);
 }
 
 byte* serialize_64_fixed(PyObject* message, bool sign) {
@@ -83,8 +88,30 @@ byte* serialize_64_fixed(PyObject* message, bool sign) {
     return result;
 }
 
-byte* serialize_length_delimited(PyObject* message, bool unicode) {
-    return NULL;
+byte* serialize_length_delimited(PyObject* message) {
+    byte* result;
+    if (PyUnicode_Check(message)) {
+        result = cstr_bytes(PyUnicode_AsUTF8(message));
+    } else if (PyBytes_Check(message)) {
+        result = cstr_bytes(PyBytes_AsString(message));
+    } else {
+        PyObject* uo = PyObject_Str(message);
+        if (!uo) {
+            return NULL;
+        }
+        Py_DECREF(uo);
+        result = cstr_bytes(PyUnicode_AsUTF8(uo));
+    }
+    size_t len = str_size(result);
+    byte* sz = serialize_varint_impl((unsigned long long)len);
+    size_t sz_len = str_size(sz);
+    size_t total = len + sz_len;
+    byte* final = malloc((2 + total) * sizeof(byte));
+    final[0] = total >> 8;
+    final[1] = total & 0xFF;
+    memcpy(final + 2, sz + 2, sz_len);
+    memcpy(final + 2 + sz_len, result + 2, len);
+    return final;
 }
 
 byte* serialize_32_fixed(PyObject* message, bool sign) {
@@ -141,10 +168,8 @@ byte* proto_serialize_builtin(vt_type_t vt, apr_hash_t* const defs, PyObject* me
             result = serialize_64_fixed(message, true);
             break;
         case vt_string:
-            result = serialize_length_delimited(message, true);
-            break;
         case vt_bytes:
-            result = serialize_length_delimited(message, false);
+            result = serialize_length_delimited(message);
             break;
         case vt_fixed32:
             result = serialize_32_fixed(message, false);

@@ -125,3 +125,7 @@ def test_signed_integer():
         == b'@\xe2\x01\x00'
     assert serializer.serialize(result.tsfixed32, 'sfixed32') \
         == b'\xc0\x1d\xfe\xff'
+    assert serializer.serialize(result.tstring, 'string') \
+        == b'\x07abcdefg'
+    assert serializer.serialize(result.tbytes, 'bytes') \
+        == b'\x03\x01\x02\x03'
