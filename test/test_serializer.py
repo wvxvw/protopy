@@ -81,10 +81,10 @@ def test_signed_integer():
         b'''
         tint32: 123456
         tint64: 123456789123456789
-        tstint32: -123456
-        tstint64: -123456789123456789
-        tutint32: 123456
-        tutint64: 123456789123456789
+        tsint32: -123456
+        tsint64: -123456789123456789
+        tuint32: 123456
+        tuint64: 123456789123456789
         tbool: true
         tfixed64: 123456789123456789
         tsfixed64: -123456789123456789
@@ -99,8 +99,22 @@ def test_signed_integer():
     print('generated proto message: {}'.format(content))
 
     parser = BinParser(roots)
-    result = parser.parse(test_proto, 'Test', content)
+    result = parser.parse(test_proto, 'SimpleTypes', content)
     serializer = Serializer(parser)
 
     assert serializer.serialize(result.tint32, 'int32') \
-        == chr(123456).encode('utf-8')
+        == b'\xc0\xc4\x07'
+    assert serializer.serialize(result.tint64, 'int64') \
+        == b'\x95\xbe\xc1\xe6\xba\xe9\xa6\xdb\x01'
+    assert serializer.serialize(result.tsint32, 'sint32') \
+        == b'\xff\x88\x0f'
+    assert serializer.serialize(result.tsint64, 'sint64') \
+        == b'\xa9\xfc\x82\xcd\xf5\xd2\xcd\xb6\x03'
+    assert serializer.serialize(result.tuint32, 'uint32') \
+        == b'\xc0\xc4\x07'
+    assert serializer.serialize(result.tuint64, 'uint64') \
+        == b'\x95\xbe\xc1\xe6\xba\xe9\xa6\xdb\x01'
+    assert serializer.serialize(result.tbool, 'bool') \
+        == b'\x01'
+    assert serializer.serialize(result.tfixed64, 'fixed64') \
+        == b'\x01'

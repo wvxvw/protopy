@@ -112,6 +112,13 @@ PyObject* proto_serialize_impl(const byte* mtype, apr_hash_t* const defs, PyObje
     PyObject* result = NULL;
     if (vt != vt_default) {
         byte* payload = proto_serialize_builtin(vt, defs, message);
+
+        if (PyErr_Occurred()) {
+            if (payload != NULL) {
+                free(payload);
+            }
+            return NULL;
+        }
         if (payload) {
             result = PyBytes_FromStringAndSize(
                 (const char*)(payload + 2),

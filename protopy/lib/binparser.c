@@ -109,7 +109,7 @@ size_t parse_varint_impl(parse_state_t* const state, uint64_t value[2]) {
     unsigned char current;
     size_t bytes_read = 0;
     size_t read = 0;
-    size_t index = 0;
+    size_t bread = 0;
 
     while (read < 16) {
         bytes_read = state_read(state, &buf, 1);
@@ -120,11 +120,20 @@ size_t parse_varint_impl(parse_state_t* const state, uint64_t value[2]) {
             return read;
         }
         current = buf[0];
-        if (read == 7) {
-            index = 1;
+        if (read < 9) {
+            value[0] |= ((uint64_t)(current & 0x7F) << (bread * 7));
         }
-        value[index] |= ((current & 0x7F) << (read * 7));
+        if (read == 9) {
+            bread = 0;
+            value[0] |= ((uint64_t)(current & 0x7F) << (bread * 7));
+        } else if (read == 10) {
+            value[0] |= ((uint64_t)(current & 1) << 63);
+            value[1] |= ((uint64_t)(current & 0x7F) >> 1);
+        } else if (read > 10) {
+            value[1] |= ((uint64_t)(current & 0x7F) << ((bread * 7) - 1));
+        }
         read++;
+        bread++;
         if ((current >> 7) == 0) {
             return read;
         }
@@ -164,6 +173,9 @@ size_t parse_varint(parse_state_t* const state, const field_info_t* const info) 
     PyObject* low = PyLong_FromUnsignedLongLong((unsigned long long)value[0]);
 
     // TODO(olegs): This part requires testing
+    // On the other hand, I don't really know when this could happen...  The spec
+    // says that varints can be 128 bits long, but there aren't any concrete types
+    // which need that many bits to encode them...
     if (value[1] > 0) {
         PyObject* high = PyLong_FromUnsignedLongLong((unsigned long long)value[1]);
         PyObject* shift = PyLong_FromLong(64L);
