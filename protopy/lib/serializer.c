@@ -14,35 +14,39 @@ byte* serialize_varint(PyObject* message, bool sign) {
     size_t nbytes = 0;
     size_t i;
     byte* result;
+    long long v;
+    unsigned long long vu;
 
     if (sign) {
-        long long v = PyLong_AsLongLong(converted);
-        long long vc = v;
-        do {
-            nbytes++;
-            vc >>= 7;
-        } while (vc);
-        result = NULL;
-    } else {
-        unsigned long long v = PyLong_AsUnsignedLongLong(converted);
-        unsigned long long vc = v;
-        do {
-            nbytes++;
-            vc >>= 7;
-        } while (vc);
-        result = malloc((2 + nbytes) * sizeof(byte));
-        result[0] = (byte)(nbytes >> 8);
-        result[1] = (byte)(nbytes & 0xFF);
-        i = 2;
-        nbytes += 2;
-        while (i < nbytes) {
-            result[i] = (byte)(v & 0x7F);
-            v >>= 7;
-            if (v) {
-                result[i] = result[i] | 0x80;
-            }
-            i++;
+        v = PyLong_AsLongLong(converted);
+        if (v < 0) {
+            v = -v;
+            v <<= 1;
+            v--;
+        } else {
+            v <<= 1;
         }
+        vu = (unsigned long long)v;
+    } else {
+        vu = PyLong_AsUnsignedLongLong(converted);
+    }
+    unsigned long long vc = vu;
+    do {
+        nbytes++;
+        vc >>= 7;
+    } while (vc);
+    result = malloc((2 + nbytes) * sizeof(byte));
+    result[0] = (byte)(nbytes >> 8);
+    result[1] = (byte)(nbytes & 0xFF);
+    i = 2;
+    nbytes += 2;
+    while (i < nbytes) {
+        result[i] = (byte)(vu & 0x7F);
+        vu >>= 7;
+        if (vu) {
+            result[i] = result[i] | 0x80;
+        }
+        i++;
     }
     return result;
 }

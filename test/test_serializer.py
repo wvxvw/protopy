@@ -72,3 +72,35 @@ def test_integer():
         == chr(123).encode('utf-8')
 
     assert serializer.serialize(123456, 'int32') == b'\xc0\xc4\x07'
+    assert serializer.serialize(123456789, 'int32') == b'\x95\x9a\xef:'
+
+
+def test_signed_integer():
+    roots, test_proto, content = generate_proto_binary(
+        'simple_types.proto',
+        b'''
+        tint32: 123456
+        tint64: 123456789123456789
+        tstint32: -123456
+        tstint64: -123456789123456789
+        tutint32: 123456
+        tutint64: 123456789123456789
+        tbool: true
+        tfixed64: 123456789123456789
+        tsfixed64: -123456789123456789
+        tdouble: 123456.123456
+        tstring: 'abcdefg'
+        tbytes: '\x01\x02\x03'
+        tfixed32: 123456
+        tsfixed32: -123456
+        ''',
+        'SimpleTypes'
+    )
+    print('generated proto message: {}'.format(content))
+
+    parser = BinParser(roots)
+    result = parser.parse(test_proto, 'Test', content)
+    serializer = Serializer(parser)
+
+    assert serializer.serialize(result.tint32, 'int32') \
+        == chr(123456).encode('utf-8')

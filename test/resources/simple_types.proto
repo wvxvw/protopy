@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+message SimpleTypes {
+    int32 tint32 = 1;
+    int64 tint64 = 2;
+    sint32 tstint32 = 3;
+    sint64 tstint64 = 4;
+    uint32 tutint32 = 5;
+    uint64 tutint64 = 6;
+    bool tbool = 7;
+    fixed64 tfixed64 = 8;
+    sfixed64 tsfixed64 = 9;
+    double tdouble = 10;
+    string tstring = 11;
+    bytes tbytes = 12;
+    fixed32 tfixed32 = 13;
+    sfixed32 tsfixed32 = 14;
+}
