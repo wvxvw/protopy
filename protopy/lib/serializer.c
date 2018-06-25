@@ -215,8 +215,8 @@ void serialize_message(
     wbuffer_t* buf,
     PyObject* message,
     factory_t* f,
-    const char* pytype,
-    apr_pool_t* mp) {
+    apr_hash_t* defs,
+    const char* pytype) {
     // IMPORTANT: We assume that whatever the implementation of messages is
     // it allows us to call __getitem__ on these object in order to get the
     // value we need to encode.
@@ -225,21 +225,67 @@ void serialize_message(
         return;
     }
 
-    apr_hash_t* inverse = apr_hash_make(mp);
+    apr_hash_t* inverse = apr_hash_make(buf->mp);
+    apr_hash_t* fields = apr_hash_make(buf->mp);
     apr_hash_index_t* hi;
     field_info_t* val;
     const size_t* key;
 
-    for (hi = apr_hash_first(mp, f->mapping); hi; hi = apr_hash_next(hi)) {
+    for (hi = apr_hash_first(buf->mp, f->mapping); hi; hi = apr_hash_next(hi)) {
         apr_hash_this(hi, (const void**)&key, NULL, (void**)&val);
         apr_hash_set(inverse, &val->n, sizeof(size_t), val);
+        apr_hash_set(fields, &val->n, sizeof(size_t), key);
     }
     Py_ssize_t len = PySequence_Size(message);
     Py_ssize_t i;
 
     for (i = 0; i < len; i++) {
         PyObject* pval = PySequence_GetItem(message, i);
-        
+        field_info_t* info = apr_hash_get(inverse, &i, sizeof(size_t));
+        size_t* field = apr_hash_get(fields, &i, sizeof(size_t));
+        if (info) {
+            vt_type_t vt = vt_builtin(info->pytype);
+            byte wt;
+            switch (vt) {
+                case vt_int32:
+                case vt_int64:
+                case vt_uint32:
+                case vt_uint64:
+                case vt_bool:
+                case vt_enum:
+                case vt_sint32:
+                case vt_sint64:
+                    wt = 0;
+                    break;
+                case vt_double:
+                case vt_fixed64:
+                case vt_sfixed64:
+                    wt = 1;
+                    break;
+                case vt_fixed32:
+                case vt_sfixed32:
+                    wt = 3;
+                    break;
+                case vt_string:
+                case vt_bytes:
+                    // TODO(olegs): Repeated fields, enums and maps
+                    // need special treatment.
+                default:
+                    wt = 2;
+                    break;
+            }
+            wt |= (*field << 3);
+            serialize_varint_impl(buf, (unsigned long long)wt);
+            proto_serialize_impl(buf, info->pytype, defs, pval);
+        } else {
+            PyErr_Format(
+                PyExc_TypeError,
+                "Don't know how to serialize field %d of %A",
+                i,
+                message);
+            Py_DECREF(pval);
+            return;
+        }
         Py_DECREF(pval);
     }
 }
@@ -248,8 +294,7 @@ void proto_serialize_impl(
     wbuffer_t* buf,
     const byte* mtype,
     apr_hash_t* const defs,
-    PyObject* message,
-    apr_pool_t* mp) {
+    PyObject* message) {
 
     vt_type_t vt = vt_builtin(mtype);
 
@@ -267,7 +312,7 @@ void proto_serialize_impl(
             case vt_enum:
                 break;
             case vt_message:
-                serialize_message(buf, message, f, key, mp);
+                serialize_message(buf, message, f, defs, key);
                 break;
             case vt_repeated:
                 break;
@@ -316,7 +361,7 @@ PyObject* proto_serialize(PyObject* self, PyObject* args) {
     buf.cap = buf_size;
     buf.len = 0;
     buf.mp = mp;
-    proto_serialize_impl(&buf, bmtype, ht, message, mp);
+    proto_serialize_impl(&buf, bmtype, ht, message);
     
     if (PyErr_Occurred()) {
         free(bmtype);

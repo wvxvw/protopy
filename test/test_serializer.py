@@ -45,13 +45,17 @@ def test_simple_serialize():
     print('generated proto message: {}'.format(content))
 
     parser = BinParser(roots)
-    result = parser.parse(test_proto, 'Test', content)
+    result1 = parser.parse(test_proto, 'Test', content)
 
-    print('result: {}'.format(result))
-    assert result.test == 123
     serializer = Serializer(parser)
 
-    assert serializer.serialize(result, 'Test') == content
+    result2 = parser.parse(
+        test_proto,
+        'Test',
+        serializer.serialize(result1, 'Test'),
+    )
+
+    assert result1 == result2
 
 
 def test_integer():

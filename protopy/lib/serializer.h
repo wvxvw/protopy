@@ -3,6 +3,7 @@
 
 #include <Python.h>
 #include <apr_general.h>
+#include <apr_hash.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -16,6 +17,8 @@ typedef struct _wbuffer {
 } wbuffer_t;
 
 PyObject* proto_serialize(PyObject*, PyObject*);
+
+void proto_serialize_impl(wbuffer_t*, const byte*, apr_hash_t* const, PyObject*);
     
 #ifdef __cplusplus
 }
