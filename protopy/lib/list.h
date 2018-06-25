@@ -113,7 +113,7 @@ typedef char* (*mapconcat_fn_t) (list);
 
 typedef int (*list_cmp_f) (list, list);
 
-char* mapconcat(mapconcat_fn_t, list, char*);
+char* mapconcat(mapconcat_fn_t, list, const char*);
 
 char* to_str(list);
 

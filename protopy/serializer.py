@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import mmap
+
 from protopy.wrapped import proto_serialize
 from protopy.parser import ensure_bytes
 
@@ -9,4 +11,9 @@ class Serializer:
 
     def serialize(self, message, ptype):
         ptype = ensure_bytes(ptype)
-        return proto_serialize(message, ptype, self.parser.def_parser.defs)
+        return proto_serialize(
+            message,
+            ptype,
+            self.parser.def_parser.defs,
+            mmap.PAGESIZE,
+        )

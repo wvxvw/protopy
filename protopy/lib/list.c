@@ -262,7 +262,7 @@ size_t str_size(const void* val) {
     return (((size_t)buf[0]) << 8) | (size_t)buf[1];
 }
 
-char* mapconcat(mapconcat_fn_t fn, list elts, char* sep) {
+char* mapconcat(mapconcat_fn_t fn, list elts, const char* sep) {
     list chunks = nil;
     char* chunk;
     size_t es = 0;
@@ -280,7 +280,7 @@ char* mapconcat(mapconcat_fn_t fn, list elts, char* sep) {
     }
 
     if (total == 0) {
-        return dupstr("nil");
+        return dupstr("");
     }
 
     chunks = nreverse(chunks);
@@ -294,8 +294,10 @@ char* mapconcat(mapconcat_fn_t fn, list elts, char* sep) {
         val = STR_VAL(chunks);
         memcpy(schunks + total, val + 2, str_size(val));
         total += str_size(val);
-        memcpy(schunks + total, sep, sep_len);
-        total += sep_len;
+        if (sep_len) {
+            memcpy(schunks + total, sep, sep_len);
+            total += sep_len;
+        }
         chunks = cdr(chunks);
     }
     schunks[total - 1] = '\0';
