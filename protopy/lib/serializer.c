@@ -58,6 +58,19 @@ byte* serialize_varint(PyObject* message, bool sign) {
     return serialize_varint_impl(vu);
 }
 
+byte* serialize_64_fixed_impl(unsigned long long vu) {
+    byte* result = malloc(10 * sizeof(byte));
+    result[0] = 0;
+    result[1] = 8;
+    size_t i;
+
+    for (i = 2; i < 10; i++) {
+        result[i] = (byte)(vu & 0xFF);
+        vu >>= 8;
+    }
+    return result;
+}
+
 byte* serialize_64_fixed(PyObject* message, bool sign) {
     PyObject* converted = PyNumber_Long(message);
     if (!converted) {
@@ -76,16 +89,17 @@ byte* serialize_64_fixed(PyObject* message, bool sign) {
         return NULL;
     }
 
-    byte* result = malloc(10 * sizeof(byte));
-    result[0] = 0;
-    result[1] = 8;
-    size_t i;
+    return serialize_64_fixed_impl(vu);
+}
 
-    for (i = 2; i < 10; i++) {
-        result[i] = (byte)(vu & 0xFF);
-        vu >>= 8;
+byte* serialize_double(PyObject* message) {
+    double val = PyFloat_AsDouble(message);
+    if (PyErr_Occurred()) {
+        return NULL;
     }
-    return result;
+    unsigned long long vu;
+    memcpy(&vu, &val, 8);
+    return serialize_64_fixed_impl(vu);
 }
 
 byte* serialize_length_delimited(PyObject* message) {
@@ -160,8 +174,10 @@ byte* proto_serialize_builtin(vt_type_t vt, apr_hash_t* const defs, PyObject* me
         case vt_sint64:
             result = serialize_varint(message, true);
             break;
-        case vt_fixed64:
         case vt_double:
+            result = serialize_double(message);
+            break;
+        case vt_fixed64:
             result = serialize_64_fixed(message, false);
             break;
         case vt_sfixed64:

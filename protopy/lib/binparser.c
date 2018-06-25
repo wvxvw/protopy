@@ -219,6 +219,7 @@ size_t parse_fixed_64(parse_state_t* const state, const field_info_t* const info
         return read;
     }
     unsigned long long val = 0;
+    double dval;
     // ntohl only takes up to 32 bits
     while (read > 0) {
         read--;
@@ -231,7 +232,8 @@ size_t parse_fixed_64(parse_state_t* const state, const field_info_t* const info
             state->out = PyLong_FromUnsignedLongLong(val);
             break;
         case vt_double:
-            state->out = PyFloat_FromDouble((double)val);
+            memcpy(&dval, &val, FIXED_LENGTH);
+            state->out = PyFloat_FromDouble(dval);
             break;
         default:
             state->out = PyLong_FromLongLong((long long)val);

@@ -75,7 +75,7 @@ def test_integer():
     assert serializer.serialize(123456789, 'int32') == b'\x95\x9a\xef:'
 
 
-def test_signed_integer():
+def test_basic_types():
     roots, test_proto, content = generate_proto_binary(
         'simple_types.proto',
         b'''
@@ -129,3 +129,6 @@ def test_signed_integer():
         == b'\x07abcdefg'
     assert serializer.serialize(result.tbytes, 'bytes') \
         == b'\x03\x01\x02\x03'
+    print('result.tdouble: {}'.format(result.tdouble))
+    assert serializer.serialize(result.tdouble, 'double') \
+        == b'\xa8\xff\xac\xf9\x01$\xfe@'
