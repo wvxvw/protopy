@@ -1,0 +1,55 @@
+#+TITLE:     Comparing Protobuf to AMF
+#+AUTHOR:    Oleg Sivokon
+#+EMAIL:     olegsivokon@gmail.com
+#+DATE:      <2018-06-27 Wed>
+#+DESCRIPTION: Comparing Protobuf to AMF
+#+KEYWORDS: Protobuf Protocol Buffers ActionScript Message Format
+#+LANGUAGE:  en
+#+OPTIONS:   H:2 num:t toc:t \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+#+INFOJS_OPT: view:nil toc:nil ltoc:t mouse:underline buttons:0 path:http://orgmode.org/org-info.js
+#+EXPORT_SELECT_TAGS: export
+#+EXPORT_EXCLUDE_TAGS: noexport
+#+LINK_UP:   
+#+LINK_HOME:
+#+startup: beamer
+#+LaTeX_CLASS: beamer
+#+LaTeX_CLASS_OPTIONS: [presentation]
+#+BEAMER_THEME: metropolis
+#+COLUMNS: %40ITEM %10BEAMER_env(Env) %9BEAMER_envargs(Env Args) %4BEAMER_col(Col) %10BEAMER_extra(Extra)
+
+* Some historical context
+
+** Battle for web dominance
+  + HTML rules the web.  XSL and then SOAP are poorly accepted.
+  + PHP, unlike ASP or JSP streams page content.
+  + Macromedia, then Adobe Flash needs streaming for interactivity.
+  + AMF gives Flash a competitive edge over SOAP.
+  + AMFPHP first, then others implement AMF.
+  + Adobe and Mozilla lose standards battle to Google, MS and Apple.
+  + Protobuf is positioned to replace AMF.
+
+* Metadata vs no metadata
+
+** AMF: yest to metadata
+   + Easy debugging.
+   + No need for codegeneration.
+   + Some overhead in short messages.
+   + Potential for references, richer vocabulary.
+
+** Protobuf: no to metadata
+   + Invention of Descriptor (fixed point description of description).
+   + Extensive infrastrucutre.  Pros: more tools.  Cons: more work.
+     - Special RPC description language.
+     - Special language-independent language for binary data
+       description.
+   + Multiple encoding layers: wire-type, value-type,
+     application-type.
+
+* Reference
+
+** Links
+  + [[http://ncannasse.fr/blog/ecmascript_4_and_the_web?lang=en][Cannasse: Ecmascript 4 and the web]]
+  + [[http://ncannasse.fr/blog/ecmascript_disharmony?lang=en][Cannasse: Ecmascript discharmony]]
+  + [[https://www.silexlabs.org/amfphp/][AMFPHP]]
+  + [[https://en.wikipedia.org/wiki/Action_Message_Format][Wikipedia: AMF]]

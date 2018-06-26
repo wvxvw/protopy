@@ -1,0 +1,89 @@
+% Created 2018-06-27 Wed 01:38
+% Intended LaTeX compiler: pdflatex
+\documentclass[presentation]{beamer}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{grffile}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{textcomp}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\usepackage[utf8]{inputenc}
+\usetheme{metropolis}
+\author{Oleg Sivokon}
+\date{\textit{<2018-06-27 Wed>}}
+\title{Comparing Protobuf to AMF}
+\hypersetup{
+ pdfauthor={Oleg Sivokon},
+ pdftitle={Comparing Protobuf to AMF},
+ pdfkeywords={Protobuf Protocol Buffers ActionScript Message Format},
+ pdfsubject={Comparing Protobuf to AMF},
+ pdfcreator={Emacs 26.1 (Org mode 9.1.9)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\begin{frame}{Outline}
+\tableofcontents
+\end{frame}
+
+
+\section{Some historical context}
+\label{sec:org5cc1c25}
+
+\begin{frame}[label={sec:org2b49d55}]{Battle for web dominance}
+\begin{itemize}
+\item HTML rules the web.  XSL and then SOAP are poorly accepted.
+\item PHP, unlike ASP or JSP streams page content.
+\item Macromedia, then Adobe Flash needs streaming for interactivity.
+\item AMF gives Flash a competitive edge over SOAP.
+\item AMFPHP first, then others implement AMF.
+\item Adobe and Mozilla lose standards battle to Google, MS and Apple.
+\item Protobuf is positioned to replace AMF.
+\end{itemize}
+\end{frame}
+
+\section{Metadata vs no metadata}
+\label{sec:org379fe19}
+
+\begin{frame}[label={sec:orgeb8ea49}]{AMF: yest to metadata}
+\begin{itemize}
+\item Easy debugging.
+\item No need for codegeneration.
+\item Some overhead in short messages.
+\item Potential for references, richer vocabulary.
+\end{itemize}
+\end{frame}
+
+\begin{frame}[label={sec:orgeb2a4e4}]{Protobuf: no to metadata}
+\begin{itemize}
+\item Invention of Descriptor (fixed point description of description).
+\item Extensive infrastrucutre.  Pros: more tools.  Cons: more work.
+\begin{itemize}
+\item Special RPC description language.
+\item Special language-independent language for binary data
+description.
+\end{itemize}
+\item Multiple encoding layers: wire-type, value-type,
+application-type.
+\end{itemize}
+\end{frame}
+
+\section{Reference}
+\label{sec:orgd53f325}
+
+\begin{frame}[label={sec:orgae4c088}]{Links}
+\begin{itemize}
+\item \href{http://ncannasse.fr/blog/ecmascript\_4\_and\_the\_web?lang=en}{Cannasse: Ecmascript 4 and the web}
+\item \href{http://ncannasse.fr/blog/ecmascript\_disharmony?lang=en}{Cannasse: Ecmascript discharmony}
+\item \href{https://www.silexlabs.org/amfphp/}{AMFPHP}
+\item \href{https://en.wikipedia.org/wiki/Action\_Message\_Format}{Wikipedia: AMF}
+\end{itemize}
+\end{frame}
+\end{document}
