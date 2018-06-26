@@ -241,11 +241,22 @@ void serialize_message(
 
     for (i = 0; i < len; i++) {
         PyObject* pval = PySequence_GetItem(message, i);
+        if (pval == Py_None) {
+            continue;
+        }
         field_info_t* info = apr_hash_get(inverse, &i, sizeof(size_t));
         size_t* field = apr_hash_get(fields, &i, sizeof(size_t));
+
         if (info) {
             vt_type_t vt = vt_builtin(info->pytype);
-            byte wt;
+            byte wt = 0;
+            if (vt == vt_default) {
+                char* key = bytes_cstr(info->pytype);
+                factory_t* ff = apr_hash_get(defs, key, APR_HASH_KEY_STRING);
+                if (ff && ff->vt_type == vt_enum) {
+                    vt = vt_enum;
+                }
+            }
             switch (vt) {
                 case vt_int32:
                 case vt_int64:
@@ -310,6 +321,7 @@ void proto_serialize_impl(
         }
         switch (f->vt_type) {
             case vt_enum:
+                serialize_varint(buf, message, false);
                 break;
             case vt_message:
                 serialize_message(buf, message, f, defs, key);

@@ -2,6 +2,8 @@ syntax = "proto3";
 
 import "foo/bar_enum.proto";
 
+// Actually zeros shouldn't be allowed as enum values.
+// No idea why protoc accepts this...
 enum TestEnum {
     TEST_MEMBER_1 = 0;
     TEST_MEMBER_2 = 2;
