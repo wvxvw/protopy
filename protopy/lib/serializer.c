@@ -45,7 +45,6 @@ void serialize_varint_impl(wbuffer_t* buf, unsigned long long vu) {
 void serialize_varint(wbuffer_t* buf, PyObject* message, bool sign) {
     PyObject* converted = PyNumber_Long(message);
     if (!converted) {
-        Py_DECREF(converted);
         return;
     }
     long long v;
@@ -84,7 +83,6 @@ void serialize_64_fixed_impl(wbuffer_t* buf, unsigned long long vu) {
 void serialize_64_fixed(wbuffer_t* buf, PyObject* message, bool sign) {
     PyObject* converted = PyNumber_Long(message);
     if (!converted) {
-        Py_DECREF(converted);
         return;
     }
     unsigned long long vu;
@@ -112,6 +110,16 @@ void serialize_double(wbuffer_t* buf, PyObject* message) {
     serialize_64_fixed_impl(buf, vu);
 }
 
+void serialize_length_delimited_impl(wbuffer_t* buf, const unsigned char* bytes, size_t len) {
+    serialize_varint_impl(buf, (unsigned long long)len);
+
+    if (buf->len + len >= buf->cap) {
+        resize_buffer(buf, buf->len + len - buf->cap);
+    }
+    memcpy(buf->buf + buf->len, bytes, len);
+    buf->len += len;
+}
+
 void serialize_length_delimited(wbuffer_t* buf, PyObject* message) {
     char* bytes;
 
@@ -128,19 +136,12 @@ void serialize_length_delimited(wbuffer_t* buf, PyObject* message) {
         bytes = PyUnicode_AsUTF8(uo);
     }
     size_t len = strlen(bytes);
-    serialize_varint_impl(buf, (unsigned long long)len);
-
-    if (buf->len + len >= buf->cap) {
-        resize_buffer(buf, buf->len + len - buf->cap);
-    }
-    memcpy(buf->buf + buf->len, bytes, len);
-    buf->len += len;
+    serialize_length_delimited_impl(buf, (unsigned char*)bytes, len);
 }
 
 void serialize_32_fixed(wbuffer_t* buf, PyObject* message, bool sign) {
     PyObject* converted = PyNumber_Long(message);
     if (!converted) {
-        Py_DECREF(converted);
         return;
     }
     unsigned long vu;
@@ -211,6 +212,98 @@ void proto_serialize_builtin(
     }
 }
 
+void
+serialize_repeated(
+    wbuffer_t* buf,
+    PyObject* message,
+    byte wt,
+    field_info_t* info,
+    apr_hash_t* defs) {
+
+    if (!PySequence_Check(message)) {
+        PyErr_Format(
+            PyExc_TypeError,
+            "%A must implement sequence protocol", message);
+        return;
+    }
+    Py_ssize_t len = PySequence_Size(message);
+    Py_ssize_t i;
+
+    vt_type_t vt = vt_builtin(info->pytype);
+    wbuffer_t subbuf = {
+        apr_palloc(buf->mp, buf->page_size),
+        buf->page_size,
+        0,
+        buf->page_size,
+        buf->mp
+    };
+
+    if (vt == vt_default || vt == vt_string || vt == vt_bytes) {
+        char* key = NULL;
+        factory_t* f = NULL;
+
+        if (vt == vt_default) {
+            key = bytes_cstr(info->pytype);
+            f = apr_hash_get(defs, key, APR_HASH_KEY_STRING);
+            if (!f) {
+                PyErr_Format(
+                    PyExc_TypeError,
+                    "Don't know how to serialize %A as %s", message, key);
+                return;
+            }
+        }
+        for (i = 0; i < len; i++) {
+            PyObject* pval = PySequence_GetItem(message, i);
+            if (pval == Py_None) {
+                continue;
+            }
+            serialize_varint_impl(buf, (unsigned long long)wt);
+            if (vt == vt_default) {
+                serialize_message(&subbuf, pval, f, defs, key);
+                serialize_length_delimited_impl(buf, subbuf.buf, subbuf.len);
+                subbuf.len = 0;
+            } else {
+                serialize_length_delimited(buf, pval);
+            }
+        }
+        if (vt == vt_default) {
+            free(key);
+        }
+    } else {
+        for (i = 0; i < len; i++) {
+            PyObject* pval = PySequence_GetItem(message, i);
+            proto_serialize_impl(&subbuf, info->pytype, defs, pval);
+        }
+        serialize_varint_impl(buf, (unsigned long long)wt);
+        serialize_length_delimited_impl(buf, subbuf.buf, subbuf.len);
+    }
+}
+
+void
+serialize_submessage(
+    wbuffer_t* const buf,
+    byte wt,
+    PyObject* pval,
+    const byte* pytype,
+    apr_hash_t* defs) {
+
+    wbuffer_t subbuf = {
+        apr_palloc(buf->mp, buf->page_size),
+        buf->page_size,
+        0,
+        buf->page_size,
+        buf->mp
+    };
+    serialize_varint_impl(buf, (unsigned long long)wt);
+    proto_serialize_impl(&subbuf, pytype, defs, pval);
+    if (PyErr_Occurred()) {
+        Py_DECREF(pval);
+        return;
+    }
+    serialize_length_delimited_impl(buf, subbuf.buf, subbuf.len);
+}
+
+// FIXME(olegs): This function is too long.  Refactor.
 void serialize_message(
     wbuffer_t* buf,
     PyObject* message,
@@ -248,15 +341,22 @@ void serialize_message(
         size_t* field = apr_hash_get(fields, &i, sizeof(size_t));
 
         if (info) {
-            vt_type_t vt = vt_builtin(info->pytype);
-            byte wt = 0;
-            if (vt == vt_default) {
-                char* key = bytes_cstr(info->pytype);
+            vt_type_t vt = vt_default;
+            char* key = bytes_cstr(info->pytype);
+
+            if (info->vt_type != vt_default) {
+                vt = info->vt_type;
+            } else {
                 factory_t* ff = apr_hash_get(defs, key, APR_HASH_KEY_STRING);
-                if (ff && ff->vt_type == vt_enum) {
-                    vt = vt_enum;
+                if (ff) {
+                    vt = ff->vt_type;
+                } else {
+                    vt = vt_builtin(info->pytype);
                 }
+                info->vt_type = vt;
             }
+            byte wt = 0;
+
             switch (vt) {
                 case vt_int32:
                 case vt_int64:
@@ -286,8 +386,24 @@ void serialize_message(
                     break;
             }
             wt |= (*field << 3);
-            serialize_varint_impl(buf, (unsigned long long)wt);
-            proto_serialize_impl(buf, info->pytype, defs, pval);
+            switch (vt) {
+                case vt_repeated:
+                    serialize_repeated(buf, pval, wt, info, defs);
+                    break;
+                case vt_map:
+                    break;
+                case vt_message:
+                    serialize_submessage(buf, wt, pval, info->pytype, defs);
+                    break;
+                default:
+                    serialize_varint_impl(buf, (unsigned long long)wt);
+                    proto_serialize_impl(buf, info->pytype, defs, pval);
+                    break;
+            }
+            if (PyErr_Occurred()) {
+                Py_DECREF(pval);
+                return;
+            }
         } else {
             PyErr_Format(
                 PyExc_TypeError,
@@ -307,18 +423,19 @@ void proto_serialize_impl(
     apr_hash_t* const defs,
     PyObject* message) {
 
-    vt_type_t vt = vt_builtin(mtype);
+    char* key = bytes_cstr(mtype);
+    factory_t* f = apr_hash_get(defs, key, APR_HASH_KEY_STRING);
 
-    if (vt != vt_default) {
-        proto_serialize_builtin(buf, vt, defs, message);
-    } else {
-        char* key = bytes_cstr(mtype);
-        factory_t* f = apr_hash_get(defs, key, APR_HASH_KEY_STRING);
-        if (!f) {
+    if (!f) {
+        vt_type_t vt = vt_builtin(mtype);
+        if (vt != vt_default) {
+            proto_serialize_builtin(buf, vt, defs, message);
+        } else {
             PyErr_Format(PyExc_TypeError, "Unknown type: %s.", key);
             free(key);
             return;
         }
+    } else {
         switch (f->vt_type) {
             case vt_enum:
                 serialize_varint(buf, message, false);
@@ -331,9 +448,7 @@ void proto_serialize_impl(
             case vt_map:
                 break;
             case vt_error:
-                break;
             case vt_default:
-                break;
             default:
                 PyErr_Format(
                     PyExc_NotImplementedError,
@@ -373,6 +488,7 @@ PyObject* proto_serialize(PyObject* self, PyObject* args) {
     buf.cap = buf_size;
     buf.len = 0;
     buf.mp = mp;
+    buf.page_size = buf_size * sizeof(byte);
     proto_serialize_impl(&buf, bmtype, ht, message);
     
     if (PyErr_Occurred()) {

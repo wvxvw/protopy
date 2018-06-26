@@ -571,13 +571,13 @@ void normalize_oneof(list message) {
         field_type = (ast_type_t)(*(int*)car(field));
         if (field_type == ast_oneof) {
             oneof_fields = cdr(cdr(field));
-            oneof_name = car(cdr(field));
             extracted = cdr(fields);
 
             while (!null(oneof_fields)) {
                 oneof_field = (list)car(oneof_fields);
-                oneof_field_num = *(int*)car(cdr(cdr(cdr(oneof_field))));
-                oneof_ftype = car(cdr(oneof_field));
+                oneof_name = STR_VAL(cdr(cdr(oneof_field)));
+                oneof_field_num = SIZE_VAL(cdr(cdr(cdr(oneof_field))));
+                oneof_ftype = STR_VAL(cdr(oneof_field));
                 extracted = cons(
                     cons_int(
                         ast_field,

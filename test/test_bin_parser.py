@@ -138,7 +138,7 @@ def test_repeated():
     result = BinParser(roots).parse(test_proto, 'Test', content)
 
     print('result: {}'.format(result))
-    assert result.either_or.some_fixed == [123456789, 987654321]
+    assert result.multiple_oneof.some_fixed == [123456789, 987654321]
 
 
 def test_fixed64():

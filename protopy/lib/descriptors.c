@@ -185,6 +185,8 @@ message_desc(
             case ast_field:
                 field_type = STR_VAL(cdr(field));
                 idx = apr_hash_get(fields, field_name, str_size(field_name) + 2);
+                // FIXME(olegs): We don't need this anymore, oneof fields should
+                // be encoded each with its own name.
                 if (idx) {
                     add_field_info(field_type, field_num, *idx, mapping, mp);
                 } else {

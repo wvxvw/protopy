@@ -9,6 +9,9 @@ void print_obj(const char* template, PyObject* obj) {
     PyObject* unicode = PyObject_Str(obj);
     if (!unicode) {
         printf("cannot print object at %p\n", obj);
+        if (PyErr_Occurred()) {
+            PyErr_Print();
+        }
         PyErr_Clear();
         return;
     }
