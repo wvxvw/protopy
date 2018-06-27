@@ -31,6 +31,7 @@ PyObject* int_to_pyint(int* val) {
 PyObject* list_to_pylist(list elts) {
     Py_ssize_t size = (Py_ssize_t)len(elts);
     PyObject* result = PyList_New(size);
+    PyObject* elt;
     byte* val;
     size_t vlen;
 
@@ -40,17 +41,19 @@ PyObject* list_to_pylist(list elts) {
             case tstr:
                 val = (byte*)car(elts);
                 vlen = str_size(val);
-                PyList_SetItem(result, size, str_to_pystr((char*)(val + 2), vlen));
+                elt = str_to_pystr((char*)(val + 2), vlen);
                 break;
             case tint:
-                PyList_SetItem(result, size, int_to_pyint((int*)car(elts)));
+                elt = int_to_pyint((int*)car(elts));
                 break;
             case tlist:
-                PyList_SetItem(result, size, list_to_pylist((list)car(elts)));
+                elt = list_to_pylist((list)car(elts));
                 break;
             default:
-                PyList_SetItem(result, size, Py_None);
+                elt = Py_None;
         }
+        Py_INCREF(elt);
+        PyList_SetItem(result, size, elt);
         size++;
         elts = cdr(elts);
     }

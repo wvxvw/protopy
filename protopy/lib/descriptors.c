@@ -39,11 +39,11 @@ void extract_type_name(
     while (i > 0) {
         i--;
         if (tname[i] == '.' || tname[i] == ':') {
-            extracted_package = apr_palloc(mp, (i - 2) * sizeof(char));
+            extracted_package = apr_palloc(mp, (i - 1) * sizeof(char));
             memcpy(extracted_package, tname + 2, (i - 2));
             extracted_package[i - 2] = '\0';
 
-            extracted_name = apr_palloc(mp, (len - i - 1) * sizeof(char));
+            extracted_name = apr_palloc(mp, (len - i) * sizeof(char));
             memcpy(extracted_name, tname + i + 1, (len - i - 1));
             extracted_name[len - i - 1] = '\0';
             *pname = extracted_name;
@@ -136,17 +136,24 @@ add_field_info(
 
 void add_pyfield(PyObject* fields, byte* field_name, apr_hash_t* keywords) {
     size_t len = str_size(field_name);
+    char* fname;
+    PyObject* new_name;
 
     if (apr_hash_get(keywords, bytes_cstr(field_name), APR_HASH_KEY_STRING)) {
-        char* fname = malloc(len + 4);
+        fname = malloc(len + 4);
         memcpy(fname, "pb_", 3);
         memcpy(fname + 3, field_name + 2, len);
         fname[len + 3] = '\0';
-        PyList_Append(fields, PyUnicode_FromString(fname));
+        new_name = PyUnicode_FromString(fname);
     } else {
-        char* fname = (char*)(field_name + 2);
-        PyList_Append(fields, PyUnicode_FromStringAndSize(fname, len));
+        fname = (char*)(field_name + 2);
+        new_name = PyUnicode_FromStringAndSize(fname, len);
     }
+    // TODO(olegs): Here and in message_desc: revisit the Py_INCREF()
+    // calls and make sure they are actually needed (I think they
+    // aren't needed).
+    Py_INCREF(new_name);
+    PyList_Append(fields, new_name);
 }
 
 void
@@ -244,7 +251,9 @@ message_desc(
 
     Py_INCREF(fields_list);
     PyObject* args = PyTuple_New(2);
-    PyTuple_SetItem(args, 0, PyUnicode_FromString(name));
+    PyObject* arg1 = PyUnicode_FromString(name);
+    Py_INCREF(arg1);
+    PyTuple_SetItem(args, 0, arg1);
     PyTuple_SetItem(args, 1, fields_list);
     PyObject* ctor = PyObject_Call(message_ctor, args, NULL);
     Py_DECREF(args);
