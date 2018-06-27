@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+import "dotted/dotted.proto";
+
+message Dotted {
+    sint32 int_field = 2;
+}
+
+message Test {
+    message InnerDotted {
+        string string_field = 1;
+    }
+    repeated .Dotted dotted_repeats = 1;
+    .Test.InnerDotted inner_dotted = 2;
+    // apparently, this is illegal...
+    // .InnerDotted simple_inner_dotted = 3;
+    .dotted.Dotted imported_dotted = 4;
+    oneof either_or {
+        .Test.InnerDotted one_of_inner_dotted = 5;
+        .dotted.Dotted imported_one_of_dotted = 6;
+    }
+}

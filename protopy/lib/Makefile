@@ -6,7 +6,7 @@ TEST_SOURCES := $(wildcard ./test_*.c)
 SOURCES := $(filter-out $(TEST_SOURCES), $(SOURCES))
 YACC_SOURCES := $(wildcard ./*.y)
 LEX_SOURCES := $(wildcard ./*.l)
-APR_INCLUDES := ../../include/apr/unix/include
+APR_INCLUDES := /usr/include/apr-1.0
 OBJECTS := $(SOURCES:.c=.o)
 YACC_GENERATED := $(YACC_SOURCES:.y=.tab.c)
 LEX_GENERATED := $(LEX_SOURCES:.l=.lex.c)

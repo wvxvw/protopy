@@ -561,3 +561,38 @@ def test_replace_method():
     result = parser.parse(test_proto, 'Wrapper', content)
     print('result after: {}'.format(result))
     assert result['replaced'].wrapped_type == 'Wrapped'
+
+
+def test_dotted():
+    roots, test_proto, content = generate_proto_binary(
+        'test_dotted_type.proto',
+        b'''dotted_repeats: [{
+            int_field: 100,
+        },
+        {
+            int_field: 1000,
+        }]
+        inner_dotted: {
+            string_field: "abcde"
+        }
+        imported_dotted: {
+            a_string: "xyz"
+            an_int: 54321
+        }
+        one_of_inner_dotted: {
+            string_field: "Lorem ipsum"
+        }
+        ''',
+    )
+    print('generated proto message: {}'.format(content))
+
+    parser = BinParser(roots)
+    parser.def_parser.parse(test_proto)
+
+    for f, p in parser.def_parser.definitions():
+        print('{} => {}'.format(f, p))
+
+    result = parser.parse(test_proto, 'Test', content)
+
+    print('result: {}'.format(result))
+    assert result.inner_dotted.string_field == "abcde"

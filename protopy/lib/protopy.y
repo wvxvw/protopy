@@ -147,7 +147,9 @@ user_type_tail : IDENTIFIER {
     $$ = cons_str($3, strlen($3), $1);
 } ;
 
-user_type : '.' user_type_tail { $$ = $2; }
+user_type : '.' user_type_tail {
+    $$ = nappend($2, cons_str(".", 1, nil));
+}
           | user_type_tail ;
 
 

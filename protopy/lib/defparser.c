@@ -142,9 +142,11 @@ byte* package_of(list ast) {
 
 void qualify_name(list elt, size_t plen, byte* package) {
     list cell = cdr(elt);
-    byte* new_name = join_bytes(package, ':', cell->value, false);
-    free(cell->value);
-    cell->value = new_name;
+    if (str_size(package) > 0) {
+        byte* new_name = join_bytes(package, ':', cell->value, false);
+        free(cell->value);
+        cell->value = new_name;
+    }
 }
 
 void collect_declarations(list ast, apr_hash_t* ht) {
@@ -243,6 +245,15 @@ byte* maybe_replace_field_type(
     byte* new_ftype = NULL;
     char* key;
 
+    if (ftype[2] == '.') {
+        size_t len = str_size(ftype) - 2;
+        new_ftype = malloc(len + 2);
+        new_ftype[0] = len >> 8;
+        new_ftype[1] = len & 0xFF;
+        memcpy(new_ftype + 2, ftype + 4, len);
+        return new_ftype;
+    }
+
     key = bytes_cstr(ftype);
     // built-in definitions don't need any special
     // treatment.
@@ -251,13 +262,17 @@ byte* maybe_replace_field_type(
     }
     // This is the top-level definition from the current file
     if (apr_hash_get(local_types, key, str_size(ftype))) {
-        new_ftype = join_bytes(package, '.', ftype, false);
+        if (str_size(package) > 0) {
+            new_ftype = join_bytes(package, '.', ftype, false);
+        } else {
+            new_ftype = str_dup(ftype);
+        }
         goto cleanup;
     }
     if (!external) {
         goto cleanup;
     }
-    if (is_prefix(package, ftype)) {
+    if (str_size(package) > 0 && is_prefix(package, ftype)) {
         goto cleanup;
     }
     apr_hash_index_t* hi;
@@ -270,7 +285,11 @@ byte* maybe_replace_field_type(
             goto cleanup;
         }
     }
-    new_ftype = join_bytes(package, '.', ftype, false);
+    if (str_size(package) > 0) {
+        new_ftype = join_bytes(package, '.', ftype, false);
+    } else {
+        new_ftype = str_dup(ftype);
+    }
 cleanup:
     free(key);
     return new_ftype;
@@ -391,9 +410,9 @@ normalize_types(
 
     apr_hash_t* external = find_external_packages(package, imports, mp);
 
-    if (!plen) {
-        return result;
-    }
+    // if (!plen) {
+    //     return result;
+    // }
     while (!null(ast)) {
         if (listp(ast)) {
             elt = (list)car(ast);

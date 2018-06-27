@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package dotted;
+
+message Dotted {
+    string a_string = 1;
+    int32 an_int = 2;
+}

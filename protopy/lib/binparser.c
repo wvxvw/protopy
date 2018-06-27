@@ -417,7 +417,7 @@ void resolve_type(parse_state_t* const state, const byte* pytype, vt_type_t* vtt
         *vttype = vt_error;
         PyErr_Format(
             PyExc_TypeError,
-            "No definition for type: %s", bytes_cstr(pytype));
+            "No definition for type: '%s'", bytes_cstr(pytype));
     }
 }
 
@@ -462,6 +462,11 @@ PyObject* parse_message(parse_state_t* const state) {
         state->factories,
         state->pytype,
         APR_HASH_KEY_STRING);
+
+    if (!state->factory) {
+        PyErr_Format(PyExc_TypeError, "No definition for %s", state->pytype);
+        return NULL;
+    }
 
     PyObject* fields = prepare_args(state);
 
