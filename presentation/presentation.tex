@@ -1,4 +1,4 @@
-% Created 2018-06-27 Wed 01:38
+% Created 2018-06-28 Thu 01:01
 % Intended LaTeX compiler: pdflatex
 \documentclass[presentation]{beamer}
 \usepackage[utf8]{inputenc}
@@ -35,9 +35,9 @@
 
 
 \section{Some historical context}
-\label{sec:org5cc1c25}
+\label{sec:org34b3072}
 
-\begin{frame}[label={sec:org2b49d55}]{Battle for web dominance}
+\begin{frame}[label={sec:orgc09b8b9}]{Battle for web dominance}
 \begin{itemize}
 \item HTML rules the web.  XSL and then SOAP are poorly accepted.
 \item PHP, unlike ASP or JSP streams page content.
@@ -50,9 +50,9 @@
 \end{frame}
 
 \section{Metadata vs no metadata}
-\label{sec:org379fe19}
+\label{sec:orge38e6ab}
 
-\begin{frame}[label={sec:orgeb8ea49}]{AMF: yest to metadata}
+\begin{frame}[label={sec:org28d97ff}]{AMF: yes to metadata}
 \begin{itemize}
 \item Easy debugging.
 \item No need for codegeneration.
@@ -61,7 +61,7 @@
 \end{itemize}
 \end{frame}
 
-\begin{frame}[label={sec:orgeb2a4e4}]{Protobuf: no to metadata}
+\begin{frame}[label={sec:orgfdf0a44}]{Protobuf: no to metadata}
 \begin{itemize}
 \item Invention of Descriptor (fixed point description of description).
 \item Extensive infrastrucutre.  Pros: more tools.  Cons: more work.
@@ -75,15 +75,106 @@ application-type.
 \end{itemize}
 \end{frame}
 
-\section{Reference}
-\label{sec:orgd53f325}
+\section{Technical details of Protobuf}
+\label{sec:orgcab892d}
 
-\begin{frame}[label={sec:orgae4c088}]{Links}
+\begin{frame}[label={sec:orge2adeac}]{Message description}
+\begin{itemize}
+\item Formal grammar attempted, but not verified.
+\item Proliferation of special cases.
+\item Confusion about semicolons.
+\item Implementing parser is not enough.
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile,label={sec:org065477a}]{Illustration I}
+ \begin{verbatim}
+syntax = "protobuf3";
+
+import "another.proto";
+
+enum Enum {
+    MEMBER_1 = 1;  // Enumerations must not be zero
+    MEMBER_2 = 3;
+}
+\end{verbatim}
+\end{frame}
+
+\begin{frame}[fragile,label={sec:org45bf4c4}]{Illustration II}
+ \begin{verbatim}
+syntax = "protobuf3";
+package some.package;
+
+message Message {
+    message NestedMessage {
+        repeated int32 repeated_field = 1;
+    }
+    NestedMessage nested = 1;
+    oneof unnecessary_name {
+        int32 either = 2;  // Must be distinct
+        string or = 3;
+    }
+    map<int32, NestedMessage> a_map = 4;
+}
+\end{verbatim}
+\end{frame}
+
+\begin{frame}[label={sec:org4a4b75a}]{Binary protocol}
+\begin{itemize}
+\item Wire-types: very limited.
+\item Value-types: no pointers.
+\item Application types: open to interpretation.
+\end{itemize}
+\end{frame}
+
+\begin{frame}[label={sec:org2439b35}]{Illustration}
+Wire-level deals with key-value pairs
+\begin{center}
+\includegraphics[height=7cm]{./images/wire-types.eps}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile,label={sec:orgcff3785}]{Value types}
+ \begin{itemize}
+\item \texttt{int} and \texttt{uint} types behave exactly the same way
+\item \texttt{repeated} types are, in fact, encoded differently, depending
+on the type being a \texttt{scalar} or not.
+\item \(sintXX(V)\) are encoded as
+\(intXX(|V| \times 2 - (\frac{V}{|V|} - 1) \times \frac{1}{2})\).
+\end{itemize}
+
+\begin{center}
+\begin{tabular}{lllll}
+varint & int32 & int64 & sint32 & sint64\\
+\hline
+fixed64 & fixed64 & sfixed64 & double & \\
+\hline
+fixed32 & fixed32 & sfixed32 &  & \\
+\hline
+lenght-delimited & bytes & string & message & repeated\\
+\end{tabular}
+\end{center}
+\end{frame}
+
+\begin{frame}[label={sec:org1c04bbb}]{Application types}
+\begin{itemize}
+\item Must be messages or enumerators.
+\item May contain extra fields, or may lack fields.
+\item Contain no identifying information.
+\item Repeated fields (and map fields) cannot be nested.
+\end{itemize}
+\end{frame}
+
+\section{Reference}
+\label{sec:org708a89a}
+
+\begin{frame}[label={sec:org5351bfc}]{Links}
 \begin{itemize}
 \item \href{http://ncannasse.fr/blog/ecmascript\_4\_and\_the\_web?lang=en}{Cannasse: Ecmascript 4 and the web}
 \item \href{http://ncannasse.fr/blog/ecmascript\_disharmony?lang=en}{Cannasse: Ecmascript discharmony}
 \item \href{https://www.silexlabs.org/amfphp/}{AMFPHP}
 \item \href{https://en.wikipedia.org/wiki/Action\_Message\_Format}{Wikipedia: AMF}
+\item \href{https://developers.google.com/protocol-buffers/docs/reference/proto3-spec}{Protobuf language specification}
 \end{itemize}
 \end{frame}
 \end{document}

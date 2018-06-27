@@ -31,7 +31,7 @@
 
 * Metadata vs no metadata
 
-** AMF: yest to metadata
+** AMF: yes to metadata
    + Easy debugging.
    + No need for codegeneration.
    + Some overhead in short messages.
@@ -46,6 +46,98 @@
    + Multiple encoding layers: wire-type, value-type,
      application-type.
 
+* Technical details of Protobuf
+  
+** Message description
+   + Formal grammar attempted, but not verified.
+   + Proliferation of special cases.
+   + Confusion about semicolons.
+   + Implementing parser is not enough.
+
+** Illustration I
+   #+BEGIN_SRC protobuf
+     syntax = "protobuf3";
+
+     import "another.proto";
+
+     enum Enum {
+         MEMBER_1 = 1;  // Enumerations must not be zero
+         MEMBER_2 = 3;
+     }
+   #+END_SRC
+
+** Illustration II
+   #+BEGIN_SRC protobuf
+     syntax = "protobuf3";
+     package some.package;
+
+     message Message {
+         message NestedMessage {
+             repeated int32 repeated_field = 1;
+         }
+         NestedMessage nested = 1;
+         oneof unnecessary_name {
+             int32 either = 2;  // Must be distinct
+             string or = 3;
+         }
+         map<int32, NestedMessage> a_map = 4;
+     }
+   #+END_SRC
+
+** Binary protocol
+   + Wire-types: very limited.
+   + Value-types: no pointers.
+   + Application types: open to interpretation.
+
+** Illustration
+   Wire-level deals with key-value pairs
+   #+BEGIN_SRC ditaa :file ./images/wire-types.eps :eps t
+     +-------------+-------------+
+     | varint(key) | field value |
+     +-------------+-------------+
+
+     +-------------+---------------+ 
+     | varint(key) | varint(value) |
+     +-------------+---------------+
+
+     +-------------+----------------+ 
+     | varint(key) | fixed64(value) |
+     +-------------+----------------+
+
+     +-------------+----------------+ 
+     | varint(key) | fixed32(value) |
+     +-------------+----------------+
+
+     +-------------+----------------+-------+
+     | varint(key) | varint(length) | value |
+     +-------------+----------------+-------+
+   #+END_SRC
+
+   #+attr_LaTeX: :height 7cm
+   #+RESULTS:
+   [[file:./images/wire-types.eps]]
+
+** Value types
+   + =int= and =uint= types behave exactly the same way
+   + =repeated= types are, in fact, encoded differently, depending
+     on the type being a =scalar= or not.
+   + $sintXX(V)$ are encoded as
+     $intXX(|V| \times 2 - (\frac{V}{|V|} - 1) \times \frac{1}{2})$.
+
+   | varint           | int32   | int64    | sint32  | sint64   |
+   |------------------+---------+----------+---------+----------|
+   | fixed64          | fixed64 | sfixed64 | double  |          |
+   |------------------+---------+----------+---------+----------|
+   | fixed32          | fixed32 | sfixed32 |         |          |
+   |------------------+---------+----------+---------+----------|
+   | lenght-delimited | bytes   | string   | message | repeated |
+
+** Application types
+   + Must be messages or enumerators.
+   + May contain extra fields, or may lack fields.
+   + Contain no identifying information.
+   + Repeated fields (and map fields) cannot be nested.
+
 * Reference
 
 ** Links
@@ -53,3 +145,4 @@
   + [[http://ncannasse.fr/blog/ecmascript_disharmony?lang=en][Cannasse: Ecmascript discharmony]]
   + [[https://www.silexlabs.org/amfphp/][AMFPHP]]
   + [[https://en.wikipedia.org/wiki/Action_Message_Format][Wikipedia: AMF]]
+  + [[https://developers.google.com/protocol-buffers/docs/reference/proto3-spec][Protobuf language specification]]
