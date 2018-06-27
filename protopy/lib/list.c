@@ -280,7 +280,7 @@ char* mapconcat(mapconcat_fn_t fn, list elts, char* sep) {
     }
 
     if (total == 0) {
-        return strdup("nil");
+        return dupstr("nil");
     }
 
     chunks = nreverse(chunks);
@@ -304,7 +304,7 @@ char* mapconcat(mapconcat_fn_t fn, list elts, char* sep) {
 
 char* to_str(list elts) {
     if (null(elts)) {
-        return strdup("nil");
+        return dupstr("nil");
     }
     
     switch (elts->t) {
@@ -315,7 +315,7 @@ char* to_str(list elts) {
         case tlist:
             return str((list)car(elts));
     }
-    return strdup("type error");
+    return dupstr("type error");
 }
 
 char* str(list elts) {
@@ -337,7 +337,7 @@ char* str(list elts) {
     }
 
     if (total == 0) {
-        return strdup("nil");
+        return dupstr("nil");
     }
 
     chunks = nreverse(chunks);
@@ -568,3 +568,12 @@ list sort_unique(list elts, list_cmp_f cmp) {
 }
 
 byte empty[2] = {0, 0};
+
+char* dupstr(char* s) {
+    size_t len = strlen(s);
+    char* r = malloc(len * sizeof(char) + 1);
+    if (r) {
+        strcpy(r, s);
+    }
+    return r;
+}

@@ -1,3 +1,5 @@
+#include <Python.h>
+
 #include <stdio.h>
 #include <string.h>
 #ifdef _WIN32
@@ -14,7 +16,6 @@
 typedef long long int64_t;
 #endif
 
-#include <Python.h>
 #include <apr_general.h>
 #include <apr_thread_proc.h>
 #include <apr_time.h>

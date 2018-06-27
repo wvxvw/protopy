@@ -52,7 +52,7 @@ void extract_type_name(
         }
     }
     *pname = bytes_cstr(tname);
-    *package = strdup("");
+    *package = dupstr("");
 }
 
 void

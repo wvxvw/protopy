@@ -743,7 +743,7 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     yyscan_t yyscanner;
     int res = yylex_init(&yyscanner);
     if (res) {
-        args->error = strdup("Couldn't initialize scanner");
+        args->error = dupstr("Couldn't initialize scanner");
         args->error_kind = memory_error;
         return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }

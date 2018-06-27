@@ -14,12 +14,15 @@ apr_lib_candidates = (
 )
 
 apr_lib = None
+extra_compile_args = None
 
 if platform == 'win32':
     apr_lib = os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
         'include/apr',
     )
+else:
+    extra_compile_args = ['-std=c11']
 for lib in apr_lib_candidates:
     if os.path.isdir(lib):
         apr_lib = lib
@@ -59,6 +62,7 @@ setup(
             include_dirs=[apr_lib],
             libraries=['apr-1'],
             py_limited_api=False,
+            extra_compile_args=extra_compile_args,
             # include_dirs=['./include/apr/unix/include']
             # extra_link_args=['-Wl,-rpath,{}'.format(LIB_DIR)]
         )

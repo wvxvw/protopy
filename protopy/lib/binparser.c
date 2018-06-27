@@ -1,8 +1,9 @@
+#include <Python.h>
+
 #include <stdio.h>
 #include <stdbool.h>
 #include <inttypes.h>
 
-#include <Python.h>
 #include <apr_hash.h>
 
 #include "binparser.h"

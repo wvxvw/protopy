@@ -1,6 +1,6 @@
-#line 2 "protopy.lex.c"
+#line 1 "protopy.lex.c"
 
-#line 4 "protopy.lex.c"
+#line 3 "protopy.lex.c"
 
 #define  YY_INT_ALIGNED short int
 
@@ -721,9 +721,9 @@ static const flex_int16_t yy_rule_linenum[46] =
             yylloc->last_column++;              \
         }                                       \
     }
-#line 725 "protopy.lex.c"
+#line 724 "protopy.lex.c"
 #define YY_NO_INPUT 1
-#line 727 "protopy.lex.c"
+#line 726 "protopy.lex.c"
 
 #define INITIAL 0
 
@@ -1076,7 +1076,7 @@ YY_DECL
 #line 33 "protopy.l"
 
 
-#line 1080 "protopy.lex.c"
+#line 1079 "protopy.lex.c"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -1173,7 +1173,7 @@ case 1:
 YY_RULE_SETUP
 #line 35 "protopy.l"
 {
-   yylval->string = strdup(yytext);
+   yylval->string = dupstr(yytext);
    return STRING_LITERAL;
 }
 	YY_BREAK
@@ -1182,7 +1182,7 @@ case 2:
 YY_RULE_SETUP
 #line 39 "protopy.l"
 {
-   yylval->string = strdup(yytext);
+   yylval->string = dupstr(yytext);
    return STRING_LITERAL;
 }
 	YY_BREAK
@@ -1190,7 +1190,7 @@ case 3:
 YY_RULE_SETUP
 #line 44 "protopy.l"
 {
-  yylval->string = strdup(yytext);
+  yylval->string = dupstr(yytext);
   return POSINTEGER;
 }
 	YY_BREAK
@@ -1198,7 +1198,7 @@ case 4:
 YY_RULE_SETUP
 #line 48 "protopy.l"
 {
-  yylval->string = strdup(yytext);
+  yylval->string = dupstr(yytext);
   return NEGINTEGER;
 }
 	YY_BREAK
@@ -1386,7 +1386,7 @@ case 41:
 YY_RULE_SETUP
 #line 91 "protopy.l"
 {
-    yylval->string = strdup(yytext);
+    yylval->string = dupstr(yytext);
     return IDENTIFIER;
 }
 	YY_BREAK
@@ -1417,7 +1417,7 @@ YY_RULE_SETUP
 #line 101 "protopy.l"
 ECHO;
 	YY_BREAK
-#line 1421 "protopy.lex.c"
+#line 1420 "protopy.lex.c"
 case YY_STATE_EOF(INITIAL):
 	yyterminate();
 

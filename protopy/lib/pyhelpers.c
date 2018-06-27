@@ -1,6 +1,6 @@
-#include <stdio.h>
-
 #include <Python.h>
+
+#include <stdio.h>
 
 #include "pyhelpers.h"
 #include "list.h"

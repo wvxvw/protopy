@@ -33,20 +33,20 @@
 %%
 
 \"(\\([\\abfnrtv]|x[0-9a-fA-F][0-9a-fA-F]|[0-7][0-7][0-7])|[^"\\])*\" {
-   yylval->string = strdup(yytext);
+   yylval->string = dupstr(yytext);
    return STRING_LITERAL;
 }
 '(\\([\\abfnrtv]|x[0-9a-fA-F][0-9a-fA-F]|[0-7][0-7][0-7])|[^'\\])*' {
-   yylval->string = strdup(yytext);
+   yylval->string = dupstr(yytext);
    return STRING_LITERAL;
 }
 
 ([1-9][0-9]*|0) {
-  yylval->string = strdup(yytext);
+  yylval->string = dupstr(yytext);
   return POSINTEGER;
 }
 ([-][1-9][0-9]*|0) {
-  yylval->string = strdup(yytext);
+  yylval->string = dupstr(yytext);
   return NEGINTEGER;
 }
 
@@ -89,7 +89,7 @@ uint64     { return TUINT64; }
 weak       { return WEAK; }
 
 [a-zA-Z_][a-zA-Z0-9_]* {
-    yylval->string = strdup(yytext);
+    yylval->string = dupstr(yytext);
     return IDENTIFIER;
 }
 

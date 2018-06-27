@@ -137,6 +137,8 @@ byte* join_bytes(const byte*, const char, const byte*, bool);
 
 extern byte empty[2];
 
+char* dupstr(char* s);
+
 #ifdef __cplusplus
 }
 #endif
