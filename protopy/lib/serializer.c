@@ -1,5 +1,5 @@
-#include <stdio.h>
 #include <Python.h>
+#include <stdio.h>
 #include <apr_general.h>
 
 #include "list.h"
