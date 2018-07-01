@@ -6,6 +6,7 @@
 
 #include <apr_hash.h>
 
+#include "helpers.h"
 #include "binparser.h"
 #include "pyhelpers.h"
 #include "descriptors.h"
@@ -574,10 +575,24 @@ PyObject* parse_message(parse_state_t* const state) {
     return state->out;
 }
 
+bool valid_key_type(vt_type_t vt) {
+    switch (vt) {
+        case vt_enum:
+        case vt_message:
+        case vt_repeated:
+        case vt_map:
+        case vt_error:
+        case vt_default:
+            return false;
+        default:
+            return true;
+    }
+}
+
 PyObject* parse_map(parse_state_t* const state, const field_info_t* const info) {
     PyObject* result = PyDict_New();
     uint64_t val[2] = { 0, 0 };
-    
+
     field_info_t key_info;
     field_info_t val_info;
     field_info_t* current_info;
@@ -590,6 +605,13 @@ PyObject* parse_map(parse_state_t* const state, const field_info_t* const info) 
     val_info.vt_type = info->extra_type_info.pair.val;
     val_info.pytype = info->extra_type_info.pair.pyval;
 
+    if (!valid_key_type(key_info.vt_type)) {
+        PyErr_Format(
+            PyExc_TypeError, "Not a valid key type: %d", key_info.vt_type);
+        Py_DECREF(result);
+        return NULL;
+    }
+    
     while (i < 2) {
         val[0] = val[1] = 0;
         parse_varint_impl(state, val);

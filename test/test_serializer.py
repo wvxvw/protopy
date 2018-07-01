@@ -194,3 +194,238 @@ def test_basic_types():
     print('result.tdouble: {}'.format(result.tdouble))
     assert serializer.serialize(result.tdouble, 'double') \
         == b'\xa8\xff\xac\xf9\x01$\xfe@'
+
+
+def test_serialize_map():
+    roots, test_proto, content = generate_proto_binary(
+        'test_map.proto',
+        b'''simple_map: [{
+                key: "foo"
+                value: 1
+            },
+            {
+                key: "bar"
+                value: 2
+            },
+            {
+                key: "baz"
+                value: 3
+            }]
+            inner_map: [{
+                key: 1
+                value: {
+                    sint_uint: [{
+                        key: 1
+                        value: 1
+                    },
+                    {
+                        key: 2,
+                        value: 2
+                    },
+                    {
+                        key: 3
+                        value: 3
+                    }]
+                }
+            },
+            {
+                key: 2
+                value: {
+                    sint_uint: [{
+                        key: -1
+                        value: 1
+                    },
+                    {
+                        key: -2,
+                        value: 2
+                    },
+                    {
+                        key: -3
+                        value: 3
+                    }]
+                }
+            },
+            {
+                key: 3
+                value: {
+                    sint_uint: [{
+                        key: -1
+                        value: 2
+                    },
+                    {
+                        key: -2,
+                        value: 4
+                    },
+                    {
+                        key: -3
+                        value: 6
+                    }]
+                }
+            }]
+        inner: {
+            sint_uint: [{
+                key: 1
+                value: 1
+            },
+            {
+                key: 2,
+                value: 2
+            },
+            {
+                key: 3
+                value: 3
+            }]
+        }
+        inner_inner: {
+            bytes_inner_map: [{
+                key: 123
+                value: {
+                    sint_uint: [{
+                        key: -1
+                        value: 4
+                    },
+                    {
+                        key: -2,
+                        value: 8
+                    },
+                    {
+                        key: -3
+                        value: 12
+                    }]
+                }
+            },
+            {
+                key: 456
+                value: {
+                    sint_uint: [{
+                        key: -1
+                        value: 8
+                    },
+                    {
+                        key: -2,
+                        value: 16
+                    },
+                    {
+                        key: -3
+                        value: 24
+                    }]
+                }
+            },
+            {
+                key: 789
+                value: {
+                    sint_uint: [{
+                        key: 1
+                        value: 16
+                    },
+                    {
+                        key: 2,
+                        value: 32
+                    },
+                    {
+                        key: 3
+                        value: 48
+                    }]
+                }
+            }]
+        }
+        inner_inner_inner: {
+            string_inner_inner_map: [{
+                key: "foo"
+                value: {
+                    bytes_inner_map: [{
+                        key: 12
+                        value: {
+                            sint_uint: [{
+                                key: 1
+                                value: 16
+                            },
+                            {
+                                key: 2,
+                                value: 32
+                            },
+                            {
+                                key: 3
+                                value: 48
+                            }]
+                        }
+                    },
+                    {
+                        key: 34
+                        value: {
+                            sint_uint: [{
+                                key: 1
+                                value: 16
+                            },
+                            {
+                                key: 2,
+                                value: 32
+                            },
+                            {
+                                key: 3
+                                value: 48
+                            }]
+                        }
+                    }]
+                },
+            },
+            {
+                key: "bar"
+                value: {
+                    bytes_inner_map: [{
+                        key: 56
+                        value: {
+                            sint_uint: [{
+                                key: 1
+                                value: 16
+                            },
+                            {
+                                key: 2,
+                                value: 32
+                            },
+                            {
+                                key: 3
+                                value: 48
+                            }]
+                        }
+                    },
+                    {
+                        key: 78
+                        value: {
+                            sint_uint: [{
+                                key: 1
+                                value: 16
+                            },
+                            {
+                                key: 2,
+                                value: 32
+                            },
+                            {
+                                key: 3
+                                value: 48
+                            }]
+                        }
+                    }]
+                }
+            }]
+        }
+        ''',
+    )
+    print('generated proto message: {}'.format(content))
+
+    parser = BinParser(roots)
+    result1 = parser.parse(test_proto, 'Test', content)
+
+    print('result: {}'.format(result1))
+
+    serializer = Serializer(parser)
+
+    payload = serializer.serialize(result1, 'Test')
+    print('payload: {}'.format(payload))
+    result2 = parser.parse(
+        test_proto,
+        'Test',
+        payload,
+    )
+
+    assert result1 == result2

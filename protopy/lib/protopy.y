@@ -284,18 +284,18 @@ oneof : ONEOF identifier '{' oneof_fields '}' {
 } ;
 
 
-key_type : TINT32   { MAYBE_ABORT; $$ = 0;  }
-         | TINT64   { MAYBE_ABORT; $$ = 1;  }
-         | TUINT32  { MAYBE_ABORT; $$ = 2;  }
-         | TUINT64  { MAYBE_ABORT; $$ = 3;  }
-         | SINT32   { MAYBE_ABORT; $$ = 4;  }
-         | SINT64   { MAYBE_ABORT; $$ = 5;  }
-         | FIXED32  { MAYBE_ABORT; $$ = 6;  }
-         | FIXED64  { MAYBE_ABORT; $$ = 7;  }
-         | SFIXED32 { MAYBE_ABORT; $$ = 8;  }
-         | SFIXED64 { MAYBE_ABORT; $$ = 9;  }
-         | TBOOL    { MAYBE_ABORT; $$ = 10; }
-         | STRING   { MAYBE_ABORT; $$ = 11; } ;
+key_type : TINT32   { MAYBE_ABORT; $$ = vt_int32;    }
+         | TINT64   { MAYBE_ABORT; $$ = vt_int64;    }
+         | TUINT32  { MAYBE_ABORT; $$ = vt_uint32;   }
+         | TUINT64  { MAYBE_ABORT; $$ = vt_uint64;   }
+         | SINT32   { MAYBE_ABORT; $$ = vt_sint32;   }
+         | SINT64   { MAYBE_ABORT; $$ = vt_sint64;   }
+         | FIXED32  { MAYBE_ABORT; $$ = vt_fixed32;  }
+         | FIXED64  { MAYBE_ABORT; $$ = vt_fixed64;  }
+         | SFIXED32 { MAYBE_ABORT; $$ = vt_sfixed32; }
+         | SFIXED64 { MAYBE_ABORT; $$ = vt_sfixed64; }
+         | TBOOL    { MAYBE_ABORT; $$ = vt_bool;     }
+         | STRING   { MAYBE_ABORT; $$ = vt_string;   } ;
 
 
 map_field : MAP '<' key_type ',' type '>' identifier '='

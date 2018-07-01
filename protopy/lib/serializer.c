@@ -3,6 +3,7 @@
 #include <apr_general.h>
 
 #include "list.h"
+#include "helpers.h"
 #include "serializer.h"
 #include "binparser.h"
 #include "pyhelpers.h"
@@ -212,6 +213,140 @@ void proto_serialize_builtin(
     }
 }
 
+wiretype_t field_and_type(vt_type_t vt, size_t field) {
+    byte wt = 0;
+
+    switch (vt) {
+        case vt_int32:
+        case vt_int64:
+        case vt_uint32:
+        case vt_uint64:
+        case vt_bool:
+        case vt_enum:
+        case vt_sint32:
+        case vt_sint64:
+            wt = 0;
+            break;
+        case vt_double:
+        case vt_fixed64:
+        case vt_sfixed64:
+            wt = 1;
+            break;
+        case vt_fixed32:
+        case vt_sfixed32:
+            wt = 3;
+            break;
+        case vt_string:
+        case vt_bytes:
+            // TODO(olegs): Repeated fields, enums and maps
+            // need special treatment.
+        default:
+            wt = 2;
+            break;
+    }
+    return wt | (field << 3);
+}
+
+void
+serialize_map(
+    wbuffer_t* buf,
+    PyObject* message,
+    byte wt,
+    field_info_t* info,
+    apr_hash_t* defs) {
+
+    // TODO(olegs): Add fast path for dictionaries
+    if (!PyMapping_Check(message)) {
+        PyErr_Format(
+            PyExc_TypeError,
+            "%A must be a dictionary", message);
+        return;
+    }
+    vt_type_t kvt = info->extra_type_info.pair.key;
+    vt_type_t vvt = info->extra_type_info.pair.val;
+    // TODO(olegs): Maybe we can thread these extra buffers when
+    // calling this function so that we can allocate less memory.
+    wbuffer_t subbuf = {
+        apr_palloc(buf->mp, buf->page_size),
+        buf->page_size,
+        0,
+        buf->page_size,
+        buf->mp
+    };
+    wbuffer_t mesbuf = {
+        apr_palloc(buf->mp, buf->page_size),
+        buf->page_size,
+        0,
+        buf->page_size,
+        buf->mp
+    };
+
+    char* key = bytes_cstr(info->extra_type_info.pair.pyval);
+    factory_t* f = NULL;
+
+    if (vvt == vt_default || vvt == vt_message) {
+        f = apr_hash_get(defs, key, APR_HASH_KEY_STRING);
+        if (!f) {
+            PyErr_Format(
+                PyExc_TypeError,
+                "Don't know how to serialize %A as %s", message, key);
+            return;
+        }
+        if (f->vt_type != vt_message) {
+            PyErr_Format(
+                PyExc_TypeError,
+                "Expected %A to be a message", message);
+            return;
+        }
+    }
+
+    Py_ssize_t len = PyMapping_Size(message);
+    PyObject* items = PyMapping_Items(message);
+    Py_ssize_t i;
+    PyObject* pykey;
+    PyObject* pyvalue;
+    PyObject* pypair;
+    wiretype_t iwt;
+    char* pytype = bytes_cstr(info->extra_type_info.pair.pyval);
+
+    for (i = 0; i < len; i++) {
+        pypair = PyList_GetItem(items, i);
+        pyvalue = PyTuple_GetItem(pypair, 1);
+        if (pyvalue == Py_None) {
+            continue;
+        }
+        pykey = PyTuple_GetItem(pypair, 0);
+        serialize_varint_impl(buf, (unsigned long long)wt);
+        iwt = field_and_type(kvt, 1);
+        serialize_varint_impl(&subbuf, (unsigned long long)iwt);
+        proto_serialize_builtin(&subbuf, kvt, defs, pykey);
+        if (PyErr_Occurred()) {
+            break;
+        }
+        iwt = field_and_type(vvt, 2);
+        serialize_varint_impl(&subbuf, (unsigned long long)iwt);
+
+        if (vvt == vt_string || vvt == vt_bytes || is_scalar(vvt)) {
+            proto_serialize_builtin(&subbuf, vvt, defs, pyvalue);
+        } else {
+            serialize_message(&mesbuf, pyvalue, f, defs, pytype);
+            serialize_length_delimited_impl(&subbuf, mesbuf.buf, mesbuf.len);
+            mesbuf.len = 0;
+        }
+        if (PyErr_Occurred()) {
+            break;
+        }
+        serialize_length_delimited_impl(buf, subbuf.buf, subbuf.len);
+        subbuf.len = 0;
+    }
+    Py_DECREF(items);
+
+    free(pytype);
+    if (key != NULL) {
+        free(key);
+    }
+}
+
 void
 serialize_repeated(
     wbuffer_t* buf,
@@ -355,42 +490,13 @@ void serialize_message(
                 }
                 info->vt_type = vt;
             }
-            byte wt = 0;
-
-            switch (vt) {
-                case vt_int32:
-                case vt_int64:
-                case vt_uint32:
-                case vt_uint64:
-                case vt_bool:
-                case vt_enum:
-                case vt_sint32:
-                case vt_sint64:
-                    wt = 0;
-                    break;
-                case vt_double:
-                case vt_fixed64:
-                case vt_sfixed64:
-                    wt = 1;
-                    break;
-                case vt_fixed32:
-                case vt_sfixed32:
-                    wt = 3;
-                    break;
-                case vt_string:
-                case vt_bytes:
-                    // TODO(olegs): Repeated fields, enums and maps
-                    // need special treatment.
-                default:
-                    wt = 2;
-                    break;
-            }
-            wt |= (*field << 3);
+            byte wt = field_and_type(vt, *field);
             switch (vt) {
                 case vt_repeated:
                     serialize_repeated(buf, pval, wt, info, defs);
                     break;
                 case vt_map:
+                    serialize_map(buf, pval, wt, info, defs);
                     break;
                 case vt_message:
                     serialize_submessage(buf, wt, pval, info->pytype, defs);
@@ -401,7 +507,9 @@ void serialize_message(
                     break;
             }
             if (PyErr_Occurred()) {
-                Py_DECREF(pval);
+                if (pval) {
+                    Py_DECREF(pval);
+                }
                 return;
             }
         } else {
@@ -413,7 +521,9 @@ void serialize_message(
             Py_DECREF(pval);
             return;
         }
-        Py_DECREF(pval);
+        if (pval) {
+            Py_DECREF(pval);
+        }
     }
 }
 

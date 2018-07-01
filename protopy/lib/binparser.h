@@ -5,6 +5,7 @@
 #include <apr_hash.h>
 
 #include "list.h"
+#include "helpers.h"
 #include "descriptors.h"
 
 #ifdef __cplusplus

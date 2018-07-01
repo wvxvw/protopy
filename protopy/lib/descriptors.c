@@ -3,6 +3,7 @@
 #include <apr_hash.h>
 
 #include "list.h"
+#include "helpers.h"
 #include "defparser.h"
 #include "descriptors.h"
 #include "pyhelpers.h"
@@ -230,7 +231,13 @@ message_desc(
                 info->vt_type = vt_map;
                 info->extra_type_info.pair.key = (vt_type_t)SIZE_VAL(kv_type);
                 info->extra_type_info.pair.val = vt_default;
+                // TODO(olegs): Why not store this in field_type?
                 info->extra_type_info.pair.pyval = STR_VAL(cdr(kv_type));
+                printf(
+                    "info->extra_type_info.pair.key: %d -> %s / %s\n",
+                    info->extra_type_info.pair.key,
+                    bytes_cstr(info->extra_type_info.pair.pyval),
+                    str(field));
 
                 add_pyfield(fields_list, field_name, keywords);
                 field_idx++;
@@ -313,6 +320,7 @@ create_descriptors(
     for (hi = apr_hash_first(mp, descriptions); hi; hi = apr_hash_next(hi)) {
         apr_hash_this(hi, &key, NULL, &val);
         file_desc = (list)val;
+        printf("file_desc: %s\n", str(file_desc));
 
         while (!null(file_desc)) {
             desc = LIST_VAL(file_desc);
