@@ -15,12 +15,20 @@ apr_lib_candidates = (
 
 apr_lib = None
 extra_compile_args = None
+package_data = {}
+library_dirs = None
+data_files = None
 
 if platform == 'win32':
     apr_lib = os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
         'include/apr',
     )
+    package_data = {
+        'lib': ['lib/libapr-1.dll'],
+    }
+    library_dirs = ['lib/apr']
+    data_files = [('lib', ['lib/libapr-1.dll'])]
 else:
     extra_compile_args = ['-std=c11']
 for lib in apr_lib_candidates:
@@ -41,10 +49,8 @@ setup(
     url='TBD',
     license='PROPRIETARY',
     scripts=['bin/protopy'],
-    package_data={
-        'protopy/test/resources': ['test/resources/*.proto'],
-    },
-    # data_files=[('test/resources', 'test/resources/*.proto')],
+    package_data=package_data,
+    data_files=data_files,
     ext_package='protopy',
     ext_modules=[
         Extension(
@@ -61,6 +67,7 @@ setup(
                 'protopy/wrapper.c',
             ],
             include_dirs=[apr_lib],
+            library_dirs=library_dirs,
             libraries=['apr-1'],
             py_limited_api=False,
             extra_compile_args=extra_compile_args,
