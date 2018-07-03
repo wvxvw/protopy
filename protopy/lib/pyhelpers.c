@@ -28,7 +28,7 @@ PyObject* int_to_pyint(int* val) {
     return PyLong_FromLong((long)(*val));
 }
 
-PyObject* list_to_pylist(list elts) {
+PyObject* list_to_pylist(list_t* elts) {
     Py_ssize_t size = (Py_ssize_t)len(elts);
     PyObject* result = PyList_New(size);
     PyObject* elt;
@@ -47,7 +47,7 @@ PyObject* list_to_pylist(list elts) {
                 elt = int_to_pyint((int*)car(elts));
                 break;
             case tlist:
-                elt = list_to_pylist((list)car(elts));
+                elt = list_to_pylist((list_t*)car(elts));
                 break;
             default:
                 elt = Py_None;
@@ -60,10 +60,10 @@ PyObject* list_to_pylist(list elts) {
     return result;
 }
 
-list pylist_to_list(PyObject* obj) {
+list_t* pylist_to_list(PyObject* obj, apr_pool_t* mp) {
     Py_ssize_t len = PyList_Size(obj);
     Py_ssize_t i = 0;
-    list result = nil;
+    list_t* result = nil;
     char* val;
     PyObject* item;
     Py_ssize_t buf_len;
@@ -71,7 +71,7 @@ list pylist_to_list(PyObject* obj) {
     while (i < len) {
         item = PyList_GetItem(obj, i);
         PyBytes_AsStringAndSize(item, &val, &buf_len);
-        result = cons_str(val, (size_t)buf_len, result);
+        result = cons_str(val, (size_t)buf_len, result, mp);
         i++;
     }
 

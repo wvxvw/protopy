@@ -23,7 +23,7 @@ PyObject* proto_serialize(PyObject*, PyObject*);
 
 void serialize_message(wbuffer_t*, PyObject*, factory_t*, apr_hash_t*, const char*);
 
-void proto_serialize_impl(wbuffer_t*, const byte*, apr_hash_t* const, PyObject*);
+void proto_serialize_impl(wbuffer_t*, const char*, apr_hash_t* const, PyObject*);
     
 #ifdef __cplusplus
 }

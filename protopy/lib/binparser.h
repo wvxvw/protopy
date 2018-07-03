@@ -65,16 +65,7 @@ PyObject* make_state(PyObject*, PyObject*);
 
 PyObject* state_ready(PyObject*, PyObject*);
 
-void resolve_type(parse_state_t* const, const byte*, vt_type_t*);
-
-typedef struct _builtin_type {
-    const unsigned char* name;
-    const vt_type_t value;
-} builtin_type_t;
-
-#define BUILTIN_TYPES 16
-
-vt_type_t vt_builtin(const byte*);
+void resolve_type(parse_state_t* const, const char*, vt_type_t*);
 
 #ifdef __cplusplus
 }

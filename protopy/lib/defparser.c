@@ -105,19 +105,19 @@ char* unquote(char* input) {
     return input;
 }
 
-list imports(list ast) {
-    list elt;
-    list result = nil;
+list_t* imports(list_t* ast, apr_pool_t* mp) {
+    list_t* elt;
+    list_t* result = nil;
     byte* pname;
     char* pname_unquoted;
 
     while (!null(ast)) {
         if (listp(ast)) {
-            elt = (list)car(ast);
+            elt = (list_t*)car(ast);
             if (!null(elt) && (ast_type_t)(*(int*)car(elt)) == ast_import) {
-                pname = str_dup((byte*)car(cdr(elt)));
-                pname_unquoted = unquote(bytes_cstr(pname));
-                result = cons_str(pname_unquoted, strlen(pname_unquoted), result);
+                pname = str_dup((byte*)car(cdr(elt)), mp);
+                pname_unquoted = unquote(bytes_cstr(pname, mp));
+                result = cons_str(pname_unquoted, strlen(pname_unquoted), result, mp);
             }
         }
         ast = cdr(ast);
@@ -125,14 +125,14 @@ list imports(list ast) {
     return result;
 }
 
-byte* package_of(list ast) {
-    list elt;
+byte* package_of(list_t* ast, apr_pool_t* mp) {
+    list_t* elt;
 
     while (!null(ast)) {
         if (listp(ast)) {
-            elt = (list)car(ast);
-            if (!null(elt) && (ast_type_t)(*(int*)car(elt)) == ast_package) {
-                return str_dup((byte*)car(cdr(elt)));
+            elt = LIST_VAL(ast);
+            if (!null(elt) && (ast_type_t)(SIZE_VAL(elt)) == ast_package) {
+                return str_dup(STR_VAL(cdr(elt)), mp);
             }
         }
         ast = cdr(ast);
@@ -140,26 +140,24 @@ byte* package_of(list ast) {
     return empty;
 }
 
-void qualify_name(list elt, size_t plen, byte* package) {
-    list cell = cdr(elt);
+void qualify_name(list_t* elt, size_t plen, byte* package, apr_pool_t* mp) {
+    list_t* cell = cdr(elt);
     if (str_size(package) > 0) {
-        byte* new_name = join_bytes(package, ':', cell->value, false);
-        free(cell->value);
-        cell->value = new_name;
+        cell->value = join_bytes(package, ':', cell->value, false, mp);
     }
 }
 
-void collect_declarations(list ast, apr_hash_t* ht) {
-    list elt;
+void collect_declarations(list_t* ast, apr_hash_t* ht, apr_pool_t* mp) {
+    list_t* elt;
     byte* key;
 
     while (!null(ast)) {
-        elt = (list)car(ast);
-        switch ((ast_type_t)(*(int*)car(elt))) {
+        elt = LIST_VAL(ast);
+        switch ((ast_type_t)(SIZE_VAL(elt))) {
             case ast_enum:
             case ast_message:
-                key = (byte*)car(cdr(elt));
-                apr_hash_set(ht, bytes_cstr(key), str_size(key), (void*)1);
+                key = STR_VAL(cdr(elt));
+                apr_hash_set(ht, bytes_cstr(key, mp), str_size(key), (void*)1);
                 break;
             default:
                 break;
@@ -168,7 +166,7 @@ void collect_declarations(list ast, apr_hash_t* ht) {
     }
 }
 
-byte* package_dir(byte* file) {
+byte* package_dir(byte* file, apr_pool_t* mp) {
     size_t i = 2;
     size_t found = 0;
     size_t len = str_size(file);
@@ -180,9 +178,9 @@ byte* package_dir(byte* file) {
         i++;
     }
     if (found == 0) {
-        return str_dup(file);
+        return str_dup(file, mp);
     }
-    return sub_str(file, found - 2);
+    return sub_str(file, found - 2, mp);
 }
 
 bool package_matches(const char* type, const char* package) {
@@ -238,7 +236,6 @@ byte* maybe_replace_field_type(
     byte* mtype,
     byte* package,
     apr_hash_t* local_types,
-    apr_hash_t* builtins,
     apr_hash_t* external,
     apr_pool_t* mp) {
 
@@ -254,26 +251,26 @@ byte* maybe_replace_field_type(
         return new_ftype;
     }
 
-    key = bytes_cstr(ftype);
+    key = bytes_cstr(ftype, mp);
     // built-in definitions don't need any special
     // treatment.
-    if (apr_hash_get(builtins, key, str_size(ftype))) {
-        goto cleanup;
+    if (vt_builtin(key) != vt_default) {
+        return new_ftype;
     }
     // This is the top-level definition from the current file
     if (apr_hash_get(local_types, key, str_size(ftype))) {
         if (str_size(package) > 0) {
-            new_ftype = join_bytes(package, '.', ftype, false);
+            new_ftype = join_bytes(package, '.', ftype, false, mp);
         } else {
-            new_ftype = str_dup(ftype);
+            new_ftype = str_dup(ftype, mp);
         }
-        goto cleanup;
+        return new_ftype;
     }
     if (!external) {
-        goto cleanup;
+        return new_ftype;
     }
     if (str_size(package) > 0 && is_prefix(package, ftype)) {
-        goto cleanup;
+        return new_ftype;
     }
     apr_hash_index_t* hi;
     void* val;
@@ -282,37 +279,34 @@ byte* maybe_replace_field_type(
     for (hi = apr_hash_first(mp, external); hi; hi = apr_hash_next(hi)) {
         apr_hash_this(hi, &ext, NULL, &val);
         if (is_prefix(ext, ftype)) {
-            goto cleanup;
+            return new_ftype;
         }
     }
     if (str_size(package) > 0) {
-        new_ftype = join_bytes(package, '.', ftype, false);
+        new_ftype = join_bytes(package, '.', ftype, false, mp);
     } else {
-        new_ftype = str_dup(ftype);
+        new_ftype = str_dup(ftype, mp);
     }
-cleanup:
-    free(key);
     return new_ftype;
 }
 
 void
 qualify_message_fields(
-    list elt,
+    list_t* elt,
     byte* package,
     apr_hash_t* local_types,
-    apr_hash_t* builtins,
     apr_hash_t* external,
     apr_pool_t* mp) {
 
     byte* mtype = (byte*)car(cdr(elt));
-    list fields = cdr(cdr(elt));
-    list field;
+    list_t* fields = cdr(cdr(elt));
+    list_t* field;
     byte* ftype;
     ast_type_t rtype;
     byte* replaced;
 
     while (!null(fields)) {
-        field = (list)car(fields);
+        field = (list_t*)car(fields);
         rtype = (ast_type_t)(*(int*)car(field));
         switch (rtype) {
             case ast_repeated:
@@ -323,11 +317,9 @@ qualify_message_fields(
                     mtype,
                     package,
                     local_types,
-                    builtins,
                     external,
                     mp);
                 if (replaced) {
-                    free(cdr(field)->value);
                     cdr(field)->value = replaced;
                 }
                 break;
@@ -338,11 +330,9 @@ qualify_message_fields(
                     mtype,
                     package,
                     local_types,
-                    builtins,
                     external,
                     mp);
                 if (replaced) {
-                    free(cdr(car(cdr(field)))->value);
                     cdr(car(cdr(field)))->value = replaced;
                 }
             default:
@@ -353,7 +343,7 @@ qualify_message_fields(
 }
 
 apr_hash_t*
-find_external_packages(byte* package, list imports, apr_pool_t* mp) {
+find_external_packages(byte* package, list_t* imports, apr_pool_t* mp) {
 
     byte* imported;
     size_t len = str_size(package);
@@ -386,7 +376,7 @@ find_external_packages(byte* package, list imports, apr_pool_t* mp) {
             if (result == NULL) {
                 result = apr_hash_make(mp);
             }
-            bimported = package_dir(imported);
+            bimported = package_dir(imported, mp);
             apr_hash_set(result, bimported, str_size(bimported) + 2, (void*)1);
         }
 
@@ -395,39 +385,34 @@ find_external_packages(byte* package, list imports, apr_pool_t* mp) {
     return result;
 }
 
-list
+list_t*
 normalize_types(
-    list ast,
+    list_t* ast,
     apr_hash_t* local_types,
-    apr_hash_t* builtins,
-    list imports,
+    list_t* imports,
     apr_pool_t* mp) {
 
-    byte* package = package_of(ast);
+    byte* package = package_of(ast, mp);
     size_t plen = str_size(package);
-    list elt;
-    list result = ast;
+    list_t* elt;
+    list_t* result = ast;
 
     apr_hash_t* external = find_external_packages(package, imports, mp);
 
-    // if (!plen) {
-    //     return result;
-    // }
     while (!null(ast)) {
         if (listp(ast)) {
-            elt = (list)car(ast);
+            elt = LIST_VAL(ast);
             if (!null(elt)) {
-                switch ((ast_type_t)(*(int*)car(elt))) {
+                switch ((ast_type_t)(SIZE_VAL(elt))) {
                     case ast_enum:
-                        qualify_name(elt, plen, package);
+                        qualify_name(elt, plen, package, mp);
                         break;
                     case ast_message:
-                        qualify_name(elt, plen, package);
+                        qualify_name(elt, plen, package, mp);
                         qualify_message_fields(
                             elt,
                             package,
                             local_types,
-                            builtins,
                             external,
                             mp);
                         break;
@@ -441,9 +426,9 @@ normalize_types(
     return result;
 }
 
-list rename_message(list original, byte* new_name, ast_type_t field_type) {
-    list fields = duplicate(cdr(cdr(original)));
-    int* tag = malloc(sizeof(int));
+list_t* rename_message(list_t* original, byte* new_name, ast_type_t field_type, apr_pool_t* mp) {
+    list_t* fields = duplicate(cdr(cdr(original)), mp);
+    int* tag = apr_palloc(mp, sizeof(int));
     switch (field_type) {
         case ast_enum:
             *tag = 1;
@@ -454,11 +439,11 @@ list rename_message(list original, byte* new_name, ast_type_t field_type) {
         default:
             break;
     }
-    list renamed = cons(tag, tint, cons(new_name, tstr, fields));
+    list_t* renamed = cons(tag, tint, cons(new_name, tstr, fields, mp), mp);
     return renamed;
 }
 
-void rename_extracted_types(apr_pool_t* mp, list inner, list normalized) {
+void rename_extracted_types(apr_pool_t* mp, list_t* inner, list_t* normalized) {
     apr_hash_t* extracted = apr_hash_make(mp);
     byte* mtpype = (byte*)car(cdr(normalized));
     byte* type;
@@ -473,42 +458,39 @@ void rename_extracted_types(apr_pool_t* mp, list inner, list normalized) {
         inner = cdr(inner);
     }
 
-    list fields = cdr(cdr(normalized));
-    list field;
+    list_t* fields = cdr(cdr(normalized));
+    list_t* field;
     ast_type_t ft;
     byte* pytype;
     byte* replacement;
-    list pair;
+    list_t* pair;
 
     while (!null(fields)) {
         field = car(fields);
-        ft = (ast_type_t)(*(int*)car(field));
+        ft = (ast_type_t)(SIZE_VAL(field));
         switch (ft) {
             case ast_repeated:
             case ast_field:
-                pytype = (byte*)car(cdr(field));
+                pytype = STR_VAL(cdr(field));
                 if (apr_hash_get(extracted, pytype + 2, str_size(pytype))) {
-                    replacement = join_bytes(mtpype, '.', pytype, false);
-                    free(cdr(field)->value);
+                    replacement = join_bytes(mtpype, '.', pytype, false, mp);
                     cdr(field)->value = replacement;
                 }
                 break;
             case ast_map:
                 pair = car(cdr(field));
-                pytype = (byte*)car(cdr(pair));
+                pytype = STR_VAL(cdr(pair));
                 if (apr_hash_get(extracted, pytype + 2, str_size(pytype))) {
-                    replacement = join_bytes(mtpype, '.', pytype, false);
-                    free(cdr(pair)->value);
+                    replacement = join_bytes(mtpype, '.', pytype, false, mp);
                     cdr(pair)->value = replacement;
                 }
                 break;
             case ast_oneof:
                 pair = cdr(cdr(field));
                 while (!null(pair)) {
-                    pytype = (byte*)car(cdr(car(pair)));
+                    pytype = STR_VAL(cdr(car(pair)));
                     if (apr_hash_get(extracted, pytype + 2, str_size(pytype))) {
-                        replacement = join_bytes(mtpype, '.', pytype, false);
-                        free(cdr(car(pair))->value);
+                        replacement = join_bytes(mtpype, '.', pytype, false, mp);
                         cdr(car(pair))->value = replacement;
                     }
                     pair = cdr(pair);
@@ -521,30 +503,36 @@ void rename_extracted_types(apr_pool_t* mp, list inner, list normalized) {
     }
 }
 
-list inner_messages(list message, list* normalized, byte* prefix, apr_pool_t* mp) {
+list_t* inner_messages(list_t* message, list_t** normalized, byte* prefix, apr_pool_t* mp) {
     byte* message_type = (byte*)car(message);
     size_t mt_len = str_size(message_type);
-    list processed = cons_str((char*)(message_type + 2), mt_len, cons_int(0, sizeof(int), nil));
-    list fields = cdr(message);
-    list field;
+    list_t* processed = cons_str(
+        (char*)(message_type + 2),
+        mt_len,
+        cons_int(0, sizeof(int), nil, mp),
+        mp);
+    list_t* fields = cdr(message);
+    list_t* field;
     ast_type_t field_type;
     byte* subtype;
     byte* subname;
-    list result = nil;
+    list_t* result = nil;
 
     while (!null(fields)) {
-        field = (list)car(fields);
-        field_type = *(int*)car(field);
+        field = LIST_VAL(fields);
+        field_type = SIZE_VAL(field);
 
         switch (field_type) {
             case ast_enum:
             case ast_message:
-                subname = (byte*)car(cdr(field));
-                subtype = join_bytes(prefix, '.', subname, false);
-                result = cons(rename_message(field, subtype, field_type), tlist, result);
+                subname = STR_VAL(cdr(field));
+                subtype = join_bytes(prefix, '.', subname, false, mp);
+                result = cons(
+                    rename_message(field, subtype, field_type, mp),
+                    tlist, result, mp);
                 break;
             default:
-                processed = cons(duplicate(field), tlist, processed);
+                processed = cons(duplicate(field, mp), tlist, processed, mp);
         }
         fields = cdr(fields);
     }
@@ -555,26 +543,26 @@ list inner_messages(list message, list* normalized, byte* prefix, apr_pool_t* mp
     return result;
 }
 
-void normalize_oneof(list message) {
-    list fields = cdr(cdr(message));
-    list field;
-    list oneof_fields;
-    list extracted;
-    list oneof_field;
+void normalize_oneof(list_t* message, apr_pool_t* mp) {
+    list_t* fields = cdr(cdr(message));
+    list_t* field;
+    list_t* oneof_fields;
+    list_t* extracted;
+    list_t* oneof_field;
     byte* oneof_name;
     byte* oneof_ftype;
     int oneof_field_num;
     ast_type_t field_type;
 
     while (!null(fields)) {
-        field = (list)car(fields);
+        field = (list_t*)car(fields);
         field_type = (ast_type_t)(*(int*)car(field));
         if (field_type == ast_oneof) {
             oneof_fields = cdr(cdr(field));
             extracted = cdr(fields);
 
             while (!null(oneof_fields)) {
-                oneof_field = (list)car(oneof_fields);
+                oneof_field = LIST_VAL(oneof_fields);
                 oneof_name = STR_VAL(cdr(cdr(oneof_field)));
                 oneof_field_num = SIZE_VAL(cdr(cdr(cdr(oneof_field))));
                 oneof_ftype = STR_VAL(cdr(oneof_field));
@@ -583,17 +571,20 @@ void normalize_oneof(list message) {
                         ast_field,
                         1,
                         cons(
-                            str_dup(oneof_ftype),
+                            str_dup(oneof_ftype, mp),
                             tstr,
                             cons(
-                                str_dup(oneof_name),
+                                str_dup(oneof_name, mp),
                                 tstr,
-                                cons_int(oneof_field_num, 1, nil)))),
+                                cons_int(oneof_field_num, 1, nil, mp),
+                                mp),
+                            mp),
+                        mp),
                     tlist,
-                    extracted);
+                    extracted,
+                    mp);
                 oneof_fields = cdr(oneof_fields);
             }
-            del(fields->value);
             fields->value = extracted->value;
             fields->next = extracted->next;
         }
@@ -601,36 +592,36 @@ void normalize_oneof(list message) {
     }
 }
 
-list normalize_messages(list ast, apr_pool_t* mp) {
-    list result = nil;
-    list node;
+list_t* normalize_messages(list_t* ast, apr_pool_t* mp) {
+    list_t* result = nil;
+    list_t* node;
     ast_type_t node_type;
-    list normalized;
+    list_t* normalized;
     byte* message_type;
-    list inner;
-    list inner_normalized;
+    list_t* inner;
+    list_t* inner_normalized;
 
     while (!null(ast)) {
-        if (null((list)car(ast))) {
+        if (null((list_t*)car(ast))) {
             ast = cdr(ast);
             continue;
         }
-        node = (list)car(ast);
+        node = (list_t*)car(ast);
         node_type = (ast_type_t)(*(int*)car(node));
         switch (node_type) {
             case ast_message:
                 message_type = (byte*)car(cdr(node));
                 inner = inner_messages(cdr(node), &normalized, message_type, mp);
-                normalize_oneof(normalized);
-                result = cons(normalized, tlist, result);
+                normalize_oneof(normalized, mp);
+                result = cons(normalized, tlist, result, mp);
                 inner_normalized = normalize_messages(inner, mp);
                 while (!null(inner_normalized)) {
-                    result = cons(car(inner_normalized), tlist, result);
+                    result = cons(car(inner_normalized), tlist, result, mp);
                     inner_normalized = cdr(inner_normalized);
                 }
                 break;
             default:
-                result = cons(node, tlist, result);
+                result = cons(node, tlist, result, mp);
         }
         ast = cdr(ast);
     }
@@ -647,46 +638,37 @@ int exists_and_is_regular(apr_finfo_t* finfo, const char* path, apr_pool_t* mp) 
     return 0;
 }
 
-int resolved_source(const char* path, list roots, byte** result) {
+int resolved_source(const char* path, list_t* roots, byte** result, apr_pool_t* mp) {
     apr_finfo_t finfo;
-    apr_pool_t* mp = NULL;
     int retcode = 0;
-
-    if (apr_pool_create(&mp, NULL) != APR_SUCCESS) {
-        return 3;
-    }
     
     switch (exists_and_is_regular(&finfo, path, mp)) {
         case 2:
             retcode = 2;
-            goto cleanup;
+            return retcode;
         case 0:
-            *result = cstr_bytes((char*)path);
-            goto cleanup;
+            *result = cstr_bytes((char*)path, mp);
+            return retcode;
     }
     
     byte* combined = NULL;
     byte* root;
-    byte* path_bytes = cstr_bytes(path);
+    byte* path_bytes = cstr_bytes(path, mp);
 
     while (!null(roots)) {
-        free(combined);
-        root = (byte*)car(roots);
-        combined = join_bytes(root, '/', path_bytes, true);
+        root = STR_VAL(roots);
+        combined = join_bytes(root, '/', path_bytes, true, mp);
         switch (exists_and_is_regular(&finfo, ((char*)combined) + 2, mp)) {
             case 2:
                 retcode = 2;
-                goto cleanup;
+                return retcode;
             case 0:
                 *result = combined;
-                goto cleanup;
+                return retcode;
         }
         roots = cdr(roots);
     }
     retcode = 1;
-
-cleanup:
-    apr_pool_destroy(mp);
     return retcode;
 }
 
@@ -701,14 +683,15 @@ void* parse_one_def_cleanup(
     if (h) {
         fclose(h);
     }
-    free(source);
     progress->thds_statuses[args->thread_id] = false;
     apr_thread_exit(thd, APR_SUCCESS);
     return NULL;
 }
 
-char* error_message_3(const char* tpl, const char* arg0, list arg1) {
-    char* arg1_cstr = str(arg1);
+char* error_message_3(const char* tpl, const char* arg0, list_t* arg1, apr_pool_t* mp) {
+    char* arg1_cstr = str(arg1, mp);
+    // We use malloc here because this memory is going to be used by
+    // Python interpreter after the pool goes away.
     char* result = malloc((strlen(tpl) + strlen(arg0) + strlen(arg1_cstr) + 1) * sizeof(char));
     sprintf(result, tpl, arg0, arg1_cstr);
     return result;
@@ -720,17 +703,16 @@ char* error_message_2(const char* tpl, const char* arg) {
     return result;
 }
 
-char* error_message_1(const char* tpl, byte* arg) {
+char* error_message_1(const char* tpl, byte* arg, apr_pool_t* mp) {
     if (arg == NULL) {
         char* cstr = "<NULL>";
         char* result = malloc((strlen(tpl) + 7) * sizeof(char));
         sprintf(result, tpl, cstr);
         return result;
     }
-    char* cstr = bytes_cstr(arg);
+    char* cstr = bytes_cstr(arg, mp);
     char* result = malloc((strlen(tpl) + str_size(arg) + 1) * sizeof(char));
     sprintf(result, tpl, cstr);
-    free(cstr);
     return result;
 }
 
@@ -743,29 +725,38 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     yyscan_t yyscanner;
     int res = yylex_init(&yyscanner);
     if (res) {
-        args->error = dupstr("Couldn't initialize scanner");
+        args->error = mdupstr("Couldn't initialize scanner");
         args->error_kind = memory_error;
         return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
-    switch (resolved_source(args->source, args->roots, &source)) {
+    apr_pool_t* mp;
+    if (apr_pool_create(&mp, NULL) != APR_SUCCESS) {
+        args->error = mdupstr("Couldn't initialize memory pool");
+        args->error_kind = memory_error;
+        return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
+    }
+    switch (resolved_source(args->source, args->roots, &source, mp)) {
         case 2:
             args->error = error_message_2("Must be regular file '%s'", args->source);
             args->error_kind = fs_error;
             return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
         case 1:
-            args->error = error_message_3("Couldn't find '%s' in '%s'", args->source, args->roots);
+            args->error = error_message_3(
+                "Couldn't find '%s' in '%s'",
+                args->source, args->roots, mp);
             args->error_kind = fs_error;
             return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
 
-    char* resolved_source = bytes_cstr(source);
+    char* resolved_source = bytes_cstr(source, mp);
     h = fopen(resolved_source, "rb");
-    free(resolved_source);
     if (h == NULL) {
         if (source != NULL) {
-            args->error = error_message_1("Couldn't open '%s'", source);
+            args->error = error_message_1("Couldn't open '%s'", source, mp);
         } else {
-            args->error = error_message_3("Couldn't open '%s' in '%s'", args->source, args->roots);
+            args->error = error_message_3(
+                "Couldn't open '%s' in '%s'",
+                args->source, args->roots, mp);
         }
         args->error_kind = fs_error;
         return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
@@ -786,18 +777,19 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     do {
         status = yypush_parse(
             ps,
-            yylex(&value, &location, yyscanner),
+            yylex(&value, &location, yyscanner, mp),
             &value,
             &location,
             yyscanner,
-            &args->result);
+            &args->result,
+            mp);
     } while (status == YYPUSH_MORE);
     
     yypstate_delete(ps);
     yylex_destroy(yyscanner);
 
     if (status != 0) {
-        args->error = error_message_1("Couldn't parse '%s'", source);
+        args->error = error_message_1("Couldn't parse '%s'", source, mp);
         args->error_kind = parser_error;
         return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }

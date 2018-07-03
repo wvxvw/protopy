@@ -13,7 +13,7 @@ extern "C" {
 typedef struct _kv {
     vt_type_t key;
     vt_type_t val;
-    byte* pyval;
+    const char* pyval;
 } kv_t;
 
 typedef union _type_info {
@@ -24,8 +24,7 @@ typedef union _type_info {
 typedef struct _field_info {
     size_t n;
     vt_type_t vt_type;
-    // TODO(olegs): Make this const char* instead same for kv_t.pyval
-    const byte* pytype;
+    const char* pytype;
     type_info_t extra_type_info;
 } field_info_t;
 
@@ -40,7 +39,7 @@ void extract_type_name(const byte*, apr_pool_t*, char**, char**);
 void
 enum_desc(
     const byte*,
-    const list,
+    const list_t*,
     apr_hash_t* const,
     PyObject*,
     apr_pool_t* const);
@@ -48,7 +47,7 @@ enum_desc(
 void
 message_desc(
     const byte*,
-    const list,
+    const list_t*,
     apr_hash_t* const,
     PyObject*,
     apr_hash_t* const,

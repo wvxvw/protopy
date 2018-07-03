@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <apr_general.h>
 
-#include "list.h"
 #include "helpers.h"
 #include "serializer.h"
 #include "binparser.h"
@@ -281,7 +280,7 @@ serialize_map(
         buf->mp
     };
 
-    char* key = bytes_cstr(info->extra_type_info.pair.pyval);
+    const char* key = info->extra_type_info.pair.pyval;
     factory_t* f = NULL;
 
     if (vvt == vt_default || vvt == vt_message) {
@@ -307,7 +306,7 @@ serialize_map(
     PyObject* pyvalue;
     PyObject* pypair;
     wiretype_t iwt;
-    char* pytype = bytes_cstr(info->extra_type_info.pair.pyval);
+    const char* pytype = info->extra_type_info.pair.pyval;
 
     for (i = 0; i < len; i++) {
         pypair = PyList_GetItem(items, i);
@@ -340,11 +339,6 @@ serialize_map(
         subbuf.len = 0;
     }
     Py_DECREF(items);
-
-    free(pytype);
-    if (key != NULL) {
-        free(key);
-    }
 }
 
 void
@@ -374,11 +368,10 @@ serialize_repeated(
     };
 
     if (vt == vt_default || vt == vt_string || vt == vt_bytes) {
-        char* key = NULL;
+        const char* key = info->pytype;
         factory_t* f = NULL;
 
         if (vt == vt_default) {
-            key = bytes_cstr(info->pytype);
             f = apr_hash_get(defs, key, APR_HASH_KEY_STRING);
             if (!f) {
                 PyErr_Format(
@@ -401,9 +394,6 @@ serialize_repeated(
                 serialize_length_delimited(buf, pval);
             }
         }
-        if (vt == vt_default) {
-            free(key);
-        }
     } else {
         for (i = 0; i < len; i++) {
             PyObject* pval = PySequence_GetItem(message, i);
@@ -419,7 +409,7 @@ serialize_submessage(
     wbuffer_t* const buf,
     byte wt,
     PyObject* pval,
-    const byte* pytype,
+    const char* pytype,
     apr_hash_t* defs) {
 
     wbuffer_t subbuf = {
@@ -477,7 +467,7 @@ void serialize_message(
 
         if (info) {
             vt_type_t vt = vt_default;
-            char* key = bytes_cstr(info->pytype);
+            const char* key = info->pytype;
 
             if (info->vt_type != vt_default) {
                 vt = info->vt_type;
@@ -529,20 +519,18 @@ void serialize_message(
 
 void proto_serialize_impl(
     wbuffer_t* buf,
-    const byte* mtype,
+    const char* mtype,
     apr_hash_t* const defs,
     PyObject* message) {
 
-    char* key = bytes_cstr(mtype);
-    factory_t* f = apr_hash_get(defs, key, APR_HASH_KEY_STRING);
+    factory_t* f = apr_hash_get(defs, mtype, APR_HASH_KEY_STRING);
 
     if (!f) {
         vt_type_t vt = vt_builtin(mtype);
         if (vt != vt_default) {
             proto_serialize_builtin(buf, vt, defs, message);
         } else {
-            PyErr_Format(PyExc_TypeError, "Unknown type: %s.", key);
-            free(key);
+            PyErr_Format(PyExc_TypeError, "Unknown type: %s.", mtype);
             return;
         }
     } else {
@@ -551,7 +539,7 @@ void proto_serialize_impl(
                 serialize_varint(buf, message, false);
                 break;
             case vt_message:
-                serialize_message(buf, message, f, defs, key);
+                serialize_message(buf, message, f, defs, mtype);
                 break;
             case vt_repeated:
                 break;
@@ -562,11 +550,9 @@ void proto_serialize_impl(
             default:
                 PyErr_Format(
                     PyExc_NotImplementedError,
-                    "Expected container type: %s, but got %d.", key, f->vt_type);
-                free(key);
+                    "Expected container type: %s, but got %d.", mtype, f->vt_type);
                 return;
         }
-        free(key);
     }
 }
 
@@ -586,7 +572,6 @@ PyObject* proto_serialize(PyObject* self, PyObject* args) {
         return NULL;
     }
     
-    byte* bmtype = cstr_bytes(mtype);
     apr_pool_t* mp;
 
     if (apr_pool_create(&mp, NULL) != APR_SUCCESS) {
@@ -599,15 +584,13 @@ PyObject* proto_serialize(PyObject* self, PyObject* args) {
     buf.len = 0;
     buf.mp = mp;
     buf.page_size = buf_size * sizeof(byte);
-    proto_serialize_impl(&buf, bmtype, ht, message);
+    proto_serialize_impl(&buf, mtype, ht, message);
     
     if (PyErr_Occurred()) {
-        free(bmtype);
         apr_pool_destroy(mp);
         return NULL;
     }
     PyObject* result = PyBytes_FromStringAndSize((char*)buf.buf, buf.len);
-    free(bmtype);
     apr_pool_destroy(mp);
     return result;
 }

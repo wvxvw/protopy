@@ -683,11 +683,11 @@ static const flex_int32_t yy_rule_can_match_eol[47] =
 
 static const flex_int16_t yy_rule_linenum[46] =
     {   0,
-       35,   39,   44,   48,   53,   54,   56,   57,   58,   59,
-       60,   61,   62,   63,   64,   65,   66,   67,   68,   69,
-       70,   71,   72,   73,   74,   75,   76,   77,   78,   79,
-       80,   81,   82,   83,   84,   85,   86,   87,   88,   89,
-       91,   96,   97,   98,   99
+       38,   42,   47,   51,   56,   57,   59,   60,   61,   62,
+       63,   64,   65,   66,   67,   68,   69,   70,   71,   72,
+       73,   74,   75,   76,   77,   78,   79,   80,   81,   82,
+       83,   84,   85,   86,   87,   88,   89,   90,   91,   92,
+       94,   99,  100,  101,  102
     } ;
 
 /* The intent behind this definition is that it'll catch
@@ -706,8 +706,11 @@ static const flex_int16_t yy_rule_linenum[46] =
 #include "helpers.h"
 #include "protopy.tab.h"
 
-#define YY_DECL  int yylex \
-    (YYSTYPE* yylval_param, YYLTYPE* yylloc_param, void* yyscanner)
+#define YY_DECL  int yylex          \
+            (YYSTYPE* yylval_param, \
+             YYLTYPE* yylloc_param, \
+             void* yyscanner,       \
+             apr_pool_t* mp)
 
 #define YY_USER_ACTION                          \
     yylloc->first_line = yylloc->last_line;     \
@@ -721,9 +724,9 @@ static const flex_int16_t yy_rule_linenum[46] =
             yylloc->last_column++;              \
         }                                       \
     }
-#line 725 "protopy.lex.c"
+#line 728 "protopy.lex.c"
 #define YY_NO_INPUT 1
-#line 727 "protopy.lex.c"
+#line 730 "protopy.lex.c"
 
 #define INITIAL 0
 
@@ -1073,10 +1076,10 @@ YY_DECL
 
 	{
 /* %% [7.0] user's declarations go here */
-#line 33 "protopy.l"
+#line 36 "protopy.l"
 
 
-#line 1080 "protopy.lex.c"
+#line 1083 "protopy.lex.c"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -1171,253 +1174,253 @@ do_action:	/* This label is used only to access EOF actions. */
 case 1:
 /* rule 1 can match eol */
 YY_RULE_SETUP
-#line 35 "protopy.l"
+#line 38 "protopy.l"
 {
-   yylval->string = dupstr(yytext);
+   yylval->string = dupstr(yytext, mp);
    return STRING_LITERAL;
 }
 	YY_BREAK
 case 2:
 /* rule 2 can match eol */
 YY_RULE_SETUP
-#line 39 "protopy.l"
+#line 42 "protopy.l"
 {
-   yylval->string = dupstr(yytext);
+   yylval->string = dupstr(yytext, mp);
    return STRING_LITERAL;
 }
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
-#line 44 "protopy.l"
+#line 47 "protopy.l"
 {
-  yylval->string = dupstr(yytext);
+  yylval->string = dupstr(yytext, mp);
   return POSINTEGER;
 }
 	YY_BREAK
 case 4:
 YY_RULE_SETUP
-#line 48 "protopy.l"
+#line 51 "protopy.l"
 {
-  yylval->string = dupstr(yytext);
+  yylval->string = dupstr(yytext, mp);
   return NEGINTEGER;
 }
 	YY_BREAK
 case 5:
 YY_RULE_SETUP
-#line 53 "protopy.l"
+#line 56 "protopy.l"
 { return BOOL_TRUE; }
 	YY_BREAK
 case 6:
 YY_RULE_SETUP
-#line 54 "protopy.l"
+#line 57 "protopy.l"
 { return BOOL_FALSE; }
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
-#line 56 "protopy.l"
+#line 59 "protopy.l"
 { return TBOOL; }
 	YY_BREAK
 case 8:
 YY_RULE_SETUP
-#line 57 "protopy.l"
+#line 60 "protopy.l"
 { return ENUM; }
 	YY_BREAK
 case 9:
 YY_RULE_SETUP
-#line 58 "protopy.l"
+#line 61 "protopy.l"
 { return EXTENSIONS; }
 	YY_BREAK
 case 10:
 YY_RULE_SETUP
-#line 59 "protopy.l"
+#line 62 "protopy.l"
 { return EXTEND; }
 	YY_BREAK
 case 11:
 YY_RULE_SETUP
-#line 60 "protopy.l"
+#line 63 "protopy.l"
 { return FIXED32; }
 	YY_BREAK
 case 12:
 YY_RULE_SETUP
-#line 61 "protopy.l"
+#line 64 "protopy.l"
 { return FIXED64; }
 	YY_BREAK
 case 13:
 YY_RULE_SETUP
-#line 62 "protopy.l"
+#line 65 "protopy.l"
 { return IMPORT; }
 	YY_BREAK
 case 14:
 YY_RULE_SETUP
-#line 63 "protopy.l"
+#line 66 "protopy.l"
 { return TINT32; }
 	YY_BREAK
 case 15:
 YY_RULE_SETUP
-#line 64 "protopy.l"
+#line 67 "protopy.l"
 { return TINT64; }
 	YY_BREAK
 case 16:
 YY_RULE_SETUP
-#line 65 "protopy.l"
+#line 68 "protopy.l"
 { return MAX; }
 	YY_BREAK
 case 17:
 YY_RULE_SETUP
-#line 66 "protopy.l"
+#line 69 "protopy.l"
 { return MESSAGE; }
 	YY_BREAK
 case 18:
 YY_RULE_SETUP
-#line 67 "protopy.l"
+#line 70 "protopy.l"
 { return MAP; }
 	YY_BREAK
 case 19:
 YY_RULE_SETUP
-#line 68 "protopy.l"
+#line 71 "protopy.l"
 { return ONEOF; }
 	YY_BREAK
 case 20:
 YY_RULE_SETUP
-#line 69 "protopy.l"
+#line 72 "protopy.l"
 { return OPTION; }
 	YY_BREAK
 case 21:
 YY_RULE_SETUP
-#line 70 "protopy.l"
+#line 73 "protopy.l"
 { return TOPTIONAL; }
 	YY_BREAK
 case 22:
 YY_RULE_SETUP
-#line 71 "protopy.l"
+#line 74 "protopy.l"
 { return PACKAGE; }
 	YY_BREAK
 case 23:
 YY_RULE_SETUP
-#line 72 "protopy.l"
+#line 75 "protopy.l"
 { return PUBLIC; }
 	YY_BREAK
 case 24:
 YY_RULE_SETUP
-#line 73 "protopy.l"
+#line 76 "protopy.l"
 { return REQUIRED; }
 	YY_BREAK
 case 25:
 YY_RULE_SETUP
-#line 74 "protopy.l"
+#line 77 "protopy.l"
 { return REPEATED; }
 	YY_BREAK
 case 26:
 YY_RULE_SETUP
-#line 75 "protopy.l"
+#line 78 "protopy.l"
 { return RESERVED; }
 	YY_BREAK
 case 27:
 YY_RULE_SETUP
-#line 76 "protopy.l"
+#line 79 "protopy.l"
 { return RETURNS; }
 	YY_BREAK
 case 28:
 YY_RULE_SETUP
-#line 77 "protopy.l"
+#line 80 "protopy.l"
 { return RPC; }
 	YY_BREAK
 case 29:
 YY_RULE_SETUP
-#line 78 "protopy.l"
+#line 81 "protopy.l"
 { return SERVICE; }
 	YY_BREAK
 case 30:
 YY_RULE_SETUP
-#line 79 "protopy.l"
+#line 82 "protopy.l"
 { return SFIXED32; }
 	YY_BREAK
 case 31:
 YY_RULE_SETUP
-#line 80 "protopy.l"
+#line 83 "protopy.l"
 { return SFIXED64; }
 	YY_BREAK
 case 32:
 YY_RULE_SETUP
-#line 81 "protopy.l"
+#line 84 "protopy.l"
 { return SINT32; }
 	YY_BREAK
 case 33:
 YY_RULE_SETUP
-#line 82 "protopy.l"
+#line 85 "protopy.l"
 { return SINT64; }
 	YY_BREAK
 case 34:
 YY_RULE_SETUP
-#line 83 "protopy.l"
+#line 86 "protopy.l"
 { return STRING; }
 	YY_BREAK
 case 35:
 YY_RULE_SETUP
-#line 84 "protopy.l"
+#line 87 "protopy.l"
 { return STREAM; }
 	YY_BREAK
 case 36:
 YY_RULE_SETUP
-#line 85 "protopy.l"
+#line 88 "protopy.l"
 { return SYNTAX; }
 	YY_BREAK
 case 37:
 YY_RULE_SETUP
-#line 86 "protopy.l"
+#line 89 "protopy.l"
 { return TO; }
 	YY_BREAK
 case 38:
 YY_RULE_SETUP
-#line 87 "protopy.l"
+#line 90 "protopy.l"
 { return TUINT32; }
 	YY_BREAK
 case 39:
 YY_RULE_SETUP
-#line 88 "protopy.l"
+#line 91 "protopy.l"
 { return TUINT64; }
 	YY_BREAK
 case 40:
 YY_RULE_SETUP
-#line 89 "protopy.l"
+#line 92 "protopy.l"
 { return WEAK; }
 	YY_BREAK
 case 41:
 YY_RULE_SETUP
-#line 91 "protopy.l"
+#line 94 "protopy.l"
 {
-    yylval->string = dupstr(yytext);
+    yylval->string = dupstr(yytext, mp);
     return IDENTIFIER;
 }
 	YY_BREAK
 case 42:
 YY_RULE_SETUP
-#line 96 "protopy.l"
+#line 99 "protopy.l"
 { return yytext[0]; }
 	YY_BREAK
 case 43:
 /* rule 43 can match eol */
 YY_RULE_SETUP
-#line 97 "protopy.l"
+#line 100 "protopy.l"
 
 	YY_BREAK
 case 44:
 /* rule 44 can match eol */
 YY_RULE_SETUP
-#line 98 "protopy.l"
+#line 101 "protopy.l"
 
 	YY_BREAK
 case 45:
 YY_RULE_SETUP
-#line 99 "protopy.l"
+#line 102 "protopy.l"
 
 	YY_BREAK
 case 46:
 YY_RULE_SETUP
-#line 101 "protopy.l"
+#line 104 "protopy.l"
 ECHO;
 	YY_BREAK
-#line 1421 "protopy.lex.c"
+#line 1424 "protopy.lex.c"
 case YY_STATE_EOF(INITIAL):
 	yyterminate();
 
@@ -2720,7 +2723,7 @@ void yyfree (void * ptr , yyscan_t yyscanner)
 
 /* %ok-for-header */
 
-#line 101 "protopy.l"
+#line 104 "protopy.l"
 
 
 int yywrap(yyscan_t yyscanner)

@@ -27,12 +27,13 @@ typedef enum error_kind_t {
 
 typedef struct parse_def_args_t {
     const char* source;
-    list roots;
-    list result;
+    list_t* roots;
+    list_t* result;
     char* error;
     error_kind_t error_kind;
     size_t thread_id;
     parsing_progress_t* progress;
+    apr_pool_t* mp;
 } parse_def_args_t;
 
 typedef struct error_info_t {
@@ -55,15 +56,15 @@ typedef enum ast_type_t {
 
 void* APR_THREAD_FUNC parse_one_def(apr_thread_t*, void*);
 
-list imports(list);
+list_t* imports(list_t*, apr_pool_t*);
 
 char* unqote(char*);
 
-list normalize_types(list, apr_hash_t*, apr_hash_t*, list, apr_pool_t*);
+list_t* normalize_types(list_t*, apr_hash_t*, list_t*, apr_pool_t*);
 
-list normalize_messages(list, apr_pool_t*);
+list_t* normalize_messages(list_t*, apr_pool_t*);
 
-void collect_declarations(list, apr_hash_t*);
+void collect_declarations(list_t*, apr_hash_t*, apr_pool_t*);
 
 #ifdef __cplusplus
 }

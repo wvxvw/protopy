@@ -1,6 +1,7 @@
 #ifndef HELPERS_H_
 #define HELPERS_H_
 
+#include <apr_general.h>
 // TODO(olegs): Even though we don't use list.h, I cannot find a way
 // to make protopy.tab.h to include it, so whenever we use it, we need
 // to first include list.h...
@@ -46,10 +47,23 @@ typedef enum vt_type_t {
     vt_map = 19
 } vt_type_t;
 
-#define YY_DECL  int yylex \
-    (YYSTYPE* yylval_param, YYLTYPE* yylloc_param, void* yyscanner)
+vt_type_t vt_builtin(const char*);
 
-extern int yylex(YYSTYPE* yylval_param, YYLTYPE* yylloc_param, void* yyscanner);
+typedef struct _builtin_type {
+    const char* name;
+    const vt_type_t value;
+} builtin_type_t;
+
+#define BUILTIN_TYPES 16
+
+#define YY_DECL  int yylex \
+    (YYSTYPE* yylval_param, YYLTYPE* yylloc_param, void* yyscanner, apr_pool_t* mp)
+
+extern int yylex(
+    YYSTYPE* yylval_param,
+    YYLTYPE* yylloc_param,
+    void* yyscanner,
+    apr_pool_t* mp);
 
 #ifdef __cplusplus
 }

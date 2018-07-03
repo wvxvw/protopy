@@ -4,7 +4,8 @@
 %locations
 %lex-param {void* scanner}
 %parse-param {void* scanner}
-%parse-param {list* result}
+%parse-param {list_t** result}
+%parse-param {apr_pool_t* mp}
 
 %{
 #include <stdio.h>
@@ -16,27 +17,21 @@
 #include "list.h"
 #include "protopy.tab.h"
 
-void yyerror(YYLTYPE *locp, void* scanner, list* result, char const *msg) {
+void yyerror(YYLTYPE *locp, void* scanner, list_t** result, apr_pool_t* mp, char const *msg) {
     fprintf(stderr, "%d/%d: %s\n", locp->first_line, locp->first_column, msg);
 }
 
-list tag(int t, list body) {
-    return cons_int(t, 1, body);
+list_t* tag(int t, list_t* body, apr_pool_t* mp) {
+    return cons_int(t, 1, body, mp);
 }
 
-#define MAYBE_ABORT                             \
-do {                                            \
-    if (false) {                                \
-        YYABORT;                                \
-    }                                           \
-} while (0)
 %}
 
 %union {
     size_t keyword;
     int64_t index;
     char* string;
-    list object;
+    list_t* object;
     void* nothing;
 }
 %start s;
@@ -107,107 +102,100 @@ do {                                            \
 
 %%
 
-string_literal : STRING_LITERAL { MAYBE_ABORT; $$ = cons_str($1, strlen($1), nil); } ;
+string_literal : STRING_LITERAL { $$ = cons_str($1, strlen($1), nil, mp); } ;
 
-import_kind : WEAK { MAYBE_ABORT; $$ = 1; }
-            | PUBLIC { MAYBE_ABORT; $$ = 2; }
-            | %empty { MAYBE_ABORT; $$ = 0; } ;
+import_kind : WEAK { $$ = 1; }
+            | PUBLIC { $$ = 2; }
+            | %empty { $$ = 0; } ;
 
 
-import : IMPORT import_kind string_literal ';' { MAYBE_ABORT; $$ = $3; } ;
+import : IMPORT import_kind string_literal ';' { $$ = $3; } ;
 
 
 package_name : identifier {
-    MAYBE_ABORT;
-    $$ = cons_str($1, strlen($1), nil);
+    $$ = cons_str($1, strlen($1), nil, mp);
 }
              | package_name '.' identifier {
-    MAYBE_ABORT;
-    $$ = cons_str($3, strlen($3), $1);
+    $$ = cons_str($3, strlen($3), $1, mp);
 } ;
 
 package : PACKAGE package_name ';' {
-    MAYBE_ABORT;
     $2 = nreverse($2);
-    char* pname = mapconcat(to_str, $2, ".");
-    $$ = cons_str(pname, strlen(pname), nil);
-    del($2);
+    char* pname = mapconcat(to_str, $2, ".", mp);
+    $$ = cons_str(pname, strlen(pname), nil, mp);
 } ;
 
 
-syntax : SYNTAX '=' string_literal ';' { MAYBE_ABORT; $$ = NULL; } ;
+syntax : SYNTAX '=' string_literal ';' { $$ = NULL; } ;
 
 
 user_type_tail : IDENTIFIER {
-    MAYBE_ABORT;
-    $$ = cons_str($1, strlen($1), nil);
+    $$ = cons_str($1, strlen($1), nil, mp);
 }
           | user_type_tail '.' IDENTIFIER  {
-    MAYBE_ABORT;
-    $$ = cons_str($3, strlen($3), $1);
+    $$ = cons_str($3, strlen($3), $1, mp);
 } ;
 
 user_type : '.' user_type_tail {
-    $$ = nappend($2, cons_str(".", 1, nil));
+    $$ = nappend($2, cons_str(".", 1, nil, mp));
 }
           | user_type_tail ;
 
 
-built_in_type : TBOOL    { MAYBE_ABORT; $$ = "bool";       }
-              | FIXED32  { MAYBE_ABORT; $$ = "fixed32";    }
-              | FIXED64  { MAYBE_ABORT; $$ = "fixed64";    }
-              | TINT32   { MAYBE_ABORT; $$ = "int32";      }
-              | TINT64   { MAYBE_ABORT; $$ = "int64";      }
-              | SFIXED32 { MAYBE_ABORT; $$ = "sfixed32";   }
-              | SFIXED64 { MAYBE_ABORT; $$ = "sfixed64";   }
-              | SINT32   { MAYBE_ABORT; $$ = "sint32";     }
-              | SINT64   { MAYBE_ABORT; $$ = "sint64";     }
-              | STRING   { MAYBE_ABORT; $$ = "string";     }
-              | TUINT32  { MAYBE_ABORT; $$ = "uint32";     }
-              | TUINT64  { MAYBE_ABORT; $$ = "uint64";     } ;
+built_in_type : TBOOL    { $$ = "bool";       }
+              | FIXED32  { $$ = "fixed32";    }
+              | FIXED64  { $$ = "fixed64";    }
+              | TINT32   { $$ = "int32";      }
+              | TINT64   { $$ = "int64";      }
+              | SFIXED32 { $$ = "sfixed32";   }
+              | SFIXED64 { $$ = "sfixed64";   }
+              | SINT32   { $$ = "sint32";     }
+              | SINT64   { $$ = "sint64";     }
+              | STRING   { $$ = "string";     }
+              | TUINT32  { $$ = "uint32";     }
+              | TUINT64  { $$ = "uint64";     } ;
 
 
 type : built_in_type {
-     MAYBE_ABORT;
-     $$ = cons_str($1, strlen($1), nil);
+    $$ = cons_str($1, strlen($1), nil, mp);
 }
-     | user_type { $$ = reverse($$); } ;
+     | user_type { $$ = reverse($$, mp); } ;
 
 
 keyword : built_in_type
-        | ENUM       { MAYBE_ABORT; $$ = "enum";       }
-        | EXTENSIONS { MAYBE_ABORT; $$ = "extensions"; }
-        | IMPORT     { MAYBE_ABORT; $$ = "import";     }
-        | MESSAGE    { MAYBE_ABORT; $$ = "message";    }
-        | MAP        { MAYBE_ABORT; $$ = "map";        }
-        | ONEOF      { MAYBE_ABORT; $$ = "oneof";      }
-        | OPTION     { MAYBE_ABORT; $$ = "option";     }
-        | TOPTIONAL  { MAYBE_ABORT; $$ = "optional";   }
-        | PACKAGE    { MAYBE_ABORT; $$ = "package";    }
-        | PUBLIC     { MAYBE_ABORT; $$ = "public";     }
-        | REQUIRED   { MAYBE_ABORT; $$ = "required";   }
-        | REPEATED   { MAYBE_ABORT; $$ = "repeated";   }
-        | RESERVED   { MAYBE_ABORT; $$ = "reserved";   }
-        | RETURNS    { MAYBE_ABORT; $$ = "returns";    }
-        | RPC        { MAYBE_ABORT; $$ = "rpc";        }
-        | SERVICE    { MAYBE_ABORT; $$ = "service";    }
-        | STREAM     { MAYBE_ABORT; $$ = "stream";     }
-        | SYNTAX     { MAYBE_ABORT; $$ = "syntax";     }
-        | TO         { MAYBE_ABORT; $$ = "to";         }
-        | WEAK       { MAYBE_ABORT; $$ = "weak";       }
-        | MAX        { MAYBE_ABORT; $$ = "max";        } ;
+        | ENUM       { $$ = "enum";       }
+        | EXTENSIONS { $$ = "extensions"; }
+        | IMPORT     { $$ = "import";     }
+        | MESSAGE    { $$ = "message";    }
+        | MAP        { $$ = "map";        }
+        | ONEOF      { $$ = "oneof";      }
+        | OPTION     { $$ = "option";     }
+        | TOPTIONAL  { $$ = "optional";   }
+        | PACKAGE    { $$ = "package";    }
+        | PUBLIC     { $$ = "public";     }
+        | REQUIRED   { $$ = "required";   }
+        | REPEATED   { $$ = "repeated";   }
+        | RESERVED   { $$ = "reserved";   }
+        | RETURNS    { $$ = "returns";    }
+        | RPC        { $$ = "rpc";        }
+        | SERVICE    { $$ = "service";    }
+        | STREAM     { $$ = "stream";     }
+        | SYNTAX     { $$ = "syntax";     }
+        | TO         { $$ = "to";         }
+        | WEAK       { $$ = "weak";       }
+        | MAX        { $$ = "max";        } ;
 
 identifier : keyword | IDENTIFIER ;
 
 
-boolean : BOOL_TRUE { MAYBE_ABORT; $$ = cons_int(1, sizeof(int), nil); }
-        | BOOL_FALSE { MAYBE_ABORT; $$ = cons_int(0, sizeof(int), nil); };
+boolean : BOOL_TRUE { $$ = cons_int(1, sizeof(int), nil, mp); }
+        | BOOL_FALSE { $$ = cons_int(0, sizeof(int), nil, mp); };
 
 
-positive_int : POSINTEGER { MAYBE_ABORT; $$ = (size_t)atoi($1); } ;
+positive_int : POSINTEGER { $$ = (size_t)atoi($1); } ;
 
-literal : NEGINTEGER { MAYBE_ABORT; $$ = cons_int(atoi($1), sizeof(int), nil); }
-        | positive_int { MAYBE_ABORT; $$ = cons_int($1, sizeof(int), nil); }
+literal : NEGINTEGER { $$ = cons_int(atoi($1), sizeof(int), nil, mp); }
+        | positive_int { $$ = cons_int($1, sizeof(int), nil, mp); }
         | string_literal
         | boolean
         | user_type ;
@@ -222,10 +210,10 @@ option_value : literal { $$ = NULL; }
              | '{' option_kvs '}' { $$ = NULL; } ;
 
 
-assignment : option_name '=' option_value { MAYBE_ABORT; $$ = NULL; } ;
+assignment : option_name '=' option_value { $$ = NULL; } ;
 
 
-option_def : assignment ';' { MAYBE_ABORT; $$ = NULL; } ;
+option_def : assignment ';' { $$ = NULL; } ;
 
 
 field_options_body : assignment | field_options_body ',' assignment ;
@@ -234,17 +222,16 @@ field_options_body : assignment | field_options_body ',' assignment ;
 field_options : '[' field_options_body ']' | %empty;
 
 
-field_label : REQUIRED  { MAYBE_ABORT; $$ = 1; }
-            | REPEATED  { MAYBE_ABORT; $$ = 2; }
-            | TOPTIONAL { MAYBE_ABORT; $$ = 3; }
-            | %empty    { MAYBE_ABORT; $$ = 0; } ;
+field_label : REQUIRED  { $$ = 1; }
+            | REPEATED  { $$ = 2; }
+            | TOPTIONAL { $$ = 3; }
+            | %empty    { $$ = 0; } ;
 
 
 field : field_label type identifier '=' positive_int field_options ';' {
-    MAYBE_ABORT;
-    char* tname = mapconcat(to_str, $2, ".");
-    list pos = cons_int($5, sizeof(int), nil);
-    list idf = cons_str($3, strlen($3), pos);
+    char* tname = mapconcat(to_str, $2, ".", mp);
+    list_t* pos = cons_int($5, sizeof(int), nil, mp);
+    list_t* idf = cons_str($3, strlen($3), pos, mp);
     int ftag;
 
     switch ($1) {
@@ -255,92 +242,82 @@ field : field_label type identifier '=' positive_int field_options ';' {
             ftag = 7;
             break;
     }
-    $$ = tag(ftag, cons_str(tname, strlen(tname), idf));
-    del($2);
+    $$ = tag(ftag, cons_str(tname, strlen(tname), idf, mp), mp);
 } ;
 
 oneof_field : type identifier '=' positive_int field_options ';' {
-    MAYBE_ABORT;
-    char* tname = mapconcat(to_str, $1, ".");
-    list pos = cons_int($4, sizeof(int), nil);
-    list idf = cons_str($2, strlen($2), pos);
-    $$ = tag(7, cons_str(tname, strlen(tname), idf));
-    del($1);
+    char* tname = mapconcat(to_str, $1, ".", mp);
+    list_t* pos = cons_int($4, sizeof(int), nil, mp);
+    list_t* idf = cons_str($2, strlen($2), pos, mp);
+    $$ = tag(7, cons_str(tname, strlen(tname), idf, mp), mp);
 } ;
 
 
 oneof_fields : oneof_field {
-    MAYBE_ABORT;
-    $$ = cons($1, tlist, nil);
+    $$ = cons($1, tlist, nil, mp);
 }            | oneof_fields oneof_field {
-    MAYBE_ABORT;
-    $$ = cons($2, tlist, $1);
+    $$ = cons($2, tlist, $1, mp);
 } ;
 
 
 oneof : ONEOF identifier '{' oneof_fields '}' {
-    MAYBE_ABORT;
-    $$ = tag(6, cons_str($2, strlen($2), $4));
+    $$ = tag(6, cons_str($2, strlen($2), $4, mp), mp);
 } ;
 
 
-key_type : TINT32   { MAYBE_ABORT; $$ = vt_int32;    }
-         | TINT64   { MAYBE_ABORT; $$ = vt_int64;    }
-         | TUINT32  { MAYBE_ABORT; $$ = vt_uint32;   }
-         | TUINT64  { MAYBE_ABORT; $$ = vt_uint64;   }
-         | SINT32   { MAYBE_ABORT; $$ = vt_sint32;   }
-         | SINT64   { MAYBE_ABORT; $$ = vt_sint64;   }
-         | FIXED32  { MAYBE_ABORT; $$ = vt_fixed32;  }
-         | FIXED64  { MAYBE_ABORT; $$ = vt_fixed64;  }
-         | SFIXED32 { MAYBE_ABORT; $$ = vt_sfixed32; }
-         | SFIXED64 { MAYBE_ABORT; $$ = vt_sfixed64; }
-         | TBOOL    { MAYBE_ABORT; $$ = vt_bool;     }
-         | STRING   { MAYBE_ABORT; $$ = vt_string;   } ;
+key_type : TINT32   { $$ = vt_int32;    }
+         | TINT64   { $$ = vt_int64;    }
+         | TUINT32  { $$ = vt_uint32;   }
+         | TUINT64  { $$ = vt_uint64;   }
+         | SINT32   { $$ = vt_sint32;   }
+         | SINT64   { $$ = vt_sint64;   }
+         | FIXED32  { $$ = vt_fixed32;  }
+         | FIXED64  { $$ = vt_fixed64;  }
+         | SFIXED32 { $$ = vt_sfixed32; }
+         | SFIXED64 { $$ = vt_sfixed64; }
+         | TBOOL    { $$ = vt_bool;     }
+         | STRING   { $$ = vt_string;   } ;
 
 
 map_field : MAP '<' key_type ',' type '>' identifier '='
             positive_int field_options ';' {
-    MAYBE_ABORT;
-    char* vtype = mapconcat(to_str, $5, ".");
+    char* vtype = mapconcat(to_str, $5, ".", mp);
     $$ = tag(9, cons(
-                cons_int($3, 1, cons_str(vtype, strlen(vtype), nil)),
+                cons_int($3, 1, cons_str(vtype, strlen(vtype), nil, mp), mp),
                 tlist,
-                cons_str($7, strlen($7), cons_int($9, 1, nil)))
-         );
-    del($5);
+                cons_str($7, strlen($7), cons_int($9, 1, nil, mp), mp), mp),
+                mp);
 } ;
 
 
-range_end : MAX /* { $$ = SIZE_MAX; } */ { MAYBE_ABORT; $$ = NULL; }
-          | positive_int { MAYBE_ABORT; $$ = NULL; } ;
+range_end : MAX /* { $$ = SIZE_MAX; } */ { $$ = NULL; }
+          | positive_int { $$ = NULL; } ;
 
 
-range : positive_int TO range_end { MAYBE_ABORT; $$ = NULL; }
-      | positive_int { MAYBE_ABORT; $$ = NULL; } ;
+range : positive_int TO range_end { $$ = NULL; }
+      | positive_int { $$ = NULL; } ;
 
 
-ranges : range | ranges ',' range { MAYBE_ABORT; $$ = NULL; } ;
+ranges : range | ranges ',' range { $$ = NULL; } ;
 
 
-reserved_strings : string_literal { MAYBE_ABORT; $$ = NULL; }
-                 | reserved_strings ',' string_literal { MAYBE_ABORT; $$ = NULL; } ;
+reserved_strings : string_literal { $$ = NULL; }
+                 | reserved_strings ',' string_literal { $$ = NULL; } ;
 
 
 reserved_body : ranges | reserved_strings ;
 
 
-reserved : RESERVED reserved_body { MAYBE_ABORT; $$ = NULL; } ;
+reserved : RESERVED reserved_body { $$ = NULL; } ;
 
 
 option_name_body_part : IDENTIFIER | keyword ;
 
 option_name_body : option_name_body_part {
-    MAYBE_ABORT;
-    $$ = cons_str($1, strlen($1), nil);
+    $$ = cons_str($1, strlen($1), nil, mp);
 }
                  | option_name_body '.' option_name_body_part {
-    MAYBE_ABORT;
-    $$ = cons($3, tstr, $1);
+    $$ = cons($3, tstr, $1, mp);
 } ;
 
 option_name_suffix : %empty { $$ = nil; }
@@ -348,13 +325,12 @@ option_name_suffix : %empty { $$ = nil; }
 
 
 option_name : '(' option_name_body ')' option_name_suffix {
-    MAYBE_ABORT;
-    $$ = cons($4, tlist, $2);
+    $$ = cons($4, tlist, $2, mp);
 }
             | option_name_body ;
 
 
-enum_value_option : option_name '=' literal { MAYBE_ABORT; $$ = NULL; } ;
+enum_value_option : option_name '=' literal { $$ = NULL; } ;
 
 
 enum_value_options : enum_value_option
@@ -365,28 +341,24 @@ enum_value_options_group : %empty { $$ = NULL; }
 
 
 enum_field : identifier '=' positive_int enum_value_options_group {
-    MAYBE_ABORT;
-    $$ = cons_str($1, strlen($1), cons_int($3, 1, nil));
+    $$ = cons_str($1, strlen($1), cons_int($3, 1, nil, mp), mp);
 }
            | OPTION option_name '=' literal {
-    MAYBE_ABORT;
     $$ = nil;
 }
            | ';' { $$ = nil; } ;
 
 
 enum_fields : enum_field {
-    MAYBE_ABORT;
     if (!null($1)) {
-        $$ = from_lists(1, $1);
+        $$ = from_lists(1, mp, $1);
     } else {
         $$ = nil;
     }
 }
             | enum_fields enum_field {
-    MAYBE_ABORT;
     if (!null($2)) {
-        $$ = cons($2, tlist, $1);
+        $$ = cons($2, tlist, $1, mp);
     } else {
         $$ = $1;
     }
@@ -394,115 +366,104 @@ enum_fields : enum_field {
 
 
 enum : ENUM identifier '{' enum_fields '}' {
-    MAYBE_ABORT;
-    $$ = cons_str($2, strlen($2), $4);
+    $$ = cons_str($2, strlen($2), $4, mp);
 } ;
 
 
-extend : EXTEND user_type '{' message_block '}' { MAYBE_ABORT; $$ = NULL; }
+extend : EXTEND user_type '{' message_block '}' { $$ = NULL; }
 
-extensions : EXTENSIONS range { MAYBE_ABORT; $$ = NULL; } ;
+extensions : EXTENSIONS range { $$ = NULL; } ;
 
 
-message_field : enum              { MAYBE_ABORT; $$ = tag(1, $1); }
-              | message           { MAYBE_ABORT; $$ = tag(0, $1); }
+message_field : enum              { $$ = tag(1, $1, mp); }
+              | message           { $$ = tag(0, $1, mp); }
               | oneof
-              | OPTION option_def { MAYBE_ABORT; $$ = nil; }
-              | map_field         { MAYBE_ABORT; $$ = $1; }
-              | field             { MAYBE_ABORT; $$ = $1; }
-              | reserved          { MAYBE_ABORT; $$ = nil; }
-              | extensions        { MAYBE_ABORT; $$ = nil; }
-              | extend            { MAYBE_ABORT; $$ = nil; }
-              | ';'               { MAYBE_ABORT; $$ = nil; } ;
+              | OPTION option_def { $$ = nil; }
+              | map_field         { $$ = $1; }
+              | field             { $$ = $1; }
+              | reserved          { $$ = nil; }
+              | extensions        { $$ = nil; }
+              | extend            { $$ = nil; }
+              | ';'               { $$ = nil; } ;
 
 
 message_block : message_field {
-    MAYBE_ABORT;
     if (null($1)) {
         $$ = nil;
     } else {
-        $$ = from_lists(1, $1);
+        $$ = from_lists(1, mp, $1);
     }
 }
               | message_block message_field {
-    MAYBE_ABORT;
     if (null($2)) {
         $$ = $1;
     } else {
-        $$ = cons($2, tlist, $1);
+        $$ = cons($2, tlist, $1, mp);
     }
 } ;
 
 
 message : MESSAGE identifier '{' message_block '}' {
-    MAYBE_ABORT;
-    $$ = cons_str($2, strlen($2), $4);
+    $$ = cons_str($2, strlen($2), $4, mp);
 }       | MESSAGE identifier '{' '}' {
-    MAYBE_ABORT;
-    $$ = cons_str($2, strlen($2), nil);
+    $$ = cons_str($2, strlen($2), nil, mp);
 };
 
 
-rpc_type : STREAM type { MAYBE_ABORT; $$ = $2; }
+rpc_type : STREAM type { $$ = $2; }
          | type ;
 
 
-rpc_options : '{' OPTION option_def '}' { MAYBE_ABORT; $$ = NULL; }
-            | '{' '}' { MAYBE_ABORT; $$ = NULL; }
-            | %empty { MAYBE_ABORT; $$ = NULL; } ;
+rpc_options : '{' OPTION option_def '}' { $$ = NULL; }
+            | '{' '}' { $$ = NULL; }
+            | %empty { $$ = NULL; } ;
 
 
 rpc : identifier '(' rpc_type ')' RETURNS '(' rpc_type ')' rpc_options {
-    MAYBE_ABORT;
-    $$ = cons_str($1, strlen($1), nil);
+    $$ = cons_str($1, strlen($1), nil, mp);
 } ;
 
 
-service_body_part : OPTION option_def { MAYBE_ABORT; $$ = nil; }
-                  | RPC rpc           { MAYBE_ABORT; $$ = $2; }
-                  | ';'               { MAYBE_ABORT; $$ = nil; };
+service_body_part : OPTION option_def { $$ = nil; }
+                  | RPC rpc           { $$ = $2; }
+                  | ';'               { $$ = nil; };
 
 
 
-service_body : %empty { MAYBE_ABORT; $$ = from_lists(1, nil); }
+service_body : %empty { $$ = from_lists(1, mp, nil); }
              | service_body service_body_part {
-    MAYBE_ABORT; 
-    $$ = cons($2, tlist, $1);
+    $$ = cons($2, tlist, $1, mp);
 } ;
 
 
 service : SERVICE identifier '{' service_body '}' {
-    MAYBE_ABORT;
-    $$ = cons_str($2, strlen($2), $4);
+    $$ = cons_str($2, strlen($2), $4, mp);
 } ;
 
 
-top_level : message    { MAYBE_ABORT; $$ = tag(0, $1); }
-          | enum       { MAYBE_ABORT; $$ = tag(1, $1); }
-          | service    { MAYBE_ABORT; $$ = tag(3, $1); }
-          | import     { MAYBE_ABORT; $$ = tag(4, $1); }
-          | package    { MAYBE_ABORT; $$ = tag(5, $1); }
-          | OPTION option_def { MAYBE_ABORT; $$ = nil; }
-          | extend     { MAYBE_ABORT; $$ = nil; }
-          | ';'        { MAYBE_ABORT; $$ = nil; } ;
+top_level : message    { $$ = tag(0, $1, mp); }
+          | enum       { $$ = tag(1, $1, mp); }
+          | service    { $$ = tag(3, $1, mp); }
+          | import     { $$ = tag(4, $1, mp); }
+          | package    { $$ = tag(5, $1, mp); }
+          | OPTION option_def { $$ = nil; }
+          | extend     { $$ = nil; }
+          | ';'        { $$ = nil; } ;
 
 
 top_levels : %empty {
-    MAYBE_ABORT;
-    $$ = from_lists(1, nil);
+    $$ = from_lists(1, mp, nil);
 }
            | top_levels top_level {
-    MAYBE_ABORT;
     if (null($2)) {
         $$ = $1;
     } else {
-        $$ = cons($2, tlist, $1);
+        $$ = cons($2, tlist, $1, mp);
     }
 } ;
 
 
 s : syntax top_levels {
-    MAYBE_ABORT;
     $$ = $2;
     *result = $$;
 } ;

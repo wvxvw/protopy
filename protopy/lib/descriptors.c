@@ -52,14 +52,14 @@ void extract_type_name(
             return;
         }
     }
-    *pname = bytes_cstr(tname);
-    *package = dupstr("");
+    *pname = bytes_cstr(tname, mp);
+    *package = dupstr("", mp);
 }
 
 void
 enum_desc(
     const byte* ftype,
-    const list desc,
+    const list_t* desc,
     apr_hash_t* const factories,
     PyObject* enum_ctor,
     apr_pool_t* const mp) {
@@ -74,8 +74,8 @@ enum_desc(
     apr_hash_t* mapping = apr_hash_make(mp);
     PyObject* ctor;
 
-    list head = desc;
-    list field;
+    list_t* head = (list_t*)desc;
+    list_t* field;
 
     while (!null(head)) {
         field = car(head);
@@ -111,7 +111,7 @@ enum_desc(
     factory->mapping = mapping;
     factory->ctor = ctor;
 
-    apr_hash_set(factories, bytes_cstr(norm_ftype), APR_HASH_KEY_STRING, factory);
+    apr_hash_set(factories, bytes_cstr(norm_ftype, mp), APR_HASH_KEY_STRING, factory);
 }
 
 field_info_t*
@@ -124,9 +124,10 @@ add_field_info(
 
     field_info_t* info = apr_palloc(mp, sizeof(field_info_t));
     info->n = idx;
-    byte* pytype = apr_palloc(mp, str_size(field_type) + 2);
-    memcpy(pytype, field_type, str_size(field_type) + 2);
-    info->pytype = pytype;
+    // field_type and field_num come from recently parsed description
+    // which will be discarded as soon as parsing finishes, this is
+    // why we need to copy them.
+    info->pytype = bytes_cstr(field_type, mp);
     info->vt_type = vt_default;
 
     size_t* key = apr_palloc(mp, sizeof(size_t));
@@ -135,12 +136,12 @@ add_field_info(
     return info;
 }
 
-void add_pyfield(PyObject* fields, byte* field_name, apr_hash_t* keywords) {
+void add_pyfield(PyObject* fields, byte* field_name, apr_hash_t* keywords, apr_pool_t* mp) {
     size_t len = str_size(field_name);
     char* fname;
     PyObject* new_name;
 
-    if (apr_hash_get(keywords, bytes_cstr(field_name), APR_HASH_KEY_STRING)) {
+    if (apr_hash_get(keywords, bytes_cstr(field_name, mp), APR_HASH_KEY_STRING)) {
         fname = malloc(len + 4);
         memcpy(fname, "pb_", 3);
         memcpy(fname + 3, field_name + 2, len);
@@ -160,7 +161,7 @@ void add_pyfield(PyObject* fields, byte* field_name, apr_hash_t* keywords) {
 void
 message_desc(
     const byte* ftype,
-    const list desc,
+    const list_t* desc,
     apr_hash_t* const factories,
     PyObject* message_ctor,
     apr_hash_t* const keywords,
@@ -170,17 +171,17 @@ message_desc(
     PyObject* fields_list = PyList_New(0);
     apr_hash_t* fields = apr_hash_make(mp);
     apr_hash_t* mapping = apr_hash_make(mp);
-    list head = desc;
+    list_t* head = (list_t*)desc;
     size_t field_idx = 0;
 
-    list field;
+    list_t* field;
     size_t field_ast;
     byte* field_name;
     byte* field_type;
     size_t field_num;
     size_t* idx;
     field_info_t* info;
-    list kv_type;
+    list_t* kv_type;
     size_t* key;
 
     while (!null(head)) {
@@ -203,7 +204,7 @@ message_desc(
                     *key = field_idx;
                     apr_hash_set(fields, field_name, str_size(field_name) + 2, key);
 
-                    add_pyfield(fields_list, field_name, keywords);
+                    add_pyfield(fields_list, field_name, keywords, mp);
                     field_idx++;
                 }
                 break;
@@ -217,7 +218,7 @@ message_desc(
                 info->vt_type = vt_repeated;
                 info->extra_type_info.elt = vt_default;
 
-                add_pyfield(fields_list, field_name, keywords);
+                add_pyfield(fields_list, field_name, keywords, mp);
                 field_idx++;
                 break;
             case ast_map:
@@ -232,14 +233,8 @@ message_desc(
                 info->extra_type_info.pair.key = (vt_type_t)SIZE_VAL(kv_type);
                 info->extra_type_info.pair.val = vt_default;
                 // TODO(olegs): Why not store this in field_type?
-                info->extra_type_info.pair.pyval = STR_VAL(cdr(kv_type));
-                printf(
-                    "info->extra_type_info.pair.key: %d -> %s / %s\n",
-                    info->extra_type_info.pair.key,
-                    bytes_cstr(info->extra_type_info.pair.pyval),
-                    str(field));
-
-                add_pyfield(fields_list, field_name, keywords);
+                info->extra_type_info.pair.pyval = bytes_cstr(STR_VAL(cdr(kv_type)), mp);
+                add_pyfield(fields_list, field_name, keywords, mp);
                 field_idx++;
                 break;
             default:
@@ -282,7 +277,7 @@ message_desc(
     factory->mapping = mapping;
     factory->ctor = ctor;
 
-    apr_hash_set(factories, bytes_cstr(norm_ftype), APR_HASH_KEY_STRING, factory);
+    apr_hash_set(factories, bytes_cstr(norm_ftype, mp), APR_HASH_KEY_STRING, factory);
 }
 
 apr_hash_t* pylist_to_apr_hash(PyObject* pylist, apr_pool_t* mp) {
@@ -311,16 +306,15 @@ create_descriptors(
     apr_hash_index_t* hi;
     void* val;
     const void* key;
-    list file_desc;
-    list desc;
+    list_t* file_desc;
+    list_t* desc;
     size_t rtype;
     byte* tname;
-    list fields;
+    list_t* fields;
 
     for (hi = apr_hash_first(mp, descriptions); hi; hi = apr_hash_next(hi)) {
         apr_hash_this(hi, &key, NULL, &val);
-        file_desc = (list)val;
-        printf("file_desc: %s\n", str(file_desc));
+        file_desc = (list_t*)val;
 
         while (!null(file_desc)) {
             desc = LIST_VAL(file_desc);

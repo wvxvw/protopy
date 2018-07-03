@@ -4,10 +4,11 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <apr_general.h>
 
 #define SIZE_VAL(x) (size_t)(*(int*)car(x))
 #define STR_VAL(x) (byte*)car(x)
-#define LIST_VAL(x) (list)car(x)
+#define LIST_VAL(x) (list_t*)car(x)
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,13 +22,18 @@ typedef enum type {
     tlist = 2
 } type_t;
 
-typedef char* (*printer)(void*);
+typedef char* (*printer_fn_t)(void*, apr_pool_t*);
 
-typedef size_t (*size)(void*);
+typedef size_t (*size_fn_t)(void*);
 
-typedef void (*deleter)(void*);
+typedef void* (*copier_fn_t)(void*, apr_pool_t*);
 
-typedef void* (*copier)(void*);
+typedef struct {
+    const char* name;
+    printer_fn_t p;
+    size_fn_t s;
+    copier_fn_t c;
+} elt_type_t;
 
 typedef struct _list _list;
 
@@ -35,109 +41,92 @@ typedef struct _list {
     type_t t;
     _list* next;
     void* value;
-} *list;
+} list_t;
 
-list cons(void*, const type_t, const list);
+list_t* cons(void*, const type_t, list_t*, apr_pool_t*);
 
-void* car(const list);
+void* car(const list_t*);
 
-list cdr(const list);
+list_t* cdr(const list_t*);
 
-list nappend(list, list);
+list_t* nappend(list_t*, list_t*);
 
-list append(list, list);
+list_t* append(list_t*, list_t*, apr_pool_t*);
 
-bool null(const list);
+bool null(const list_t*);
 
-list duplicate(const list);
+list_t* duplicate(const list_t*, apr_pool_t*);
 
-char* str(list);
+char* str(const list_t*, apr_pool_t*);
 
-size_t len(list);
+size_t len(list_t*);
 
-printer printer_of(list);
+printer_fn_t printer_of(list_t*);
 
-size size_of(list);
+size_fn_t size_of(list_t*);
 
-deleter deleter_of(list);
+copier_fn_t copier_of(list_t*);
 
-copier copier_of(list);
+list_t* nreverse(list_t*);
 
-list nreverse(list);
+list_t* reverse(list_t*, apr_pool_t*);
 
-list reverse(list);
+list_t* from_strings(size_t, apr_pool_t*, ...);
 
-void del(list);
+list_t* from_lists(size_t, apr_pool_t*, ...);
 
-list from_strings(size_t, ...);
+char* str_str(const byte*, apr_pool_t*);
 
-list from_lists(size_t, ...);
+char* int_str(const int*, apr_pool_t*);
 
-char* str_str(void*);
+char* list_str(const list_t*, apr_pool_t*);
 
-char* int_str(void*);
+size_t int_size(const int*);
 
-char* list_str(void*);
+size_t str_size(const byte*);
 
-size_t int_size(void*);
+int* int_dup(const int*, apr_pool_t*);
 
-size_t str_size(const void*);
+byte* str_dup(const byte*, apr_pool_t*);
 
-void* int_dup(void*);
+byte* sub_str(const byte*, const size_t, apr_pool_t*);
 
-void* str_dup(const void*);
+extern list_t* nil;
 
-byte* sub_str(const byte*, const size_t);
+elt_type_t* type_of(list_t*);
 
-extern list nil;
+extern elt_type_t types[];
 
-typedef struct {
-    const char* name;
-    printer p;
-    size s;
-    deleter d;
-    copier c;
-} elt_type;
+bool listp(list_t*);
 
-elt_type* type_of(list);
+bool intp(list_t*);
 
-extern elt_type types[];
+bool strp(list_t*);
 
-bool listp(list);
+typedef char* (*mapconcat_fn_t) (list_t*, apr_pool_t*);
 
-bool intp(list);
+typedef int (*list_cmp_f) (list_t*, list_t*);
 
-bool strp(list);
+char* mapconcat(mapconcat_fn_t, list_t*, const char*, apr_pool_t*);
 
-typedef char* (*mapconcat_fn_t) (list);
+char* to_str(list_t*, apr_pool_t*);
 
-typedef int (*list_cmp_f) (list, list);
+list_t* sort_unique(list_t*, list_cmp_f, apr_pool_t*);
 
-char* mapconcat(mapconcat_fn_t, list, const char*);
+byte* cstr_bytes(const char*, apr_pool_t*);
 
-char* to_str(list);
+list_t* cons_str(const char*, const size_t, list_t*, apr_pool_t*);
 
-size_t rope_length(list);
+list_t* cons_int(const int, const size_t, list_t*, apr_pool_t*);
 
-size_t rope_peek(list, char*, size_t);
+char* bytes_cstr(const byte*, apr_pool_t*);
 
-size_t rope_read(list, char*, size_t, list*);
-
-list sort_unique(list, list_cmp_f);
-
-byte* cstr_bytes(const char*);
-
-list cons_str(const char*, const size_t, const list);
-
-list cons_int(const int, const size_t, const list);
-
-char* bytes_cstr(const byte*);
-
-byte* join_bytes(const byte*, const char, const byte*, bool);
+byte* join_bytes(const byte*, const char, const byte*, bool, apr_pool_t*);
 
 extern byte empty[2];
 
-char* dupstr(char* s);
+char* dupstr(char* s, apr_pool_t*);
+char* mdupstr(char* s);
 
 #ifdef __cplusplus
 }

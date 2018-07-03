@@ -6,8 +6,11 @@
 #include "helpers.h"
 #include "protopy.tab.h"
 
-#define YY_DECL  int yylex \
-    (YYSTYPE* yylval_param, YYLTYPE* yylloc_param, void* yyscanner)
+#define YY_DECL  int yylex          \
+            (YYSTYPE* yylval_param, \
+             YYLTYPE* yylloc_param, \
+             void* yyscanner,       \
+             apr_pool_t* mp)
 
 #define YY_USER_ACTION                          \
     yylloc->first_line = yylloc->last_line;     \
@@ -33,20 +36,20 @@
 %%
 
 \"(\\([\\abfnrtv]|x[0-9a-fA-F][0-9a-fA-F]|[0-7][0-7][0-7])|[^"\\])*\" {
-   yylval->string = dupstr(yytext);
+   yylval->string = dupstr(yytext, mp);
    return STRING_LITERAL;
 }
 '(\\([\\abfnrtv]|x[0-9a-fA-F][0-9a-fA-F]|[0-7][0-7][0-7])|[^'\\])*' {
-   yylval->string = dupstr(yytext);
+   yylval->string = dupstr(yytext, mp);
    return STRING_LITERAL;
 }
 
 ([1-9][0-9]*|0) {
-  yylval->string = dupstr(yytext);
+  yylval->string = dupstr(yytext, mp);
   return POSINTEGER;
 }
 ([-][1-9][0-9]*|0) {
-  yylval->string = dupstr(yytext);
+  yylval->string = dupstr(yytext, mp);
   return NEGINTEGER;
 }
 
@@ -89,7 +92,7 @@ uint64     { return TUINT64; }
 weak       { return WEAK; }
 
 [a-zA-Z_][a-zA-Z0-9_]* {
-    yylval->string = dupstr(yytext);
+    yylval->string = dupstr(yytext, mp);
     return IDENTIFIER;
 }
 

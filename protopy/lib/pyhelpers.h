@@ -14,9 +14,9 @@ PyObject* str_to_pystr(char*, size_t);
 
 PyObject* int_to_pyint(int*);
 
-PyObject* list_to_pylist(list);
+PyObject* list_to_pylist(list_t*);
 
-list pylist_to_list(PyObject*);
+list_t* pylist_to_list(PyObject*, apr_pool_t*);
 
 #ifdef __cplusplus
 }

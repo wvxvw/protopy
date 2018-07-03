@@ -134,12 +134,12 @@ extern int yydebug;
 
 union YYSTYPE
 {
-#line 35 "protopy.y" /* yacc.c:1909  */
+#line 30 "protopy.y" /* yacc.c:1909  */
 
     size_t keyword;
     int64_t index;
     char* string;
-    list object;
+    list_t* object;
     void* nothing;
 
 #line 146 "protopy.tab.h" /* yacc.c:1909  */
@@ -173,7 +173,7 @@ enum { YYPUSH_MORE = 4 };
 
 typedef struct yypstate yypstate;
 
-int yypush_parse (yypstate *ps, int pushed_char, YYSTYPE const *pushed_val, YYLTYPE *pushed_loc, void* scanner, list* result);
+int yypush_parse (yypstate *ps, int pushed_char, YYSTYPE const *pushed_val, YYLTYPE *pushed_loc, void* scanner, list_t** result, apr_pool_t* mp);
 
 yypstate * yypstate_new (void);
 void yypstate_delete (yypstate *ps);

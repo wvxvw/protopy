@@ -90,8 +90,11 @@ PyMODINIT_FUNC PyInit_wrapped(void) {
     return PyModule_Create(&protopy_module);
 }
 
+bool apr_terminated = false;
+
 static PyObject* apr_cleanup(PyObject* self, PyObject* args) {
     apr_terminate();
+    apr_terminated = true;
     Py_RETURN_NONE;
 }
 
@@ -235,7 +238,7 @@ void free_apr_pool(PyObject* capsule) {
         return;
     }
     apr_pool_t* mp = (apr_pool_t*)PyCapsule_GetPointer(capsule, NULL);
-    if (mp) {
+    if (mp && !apr_terminated) {
         apr_pool_destroy(mp);
     }
 }
@@ -338,42 +341,19 @@ bool all_threads_busy(parsing_progress_t* progress) {
     return available_thread_pos(progress) < progress->nthreads;
 }
 
-apr_hash_t* built_in_types(apr_pool_t* mp) {
-    apr_hash_t* result = apr_hash_make(mp);
-    static char* builtins[] = {
-        "int32",
-        "int64",
-        "uint32",
-        "uint64",
-        "sint32",
-        "sint64",
-        "bool",
-        "fixed64",
-        "sfixed64",
-        "double",
-        "fixed32",
-        "sfixed32",
-        "float",
-        "string",
-        "bytes"
-    };
-    size_t i;
-    for (i = 0; i < 15; i++) {
-        apr_hash_set(result, builtins[i], strlen(builtins[i]), (void*)true);
-    }
-    return result;
-}
-
 void
 start_defparser_thread(
     parsing_progress_t* progress,
     parse_def_args_t** thds_args,
     size_t i,
     char* source,
-    list roots,
+    list_t* roots,
     apr_pool_t* mp) {
 
     parse_def_args_t* def_args = thds_args[i];
+
+    apr_pool_t* tmp;
+    apr_pool_create(&tmp, NULL);
 
     def_args->roots = roots;
     def_args->source = source;
@@ -381,22 +361,22 @@ start_defparser_thread(
     def_args->result = NULL;
     def_args->thread_id = i;
     def_args->progress = progress;
+    def_args->mp = tmp;
     thds_args[i] = def_args;
     progress->thds_statuses[i] = true;
     apr_thread_create(&progress->thds[i], NULL, parse_one_def, def_args, mp);
 }
 
-list
+list_t*
 process_finished_threads(
     parsing_progress_t* progress,
     parse_def_args_t** thds_args,
     apr_hash_t* defs,
-    apr_hash_t* builtins,
     error_info_t* einfo,
     apr_pool_t* mp) {
 
     size_t i = finished_thread(progress);
-    list deps = nil;
+    list_t* deps = nil;
 
     if (i < progress->nthreads) {
         if (thds_args[i]->error != NULL) {
@@ -417,11 +397,11 @@ process_finished_threads(
         apr_status_t rv;
         apr_thread_join(&rv, progress->thds[i]);
         progress->thds[i] = NULL;
-        deps = imports(thds_args[i]->result);
+        deps = imports(thds_args[i]->result, mp);
         apr_hash_t* declarations = apr_hash_make(mp);
-        list normalized = normalize_messages(thds_args[i]->result, mp);
-        collect_declarations(normalized, declarations);
-        list parsed = normalize_types(normalized, declarations, builtins, deps, mp);
+        list_t* normalized = normalize_messages(thds_args[i]->result, mp);
+        collect_declarations(normalized, declarations, mp);
+        list_t* parsed = normalize_types(normalized, declarations, deps, mp);
         apr_hash_set(defs, thds_args[i]->source, APR_HASH_KEY_STRING, parsed);
     }
     return deps;
@@ -429,8 +409,8 @@ process_finished_threads(
 
 static apr_hash_t*
 proto_def_parse_produce(
-    list sources,
-    list roots,
+    list_t* sources,
+    list_t* roots,
     size_t nthreads,
     apr_pool_t* mp,
     error_info_t* einfo) {
@@ -439,7 +419,6 @@ proto_def_parse_produce(
     size_t i = 0;
     parse_def_args_t** thds_args = ALLOCA(sizeof(parse_def_args_t*) * nthreads);
     apr_hash_t* result = apr_hash_make(mp);
-    apr_hash_t* builtins = built_in_types(mp);
 
     while (i < nthreads) {
         thds_args[i] = malloc(sizeof(parse_def_args_t));
@@ -453,30 +432,24 @@ proto_def_parse_produce(
         i = available_thread_pos(&progress);
 
         while (!null(sources) && i < progress.nthreads) {
-            char* source = bytes_cstr(car(sources));
+            char* source = bytes_cstr(car(sources), mp);
             sources = cdr(sources);
             if (!apr_hash_get(result, source, APR_HASH_KEY_STRING)) {
                 apr_hash_set(result, source, APR_HASH_KEY_STRING, (void*)true);
                 start_defparser_thread(&progress, thds_args, i, source, roots, mp);
-            } else {
-                free(source);
             }
             i = available_thread_pos(&progress);
         }
-        list extras = process_finished_threads(
+        list_t* extras = process_finished_threads(
             &progress,
             thds_args,
             result,
-            builtins,
             einfo,
             mp);
         if (einfo->message) {
-            del(sources);
             break;
         }
-        list new_sources = append(sources, extras);
-        del(sources);
-        sources = new_sources;
+        sources = append(sources, extras, mp);
         if (null(sources) || all_threads_busy(&progress)) {
             apr_sleep(100);
         }
@@ -496,7 +469,7 @@ PyObject* aprdict_to_pydict(apr_pool_t* mp, apr_hash_t* ht) {
     for (hi = apr_hash_first(mp, ht); hi; hi = apr_hash_next(hi)) {
         apr_hash_this(hi, &key, NULL, &val);
         PyObject* pykey = PyBytes_FromString((char*)key);
-        PyObject* pyval = list_to_pylist((list)val);
+        PyObject* pyval = list_to_pylist((list_t*)val);
         PyDict_SetItem(result, pykey, pyval);
         Py_DECREF(pykey);
         Py_DECREF(pyval);
@@ -537,14 +510,14 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     }
     Py_DECREF(multiprocessing);
     Py_DECREF(ncores);
-    list roots = pylist_to_list(source_roots);
-    // TODO(olegs): This pool needs to be initialized per parser
-    // instance.
+
     apr_pool_t* mp = PyCapsule_GetPointer(mp_capsule, NULL);
     if (!mp) {
         PyErr_Format(PyExc_ValueError, "APR memory pool wasn't initialized");
         return NULL;
     }
+
+    list_t* roots = pylist_to_list(source_roots, mp);
     apr_hash_t* parsed_defs;
 
     error_info_t einfo;
@@ -553,10 +526,8 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
 
     Py_BEGIN_ALLOW_THREADS;
 
-    list sources = cons_str(source, strlen(source), nil);
+    list_t* sources = cons_str(source, strlen(source), nil, mp);
     parsed_defs = proto_def_parse_produce(sources, roots, (size_t)nthreads, mp, &einfo);
-
-    del(roots);
 
     Py_END_ALLOW_THREADS;
 

@@ -13,22 +13,22 @@
 
 
 static builtin_type_t builtin_types[BUILTIN_TYPES] = {
-    {(unsigned char*)"\0"       , vt_error},
-    {(unsigned char*)"\0"       , vt_error},
-    {(unsigned char*)"bool"     , vt_bool},
-    {(unsigned char*)"bytes"    , vt_bytes},
-    {(unsigned char*)"double"   , vt_double},
-    {(unsigned char*)"fixed32"  , vt_fixed32},
-    {(unsigned char*)"fixed64"  , vt_fixed64},
-    {(unsigned char*)"int32"    , vt_int32},
-    {(unsigned char*)"int64"    , vt_int64},
-    {(unsigned char*)"sfixed32" , vt_sfixed32},
-    {(unsigned char*)"sfixed64" , vt_sfixed64},
-    {(unsigned char*)"sint32"   , vt_sint32},
-    {(unsigned char*)"sint64"   , vt_sint64},
-    {(unsigned char*)"string"   , vt_string},
-    {(unsigned char*)"uint32"   , vt_uint32},
-    {(unsigned char*)"uint64"   , vt_uint64},
+    {(const char*)"\0"       , vt_error},
+    {(const char*)"\0"       , vt_error},
+    {(const char*)"bool"     , vt_bool},
+    {(const char*)"bytes"    , vt_bytes},
+    {(const char*)"double"   , vt_double},
+    {(const char*)"fixed32"  , vt_fixed32},
+    {(const char*)"fixed64"  , vt_fixed64},
+    {(const char*)"int32"    , vt_int32},
+    {(const char*)"int64"    , vt_int64},
+    {(const char*)"sfixed32" , vt_sfixed32},
+    {(const char*)"sfixed64" , vt_sfixed64},
+    {(const char*)"sint32"   , vt_sint32},
+    {(const char*)"sint64"   , vt_sint64},
+    {(const char*)"string"   , vt_string},
+    {(const char*)"uint32"   , vt_uint32},
+    {(const char*)"uint64"   , vt_uint64},
 };
 
 void free_state(PyObject* capsule) {
@@ -194,7 +194,7 @@ size_t parse_varint(parse_state_t* const state, const field_info_t* const info) 
     if (info->vt_type == vt_enum) {
         factory_t* factory = apr_hash_get(
             state->factories,
-            bytes_cstr(info->pytype),
+            info->pytype,
             APR_HASH_KEY_STRING);
         Py_INCREF(factory->ctor);
         state->out = PyObject_CallFunctionObjArgs(
@@ -256,7 +256,7 @@ void init_substate(
     substate->in = bytes;
     substate->len = length;
     substate->factories = parent->factories;
-    substate->pytype = bytes_cstr(info->pytype);
+    substate->pytype = info->pytype;
     substate->mp = parent->mp;
 }
 
@@ -385,10 +385,10 @@ bool is_scalar(vt_type_t vt) {
     }
 }
 
-vt_type_t vt_builtin(const byte* type) {
+vt_type_t vt_builtin(const char* type) {
     size_t len = BUILTIN_TYPES;
     size_t i = len >> 1;
-    size_t tlen = str_size(type) + 2;
+    size_t tlen = strlen(type);
     size_t pos;
     size_t step = i;
     char a, b;
@@ -396,10 +396,10 @@ vt_type_t vt_builtin(const byte* type) {
 
     while (step > 0) {
         bt = &builtin_types[i];
-        pos = 2;
+        pos = 0;
         do {
             a = type[pos];
-            b = bt->name[pos - 2];
+            b = bt->name[pos];
             pos++;
         } while (a == b && pos < tlen);
         if (pos == tlen) {
@@ -418,12 +418,12 @@ vt_type_t vt_builtin(const byte* type) {
     return vt_default;
 }
 
-void resolve_type(parse_state_t* const state, const byte* pytype, vt_type_t* vttype) {
+void resolve_type(parse_state_t* const state, const char* pytype, vt_type_t* vttype) {
     *vttype = vt_builtin(pytype);
     if (*vttype == vt_default) {
         factory_t* f = apr_hash_get(
             state->factories,
-            bytes_cstr(pytype),
+            pytype,
             APR_HASH_KEY_STRING);
         if (f) {
             *vttype = f->vt_type;
@@ -433,7 +433,7 @@ void resolve_type(parse_state_t* const state, const byte* pytype, vt_type_t* vtt
         *vttype = vt_error;
         PyErr_Format(
             PyExc_TypeError,
-            "No definition for type: '%s'", bytes_cstr(pytype));
+            "No definition for type: '%s'", pytype);
     }
 }
 
@@ -713,7 +713,7 @@ PyObject* parse_repeated(parse_state_t* const state, const field_info_t* const i
         PyList_Append(result, subresult);
         Py_DECREF(subresult);
     } else {
-        state->pytype = bytes_cstr(info->pytype);
+        state->pytype = info->pytype;
 
         subresult = parse_message(state);
         if (!subresult) {
