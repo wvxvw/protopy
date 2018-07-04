@@ -2,11 +2,82 @@
 # -*- coding: utf-8 -*-
 
 import os
+import logging
 from sys import platform
-# from distutils.core import setup, Extension
 from setuptools import setup, Extension
+from setuptools.command.build_ext import build_ext
+from subprocess import Popen, CalledProcessError, check_output
 
-# './include/apr/unix/.libs/libapr-1.so'
+
+project_dir = os.path.dirname(os.path.realpath(__file__))
+
+
+class BuildWithYacc(build_ext):
+
+    yacc = 'yacc'
+    lex = 'lex'
+
+    def has_yacc_and_lex(self):
+        finder = None
+        if platform == 'win32':
+            finder = 'where'
+        else:
+            finder = 'which'
+
+        result = 1
+
+        for p in (self.yacc, self.lex):
+            out = check_output([finder, p]).strip()
+            if not out:
+                logging.warning('Did not find {}'.format(self.yacc))
+            result &= bool(out)
+        return result
+
+    def run_proc_with_setup(self, cwd, env, args):
+        try:
+            print(' '.join(args))
+            proc = Popen(args, env=env, cwd=cwd)
+            stdout, stderr = proc.communicate()
+            if stdout:
+                print(stdout)
+            if proc.returncode != 0:
+                raise Exception(str(stderr))
+        except CalledProcessError as e:
+            print(e.stderr)
+            raise
+
+    def generate_parser(self):
+        yacc_args = [
+            self.yacc,
+            '-t',
+            '-vd',
+            'protopy.y',
+            '-o',
+            'protopy.tab.c',
+        ]
+        lex_args = [
+            self.lex,
+            '-d',
+            '--header-file=protopy.lex.h',
+            '-o',
+            'protopy.lex.c',
+            'protopy.l'
+        ]
+        cwd = os.path.join(project_dir, 'protopy', 'lib')
+        env = dict(os.environ)
+
+        self.run_proc_with_setup(cwd, env, yacc_args)
+        self.run_proc_with_setup(cwd, env, lex_args)
+
+    def run(self):
+        if self.has_yacc_and_lex():
+            self.generate_parser()
+        else:
+            logging.warning(
+                'Did not find yacc and or, will use precompiled parser',
+            )
+        super().run()
+
 
 apr_lib_candidates = (
     '/usr/include/apr-1.0',
@@ -40,6 +111,7 @@ if not apr_lib:
     raise Exception('Cannot find Apache Portable Runtime headers')
 
 setup(
+    cmdclass={'build_ext': BuildWithYacc},
     packages=['protopy'],
     name='protopy',
     version='0.0.1',
