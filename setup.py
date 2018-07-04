@@ -74,7 +74,7 @@ class BuildWithYacc(build_ext):
             self.generate_parser()
         else:
             logging.warning(
-                'Did not find yacc and or, will use precompiled parser',
+                'Did not find yacc and or lex, will use precompiled parser',
             )
         super().run()
 

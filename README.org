@@ -38,7 +38,7 @@
   interface is more or less stable.
 
 ** Priority Tasks
-   - [ ] Memory (de)allocation needs to be:
+   - [X] Memory (de)allocation needs to be:
      1. Done from APR pools.
      2. More fine-grained pools.
    - [ ] Naming needs work, some names use inconsistent conventions.
@@ -46,16 +46,26 @@
    - [X] Revise how arguments are supplied to message constructors, maybe
      we can shave some fat there by creating a tuple right away rather
      than collecting them into a hash-table and then into a tuple.
-   - [ ] Rewrite =setup.py= so that it also builds the lexer and the
+   - [X] Rewrite =setup.py= so that it also builds the lexer and the
      parser (maybe, conditionally), then get rid of =main.c= and few
      more junk files in =lib=.
-   - [ ] Few more exotic types need testing: very long varints and floats,
+   - [X] Few more exotic types need testing: very long varints and floats,
      I think they don't parse correctly.
    - [ ] =defparser= is kind of a mess, it can be reorganized and
      cleaned up a bit.
    - [ ] ints in =list= could be encoded into pointers instead of
      allocating extra memory.
-   - [ ] =cons= may have an alternative version, where it doesn't
+   - [X] =cons= may have an alternative version, where it doesn't
      allocate more memory, but uses the the =value= as is.
-   - [ ] Some code in =protopy.y= never releases memory / could
+     /Irrelevant since using APR pools/.
+   - [X] Some code in =protopy.y= never releases memory / could
      allocate less.
+     /Irrelevant since using APR pools/.
+
+** Medium priority
+   Keep this number low
+   #+BEGIN_SRC sh
+     find ./protopy \( -name '*.py' -or -name '*.[chyl]' \) -exec wc -l {} +
+   #+END_SRC
+
+   Right now it's 11315, I would like to get in under 10K.
