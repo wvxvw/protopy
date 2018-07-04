@@ -729,12 +729,7 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
         args->error_kind = memory_error;
         return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
-    apr_pool_t* mp;
-    if (apr_pool_create(&mp, NULL) != APR_SUCCESS) {
-        args->error = mdupstr("Couldn't initialize memory pool");
-        args->error_kind = memory_error;
-        return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
-    }
+    apr_pool_t* mp = args->mp;
     switch (resolved_source(args->source, args->roots, &source, mp)) {
         case 2:
             args->error = error_message_2("Must be regular file '%s'", args->source);

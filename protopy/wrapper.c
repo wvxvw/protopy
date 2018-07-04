@@ -397,12 +397,18 @@ process_finished_threads(
         apr_status_t rv;
         apr_thread_join(&rv, progress->thds[i]);
         progress->thds[i] = NULL;
-        deps = imports(thds_args[i]->result, mp);
-        apr_hash_t* declarations = apr_hash_make(mp);
-        list_t* normalized = normalize_messages(thds_args[i]->result, mp);
-        collect_declarations(normalized, declarations, mp);
-        list_t* parsed = normalize_types(normalized, declarations, deps, mp);
-        apr_hash_set(defs, thds_args[i]->source, APR_HASH_KEY_STRING, parsed);
+        apr_pool_t* tmp = thds_args[i]->mp;
+        deps = imports(thds_args[i]->result, tmp);
+        apr_hash_t* declarations = apr_hash_make(tmp);
+        list_t* normalized = normalize_messages(thds_args[i]->result, tmp);
+        collect_declarations(normalized, declarations, tmp);
+        list_t* parsed = normalize_types(normalized, declarations, deps, tmp);
+
+        // We will destroy the pool where this result was allocated
+        // but we need to store the result.
+        list_t* result = duplicate(parsed, mp);
+        apr_hash_set(defs, thds_args[i]->source, APR_HASH_KEY_STRING, result);
+        apr_pool_destroy(tmp);
     }
     return deps;
 }
