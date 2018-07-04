@@ -3,6 +3,8 @@
 
 import os
 import logging
+import sys
+
 from sys import platform
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
@@ -10,6 +12,11 @@ from subprocess import Popen, CalledProcessError, check_output
 
 
 project_dir = os.path.dirname(os.path.realpath(__file__))
+# Excluding project directory from sys.path so that Sphinx
+# wouldn't get confused about where to load the sources.
+# This, however, implies that you _must_ install the project
+# before you generate documentation.
+sys.path = [x for x in sys.path if not x == project_dir]
 
 
 class BuildWithYacc(build_ext):
@@ -111,7 +118,9 @@ if not apr_lib:
     raise Exception('Cannot find Apache Portable Runtime headers')
 
 setup(
-    cmdclass={'build_ext': BuildWithYacc},
+    cmdclass={
+        'build_ext': BuildWithYacc,
+    },
     packages=['protopy'],
     name='protopy',
     version='0.0.1',
@@ -124,6 +133,11 @@ setup(
     package_data=package_data,
     data_files=data_files,
     ext_package='protopy',
+    command_options={
+        'build_sphinx': {
+            'source_dir': ('setup.py', 'source')
+        }
+    },
     ext_modules=[
         Extension(
             'wrapped',
@@ -143,10 +157,9 @@ setup(
             libraries=['apr-1'],
             py_limited_api=False,
             extra_compile_args=extra_compile_args,
-            # include_dirs=['./include/apr/unix/include']
-            # extra_link_args=['-Wl,-rpath,{}'.format(LIB_DIR)]
         )
     ],
+    setup_requires=['sphinx'],
     install_requires=[
         'pytest >= 3.4.2',
     ],

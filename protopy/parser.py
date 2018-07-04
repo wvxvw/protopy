@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+'''
+Python interface to Protobuf IML and binary parsing code.
+'''
 
 from collections import namedtuple
 from enum import IntEnum
@@ -21,12 +24,30 @@ from protopy.wrapped import (
 
 
 def ensure_bytes(s):
+    '''
+    Helper procedure to convert ``s`` to ``bytes`` if necessary.
+    '''
     if isinstance(s, bytes):
         return s
     return str(s).encode('utf-8')
 
 
 def simple_enum(name, fields):
+    '''
+    Python's built-in ``enum.IntEnum`` class, which is used by the
+    parser by default may be too expensive memory and speed-wise.
+
+    This procedure provides a light-weight alternative, which parse
+    enumerator members as strings with the name of that member.
+
+    Note that this procedure cannot be used if you also want to
+    serialize enumerator values later.
+
+    :param name: The name of the type of the enumerator you will be
+        creating.
+    :param fields: A dictionary mapping enumerator field names to
+        the numerical values as defined in Protobuf IML.
+    '''
     inverse = {v: '{}.{}'.format(name, k) for k, v in fields.items()}
 
     def ctor(n):
@@ -36,7 +57,9 @@ def simple_enum(name, fields):
 
 
 class DefParser:
-
+    '''
+    Provides Python interface to IML parsing C code.
+    '''
     def __init__(
             self,
             roots,
@@ -44,6 +67,29 @@ class DefParser:
             message_ctor=namedtuple,
             mp=None,
     ):
+        '''
+        Creates new Protobuf IML parser.  The parser will resolve source
+        relative to ``roots`` directories.  This is equivalent to
+        ``protoc -I`` option.
+
+        :param roots: Directories relative to which the parser should try
+            to find sources and their dependencies.
+
+        :param enum_ctor: A callable to use as a factory for creating
+            enumerator classes.
+        :param message_ctor: A callable to use as a factory for creating
+            message classes.
+        :param mp: A capsule containing a pointer to APR memory pool this
+            parser will use to allocate memory.  Note that this parser
+            has internal state that relies on this pool to exist as
+            long as the state needs to be accessed.  I.e. the
+            definitions aren't actually Python objects, and are stored
+            in this pool.  Do not try to free it unless you also
+            delete the parser.
+
+        It is not generally a good idea to pass this argument explicitly
+        unless you know what you are doing.
+        '''
         self.enum_ctor = enum_ctor
         self.message_ctor = message_ctor
         self.roots = list(set([ensure_bytes(r) for r in roots]))
@@ -55,6 +101,18 @@ class DefParser:
         self.defs = make_apr_hash(self.mp)
 
     def definitions(self):
+        '''
+        Returns an iterator that looks at every definition this parser has
+        parsed so far.
+
+        Example:
+
+            .. code-block:: python
+
+               for k, v in parser.definitions():
+                   if k == b'foo.bar.Baz':
+                       print('Baz found!')
+        '''
         it = apr_hash_iterator(self.defs)
         while True:
             k, v = apr_hash_get_kv(it)
@@ -62,12 +120,51 @@ class DefParser:
                 yield k, v
 
     def find_definition(self, definition):
+        '''
+        Returns a factory used to generate Python objects associated with
+        ``definition`` (the fully qualified name of the Protobuf type
+        as it appears in IDL).
+
+        :param definition: The name of Protobuf type.
+        '''
         return apr_hash_find(self.defs, ensure_bytes(definition))
 
     def update_definition(self, definition, new):
+        '''
+        Replaces the factory associated with ``definition`` with ``new``
+        factory.
+
+        Note that you cannot replace factories for built-in Protobuf
+        types (eg. ``int32`` or ``string``).
+
+        This may be useful when you need to convert or fix messages
+        before they are passed into constructors of the messages they
+        belong to.
+
+        ``new`` must be a callable that takes the same arguments as the
+        replaced callable did.
+
+        Example:
+
+            .. code-block:: python
+
+               original = parser.find_definition(b'Wrapper')
+
+               def replacement(*args):
+                   return {'replaced': original(*args)}
+               parser.update_definition(b'Wrapper', replacement)
+        '''
         apr_hash_replace(self.defs, ensure_bytes(definition), new)
 
     def parse(self, source, force=False):
+        '''
+        Parses ``source`` file (which will be looked up relative to the
+        ``roots`` of this parser) together with all its dependencies.
+
+        :param source: The Protobuf IML file to parse.
+        :param force: If ``True`` forces re-parsing of the ``source``,
+            even if it is already in the parser's cache.
+        '''
         source = ensure_bytes(source)
         if not force:
             if source in self.files:
@@ -91,13 +188,31 @@ class DefParser:
 
 
 class BinParser:
+    '''
+    Parses binary Protobuf format.
+    '''
 
     def __init__(self, roots):
+        '''
+        :param roots: list of directories relative to which the ``DefParser``
+        created by this parser will try to resolve file names needed to
+        parse the Protobuf definitions.
+        '''
         self.mp = make_apr_pool()
         self.def_parser = DefParser(roots, mp=self.mp)
         self.state = None
 
     def parse(self, source, message, buf):
+        '''
+        Parses ``buf`` (binary content) using ``message`` as the name for
+        the schema.  The shcema is read from ``source`` file.
+
+        :param source: The file where schema (definition) for the message
+            is to be found.
+        :param message: The message to be parsed.  Unlike serializer, this
+            does not allow parsing simple (not container) types.
+        :param buf: The binary payload to parse.
+        '''
         self.def_parser.parse(source)
 
         if not isinstance(message, bytes):

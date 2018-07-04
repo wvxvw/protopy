@@ -1,3 +1,18 @@
+* Documentation
+  For now, the only way to obtain documentation is to generate it.
+  You can only generate it once the project is installed (Sphinx
+  load Python modules in order to generate documentation, but,
+  unless the project is installed, the imports will not work).
+
+  The way to do this is to:
+
+  #+BEGIN_SRC sh
+    virtualenv ./.venv
+    ./.venv/bin/activate
+    ./setup.py install
+    ./setup.py build_sphinx
+  #+END_SRC
+
 * About
   This project is an attempt to re-implement Protocol Buffers parser
   (both sources and binary) as a C extension for Python.
