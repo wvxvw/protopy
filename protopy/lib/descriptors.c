@@ -104,6 +104,9 @@ enum_desc(
             str_size(norm_ftype)),
         members,
         NULL);
+    if (PyErr_Occurred()) {
+        return;
+    }
     Py_INCREF(ctor);
 
     factory_t* factory = apr_palloc(mp, sizeof(factory_t));

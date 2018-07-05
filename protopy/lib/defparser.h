@@ -8,6 +8,7 @@
 #include <apr_hash.h>
 
 #include "list.h"
+#include "helpers.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,7 +29,7 @@ typedef enum error_kind_t {
 typedef struct parse_def_args_t {
     const char* source;
     list_t* roots;
-    list_t* result;
+    proto_file_t* result;
     char* error;
     error_kind_t error_kind;
     size_t thread_id;
@@ -40,19 +41,6 @@ typedef struct error_info_t {
     char* message;
     error_kind_t kind;
 } error_info_t;
-
-// TODO(olegs): It would be better if protopy.y also used this.
-typedef enum ast_type_t {
-    ast_message = 0,
-    ast_enum = 1,
-    ast_service = 3,
-    ast_import = 4,
-    ast_package = 5,
-    ast_oneof = 6,
-    ast_field = 7,
-    ast_repeated = 8,
-    ast_map = 9
-} ast_type_t;
 
 void* APR_THREAD_FUNC parse_one_def(apr_thread_t*, void*);
 

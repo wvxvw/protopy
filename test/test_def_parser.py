@@ -29,6 +29,7 @@ def test_nonexisting_import():
         assert 'nonexistent.proto' in str(e)
 
 
+# this one hangs
 def test_imported_oneof():
     roots = [
         pkg_resources.resource_filename(__name__, './'),
@@ -54,6 +55,7 @@ def test_imported_oneof():
     )
 
 
+# this one hangs too
 def test_iterate_defs():
     roots = [
         pkg_resources.resource_filename(__name__, './resources'),
@@ -119,6 +121,7 @@ def test_rpc():
     parser.parse(test_proto)
 
 
+# this one hangs
 def test_block_comment():
     roots = [
         pkg_resources.resource_filename(__name__, './resources')

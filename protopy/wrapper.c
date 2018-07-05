@@ -23,8 +23,8 @@ typedef long long int64_t;
 
 #include "lib/helpers.h"
 #include "lib/pyhelpers.h"
-#include "lib/protopy.lex.h"
 #include "lib/protopy.tab.h"
+#include "lib/protopy.lex.h"
 #include "lib/binparser.h"
 #include "lib/defparser.h"
 #include "lib/list.h"
@@ -367,6 +367,16 @@ start_defparser_thread(
     apr_thread_create(&progress->thds[i], NULL, parse_one_def, def_args, mp);
 }
 
+list_t* deps_from_imports(list_t* imports, apr_pool_t* mp) {
+    list_t* result = nil;
+
+    while (!null(imports)) {
+        result = ncons_str(nmapconcat(to_bytes, car(imports), "/", mp), result, mp);
+        imports = cdr(imports);
+    }
+    return result;
+}
+
 list_t*
 process_finished_threads(
     parsing_progress_t* progress,
@@ -397,16 +407,18 @@ process_finished_threads(
         apr_status_t rv;
         apr_thread_join(&rv, progress->thds[i]);
         progress->thds[i] = NULL;
+        proto_file_t* res = thds_args[i]->result;
         apr_pool_t* tmp = thds_args[i]->mp;
-        deps = imports(thds_args[i]->result, tmp);
-        apr_hash_t* declarations = apr_hash_make(tmp);
-        list_t* normalized = normalize_messages(thds_args[i]->result, tmp);
-        collect_declarations(normalized, declarations, tmp);
-        list_t* parsed = normalize_types(normalized, declarations, deps, tmp);
+        deps = deps_from_imports(thds_args[i]->result->imports, mp);
+        // apr_hash_t* declarations = apr_hash_make(tmp);
+        // list_t* normalized = normalize_messages(thds_args[i]->result, tmp);
+        // collect_declarations(normalized, declarations, tmp);
+        // list_t* parsed = normalize_types(normalized, declarations, deps, tmp);
 
         // We will destroy the pool where this result was allocated
         // but we need to store the result.
-        list_t* result = duplicate(parsed, mp);
+        // list_t* result = duplicate(parsed, mp);
+        list_t* result = append(res->messages, res->enums, mp);
         apr_hash_set(defs, thds_args[i]->source, APR_HASH_KEY_STRING, result);
         apr_pool_destroy(tmp);
     }

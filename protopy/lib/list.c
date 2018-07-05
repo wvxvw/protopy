@@ -21,19 +21,27 @@ list_t* cons(void* elt, const type_t elt_type, list_t* old, apr_pool_t* mp) {
     return result;
 }
 
-list_t* cons_int(const int val, const size_t s, list_t* old, apr_pool_t* mp) {
+list_t* cons_int(const int val, size_t s, list_t* old, apr_pool_t* mp) {
     int* ival = apr_palloc(mp, int_size(&val));
     *ival = val;
     return cons(ival, tint, old, mp);
 }
 
-list_t* cons_str(const char* val, const size_t s, list_t* old, apr_pool_t* mp) {
+list_t* ncons_int(const int* val, list_t* old, apr_pool_t* mp) {
+    return cons((void*)val, tint, old, mp);
+}
+
+list_t* cons_str(const char* val, size_t s, list_t* old, apr_pool_t* mp) {
     byte* bval = apr_palloc(mp, (s + 2) * sizeof(byte));
     bval[0] = (byte)(s >> 8);
     bval[1] = (byte)(s & 0xFF);
 
     memcpy(bval + 2, val, s);
     return cons(bval, tstr, old, mp);
+}
+
+list_t* ncons_str(const byte* val, list_t* old, apr_pool_t* mp) {
+    return cons((void*)val, tstr, old, mp);
 }
 
 void* car(const list_t* elts) {
@@ -72,6 +80,10 @@ int* int_dup(const int* val, apr_pool_t* mp) {
 
 byte* cstr_bytes(const char* cstr, apr_pool_t* mp) {
     size_t len = strlen(cstr);
+    return cstr_bytes_impl(cstr, len, mp);
+}
+
+byte* cstr_bytes_impl(const char* cstr, size_t len, apr_pool_t* mp) {
     byte* result = apr_palloc(mp, (len + 2) * sizeof(byte));
     result[0] = (byte)(len >> 8);
     result[1] = (byte)(len & 0xFF);
@@ -88,6 +100,16 @@ char* bytes_cstr(const byte* bytes, apr_pool_t* mp) {
     memcpy(result, bytes + 2, len);
     result[len] = '\0';
     return result;
+}
+
+char* nbytes_cstr(byte* bytes) {
+    if (bytes == NULL) {
+        return NULL;
+    }
+    size_t len = str_size(bytes);
+    memmove(bytes, bytes + 2, len);
+    bytes[len] = '\0';
+    return (char*)bytes;
 }
 
 byte* join_bytes(const byte* prefix, const char delim, const byte* suffix, bool cstr, apr_pool_t* mp) {
@@ -235,7 +257,8 @@ size_t str_size(const byte* val) {
     return (((size_t)val[0]) << 8) | (size_t)val[1];
 }
 
-char* mapconcat(mapconcat_fn_t fn, list_t* elts, const char* sep, apr_pool_t* mp) {
+char* mapconcat(mapconcat_fn_t fn, const list_t* celts, const char* sep, apr_pool_t* mp) {
+    list_t* elts = (list_t*)celts;
     list_t* chunks = nil;
     char* chunk;
     size_t es = 0;
@@ -276,6 +299,56 @@ char* mapconcat(mapconcat_fn_t fn, list_t* elts, const char* sep, apr_pool_t* mp
     return schunks;
 }
 
+byte* nmapconcat(nmapconcat_fn_t fn, const list_t* celts, const char* sep, apr_pool_t* mp) {
+    list_t* elts = (list_t*)celts;
+    list_t* chunks = nil;
+    byte* chunk;
+    size_t total = 0;
+    byte* schunks;
+    size_t sep_len = strlen(sep);
+
+    while (!null(elts)) {
+        chunk = fn(elts, mp);
+        total += str_size(chunk) + sep_len;
+        chunks = ncons_str(chunk, chunks, mp);
+        elts = cdr(elts);
+    }
+
+    if (total == 0) {
+        return str_dup(empty, mp);
+    }
+
+    chunks = nreverse(chunks);
+
+    size_t allocated = total + 2 - sep_len;
+    schunks = apr_palloc(mp, sizeof(char) * allocated);
+    total = 2;
+
+    byte* val;
+
+    // TODO(olegs): This part is almost the same as mapconcat.
+    while (!null(chunks)) {
+        val = STR_VAL(chunks);
+        if (str_size(val) + total > allocated) {
+            break;
+        }
+        memcpy(schunks + total, val + 2, str_size(val));
+        total += str_size(val);
+        if (sep_len + total > allocated) {
+            break;
+        }
+        if (sep_len) {
+            memcpy(schunks + total, sep, sep_len);
+            total += sep_len;
+        }
+        chunks = cdr(chunks);
+    }
+    total -= 2;
+    schunks[0] = total >> 8;
+    schunks[1] = total & 0xFF;
+    return schunks;
+}
+
 char* to_str(list_t* elts, apr_pool_t* mp) {
     if (null(elts)) {
         return dupstr("nil", mp);
@@ -292,46 +365,33 @@ char* to_str(list_t* elts, apr_pool_t* mp) {
     return dupstr("type error", mp);
 }
 
-char* str(const list_t* celts, apr_pool_t* mp) {
-    // TODO(olegs): Maybe reimplement in terms of mapconcat
-    list_t* chunks = nil;
-    char* chunk;
-    void* val;
-    size_t es = 0;
-    size_t total = 0;
-    char* schunks;
-    list_t* elts = (list_t*)celts;
-
-    while (!null(elts)) {
-        val = car(elts);
-        chunk = printer_of(elts)(val, mp);
-        es = strlen(chunk);
-        total += es + 1;
-        chunks = cons(chunk, tstr, chunks, mp);
-        elts = cdr(elts);
+byte* to_bytes(list_t* elts, apr_pool_t* mp) {
+    if (null(elts)) {
+        return cstr_bytes("nil", mp);
     }
-
-    if (total == 0) {
-        return dupstr("nil", mp);
+    
+    switch (elts->t) {
+        case tstr:
+            return str_dup(car(elts), mp);
+        case tint:
+            return cstr_bytes(int_str(car(elts), mp), mp);
+        case tlist:
+            // TODO(olegs): This needs a dedicated conversion
+            // function.
+            return cstr_bytes(str(LIST_VAL(elts), mp), mp);
     }
+    return cstr_bytes("type error", mp);
+}
 
-    chunks = nreverse(chunks);
-
-    schunks = apr_palloc(mp, sizeof(char) * (total + 2));
-    schunks[0] = '(';
-    total = 1;
-
-    while (!null(chunks)) {
-        val = car(chunks);
-        strcpy(schunks + total, (char*)val);
-        total += strlen((char*)val);
-        schunks[total] = ' ';
-        total++;
-        chunks = cdr(chunks);
-    }
-    schunks[total - 1] = ')';
-    schunks[total] = '\0';
-    return schunks;
+char* str(const list_t* cells, apr_pool_t* mp) {
+    char* inside = mapconcat(to_str, cells, " ", mp);
+    size_t len = strlen(inside);
+    char* result = apr_palloc(mp, len + 3);
+    result[0] = '(';
+    memcpy(result + 1, inside, len);
+    result[len + 1] = ')';
+    result[len + 2] = '\0';
+    return result;
 }
 
 char* str_str(const byte* bstr, apr_pool_t* mp) {
@@ -399,6 +459,25 @@ bool intp(list_t* val) {
 
 bool strp(list_t* val) {
     return val->t == tstr;
+}
+
+int bytes_cmp(byte* a, byte* b) {
+    size_t sa = str_size(a);
+    size_t sb = str_size(b);
+    int res = sa - sb;
+
+    if (res) {
+        return res;
+    }
+    size_t i = 0;
+
+    while (i < sa) {
+        if (a[i] != b[i]) {
+            return (int)(a[i] - b[i]);
+        }
+        i++;
+    }
+    return 0;
 }
 
 list_t* merge_unique(list_t* ia, list_t* ib, list_cmp_f cmp, apr_pool_t* mp) {

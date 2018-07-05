@@ -2,9 +2,6 @@
 #define HELPERS_H_
 
 #include <apr_general.h>
-// TODO(olegs): Even though we don't use list.h, I cannot find a way
-// to make protopy.tab.h to include it, so whenever we use it, we need
-// to first include list.h...
 #include "list.h"
 
 #ifdef _WIN32
@@ -12,8 +9,6 @@
 typedef long long int64_t;
 typedef unsigned long long uint64_t;
 #endif
-
-#include "protopy.tab.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,6 +42,18 @@ typedef enum vt_type_t {
     vt_map = 19
 } vt_type_t;
 
+typedef enum ast_type_t {
+    ast_message = 0,
+    ast_enum = 1,
+    ast_service = 3,
+    ast_import = 4,
+    ast_package = 5,
+    ast_oneof = 6,
+    ast_field = 7,
+    ast_repeated = 8,
+    ast_map = 9
+} ast_type_t;
+
 vt_type_t vt_builtin(const char*);
 
 typedef struct _builtin_type {
@@ -56,14 +63,24 @@ typedef struct _builtin_type {
 
 #define BUILTIN_TYPES 16
 
-#define YY_DECL  int yylex \
-    (YYSTYPE* yylval_param, YYLTYPE* yylloc_param, void* yyscanner, apr_pool_t* mp)
+typedef struct _proto_file_t {
+    byte* package;
+    list_t* imports;
+    list_t* messages;
+    list_t* enums;
+    list_t* scope;
+    list_t* current;
+    list_t* previous;
+    apr_pool_t* mp;
+} proto_file_t;
 
-extern int yylex(
-    YYSTYPE* yylval_param,
-    YYLTYPE* yylloc_param,
-    void* yyscanner,
-    apr_pool_t* mp);
+proto_file_t* make_proto_file(apr_pool_t*);
+
+byte* qualify_type(list_t*, proto_file_t*);
+
+list_t* parse_import(byte*, apr_pool_t*);
+
+char* unquote(char*);
 
 #ifdef __cplusplus
 }

@@ -105,23 +105,39 @@ bool strp(list_t*);
 
 typedef char* (*mapconcat_fn_t) (list_t*, apr_pool_t*);
 
+typedef byte* (*nmapconcat_fn_t) (list_t*, apr_pool_t*);
+
 typedef int (*list_cmp_f) (list_t*, list_t*);
 
-char* mapconcat(mapconcat_fn_t, list_t*, const char*, apr_pool_t*);
+char* mapconcat(mapconcat_fn_t, const list_t*, const char*, apr_pool_t*);
+
+byte* nmapconcat(nmapconcat_fn_t, const list_t*, const char*, apr_pool_t*);
 
 char* to_str(list_t*, apr_pool_t*);
+
+byte* to_bytes(list_t*, apr_pool_t*);
 
 list_t* sort_unique(list_t*, list_cmp_f, apr_pool_t*);
 
 byte* cstr_bytes(const char*, apr_pool_t*);
 
-list_t* cons_str(const char*, const size_t, list_t*, apr_pool_t*);
+byte* cstr_bytes_impl(const char*, size_t, apr_pool_t*);
 
-list_t* cons_int(const int, const size_t, list_t*, apr_pool_t*);
+list_t* cons_str(const char*, size_t, list_t*, apr_pool_t*);
+
+list_t* ncons_str(const byte*, list_t*, apr_pool_t*);
+
+list_t* cons_int(const int, size_t, list_t*, apr_pool_t*);
+
+list_t* ncons_int(const int*, list_t*, apr_pool_t*);
 
 char* bytes_cstr(const byte*, apr_pool_t*);
 
+char* nbytes_cstr(byte*);
+
 byte* join_bytes(const byte*, const char, const byte*, bool, apr_pool_t*);
+
+int bytes_cmp(byte*, byte*);
 
 extern byte empty[2];
 

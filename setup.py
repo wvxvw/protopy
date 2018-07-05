@@ -158,6 +158,7 @@ setup(
         Extension(
             'wrapped',
             [
+                'protopy/lib/helpers.c',
                 'protopy/lib/descriptors.c',
                 'protopy/lib/binparser.c',
                 'protopy/lib/serializer.c',

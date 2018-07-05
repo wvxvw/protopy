@@ -12,25 +12,6 @@
 #include "descriptors.h"
 
 
-static builtin_type_t builtin_types[BUILTIN_TYPES] = {
-    {(const char*)"\0"       , vt_error},
-    {(const char*)"\0"       , vt_error},
-    {(const char*)"bool"     , vt_bool},
-    {(const char*)"bytes"    , vt_bytes},
-    {(const char*)"double"   , vt_double},
-    {(const char*)"fixed32"  , vt_fixed32},
-    {(const char*)"fixed64"  , vt_fixed64},
-    {(const char*)"int32"    , vt_int32},
-    {(const char*)"int64"    , vt_int64},
-    {(const char*)"sfixed32" , vt_sfixed32},
-    {(const char*)"sfixed64" , vt_sfixed64},
-    {(const char*)"sint32"   , vt_sint32},
-    {(const char*)"sint64"   , vt_sint64},
-    {(const char*)"string"   , vt_string},
-    {(const char*)"uint32"   , vt_uint32},
-    {(const char*)"uint64"   , vt_uint64},
-};
-
 void free_state(PyObject* capsule) {
     if (capsule == Py_None) {
         return;
@@ -383,39 +364,6 @@ bool is_scalar(vt_type_t vt) {
         default:
             return true;
     }
-}
-
-vt_type_t vt_builtin(const char* type) {
-    size_t len = BUILTIN_TYPES;
-    size_t i = len >> 1;
-    size_t tlen = strlen(type);
-    size_t pos;
-    size_t step = i;
-    char a, b;
-    builtin_type_t* bt;
-
-    while (step > 0) {
-        bt = &builtin_types[i];
-        pos = 0;
-        do {
-            a = type[pos];
-            b = bt->name[pos];
-            pos++;
-        } while (a == b && pos < tlen);
-        if (pos == tlen) {
-            return bt->value;
-        }
-        step >>= 1;
-        if (a > b) {
-            i += step;
-        } else {
-            i -= step;
-        }
-        if (i >= BUILTIN_TYPES) {
-            break;
-        }
-    }
-    return vt_default;
 }
 
 void resolve_type(parse_state_t* const state, const char* pytype, vt_type_t* vttype) {

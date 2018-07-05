@@ -39,6 +39,46 @@
 #if YYDEBUG
 extern int yydebug;
 #endif
+/* "%code requires" blocks.  */
+#line 9 "protopy.y" /* yacc.c:1909  */
+
+#include <apr_general.h>
+#include "list.h"
+#include "helpers.h"
+
+union YYSTYPE {
+    size_t keyword;
+    int index;
+    byte* string;
+    list_t* object;
+    void* nothing;
+};
+
+typedef union YYSTYPE YYSTYPE;
+#define YYSTYPE_IS_TRIVIAL 1
+#define YYSTYPE_IS_DECLARED 1
+
+typedef struct YYLTYPE YYLTYPE;
+struct YYLTYPE {
+  int first_line;
+  int first_column;
+  int last_line;
+  int last_column;
+};
+
+#define YYLTYPE_IS_DECLARED 1
+#define YYLTYPE_IS_TRIVIAL 1
+
+#define YY_DECL  int yylex \
+    (YYSTYPE* yylval_param, YYLTYPE* yylloc_param, void* yyscanner, apr_pool_t* mp)
+
+extern int yylex(
+    YYSTYPE* yylval_param,
+    YYLTYPE* yylloc_param,
+    void* yyscanner,
+    apr_pool_t* mp);
+
+#line 82 "protopy.tab.h" /* yacc.c:1909  */
 
 /* Token type.  */
 #ifndef YYTOKENTYPE
@@ -89,25 +129,6 @@ extern int yydebug;
 #endif
 
 /* Value type.  */
-#if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
-
-union YYSTYPE
-{
-#line 30 "protopy.y" /* yacc.c:1909  */
-
-    size_t keyword;
-    int64_t index;
-    char* string;
-    list_t* object;
-    void* nothing;
-
-#line 105 "protopy.tab.h" /* yacc.c:1909  */
-};
-
-typedef union YYSTYPE YYSTYPE;
-# define YYSTYPE_IS_TRIVIAL 1
-# define YYSTYPE_IS_DECLARED 1
-#endif
 
 /* Location type.  */
 #if ! defined YYLTYPE && ! defined YYLTYPE_IS_DECLARED
@@ -132,7 +153,7 @@ enum { YYPUSH_MORE = 4 };
 
 typedef struct yypstate yypstate;
 
-int yypush_parse (yypstate *ps, int pushed_char, YYSTYPE const *pushed_val, YYLTYPE *pushed_loc, void* scanner, list_t** result, apr_pool_t* mp);
+int yypush_parse (yypstate *ps, int pushed_char, YYSTYPE const *pushed_val, YYLTYPE *pushed_loc, void* scanner, proto_file_t* pf);
 
 yypstate * yypstate_new (void);
 void yypstate_delete (yypstate *ps);
