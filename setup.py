@@ -34,10 +34,14 @@ class BuildWithYacc(build_ext):
         result = 1
 
         for p in (self.yacc, self.lex):
-            out = check_output([finder, p]).strip()
-            if not out:
-                logging.warning('Did not find {}'.format(self.yacc))
-            result &= bool(out)
+            try:
+                out = check_output([finder, p]).strip()
+                if not out:
+                    logging.warning('Did not find {}'.format(p))
+                result &= bool(out)
+            except:  # noqa: E722
+                logging.warning('Did not find {}'.format(p))
+                result = False
         return result
 
     def run_proc_with_setup(self, cwd, env, args):
@@ -123,7 +127,7 @@ setup(
     },
     packages=['protopy'],
     name='protopy',
-    version='0.0.1',
+    version='0.0.2',
     description='Parser for Google Protobuf',
     author='Oleg Sivokon',
     author_email='olegs@traiana.com',
