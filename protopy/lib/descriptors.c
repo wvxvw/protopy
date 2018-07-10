@@ -64,8 +64,6 @@ enum_desc(
     PyObject* enum_ctor,
     apr_pool_t* const mp) {
 
-    // TODO(olegs): In the future... we will allocate strings fro APR
-    // pools, so managing their memory will be easier.
     byte* norm_ftype = replace_str(ftype, ':', '.', mp);
     // TODO(olegs): Maybe check if we already registered this type?
 
@@ -172,7 +170,6 @@ message_desc(
 
     byte* norm_ftype = replace_str(ftype, ':', '.', mp);
     PyObject* fields_list = PyList_New(0);
-    apr_hash_t* fields = apr_hash_make(mp);
     apr_hash_t* mapping = apr_hash_make(mp);
     list_t* head = (list_t*)desc;
     size_t field_idx = 0;
@@ -182,10 +179,8 @@ message_desc(
     byte* field_name;
     byte* field_type;
     size_t field_num;
-    size_t* idx;
     field_info_t* info;
     list_t* kv_type;
-    size_t* key;
 
     while (!null(head)) {
         field = car(head);
@@ -196,27 +191,13 @@ message_desc(
         switch ((ast_type_t)field_ast) {
             case ast_field:
                 field_type = STR_VAL(cdr(field));
-                idx = apr_hash_get(fields, field_name, str_size(field_name) + 2);
-                // FIXME(olegs): We don't need this anymore, oneof fields should
-                // be encoded each with its own name.
-                if (idx) {
-                    add_field_info(field_type, field_num, *idx, mapping, mp);
-                } else {
-                    add_field_info(field_type, field_num, field_idx, mapping, mp);
-                    key = apr_palloc(mp, sizeof(size_t));
-                    *key = field_idx;
-                    apr_hash_set(fields, field_name, str_size(field_name) + 2, key);
-
-                    add_pyfield(fields_list, field_name, keywords, mp);
-                    field_idx++;
-                }
+                add_field_info(field_type, field_num, field_idx, mapping, mp);
+                add_pyfield(fields_list, field_name, keywords, mp);
+                field_idx++;
                 break;
             case ast_repeated:
-                key = apr_palloc(mp, sizeof(size_t));
-                *key = field_idx;
                 field_type = STR_VAL(cdr(field));
                 info = add_field_info(field_type, field_num, field_idx, mapping, mp);
-                apr_hash_set(fields, field_name, str_size(field_name) + 2, key);
 
                 info->vt_type = vt_repeated;
                 info->extra_type_info.elt = vt_default;
@@ -225,12 +206,9 @@ message_desc(
                 field_idx++;
                 break;
             case ast_map:
-                key = apr_palloc(mp, sizeof(size_t));
-                *key = field_idx;
                 kv_type = LIST_VAL(cdr(field));
                 field_type = empty;
                 info = add_field_info(field_type, field_num, field_idx, mapping, mp);
-                apr_hash_set(fields, field_name, str_size(field_name) + 2, key);
 
                 info->vt_type = vt_map;
                 info->extra_type_info.pair.key = (vt_type_t)SIZE_VAL(kv_type);
