@@ -69,7 +69,6 @@ enum_desc(
 
     size_t i = 0;
     PyObject* members = PyDict_New();
-    apr_hash_t* mapping = apr_hash_make(mp);
     PyObject* ctor;
 
     list_t* head = (list_t*)desc;
@@ -78,18 +77,12 @@ enum_desc(
     while (!null(head)) {
         field = car(head);
 
-        byte* tname = car(field);
+        byte* tname = STR_VAL(field);
         size_t num = SIZE_VAL(cdr(field));
         PyObject* member = PyUnicode_FromStringAndSize(
             (char*)(tname + 2),
             str_size(tname));
-        field_info_t* info = apr_palloc(mp, sizeof(field_info_t));
-        size_t* key = apr_palloc(mp, sizeof(size_t));
-
-        *key = num;
-        info->n = i;
         
-        apr_hash_set(mapping, key, sizeof(size_t), info);
         PyDict_SetItem(members, member, PyLong_FromSsize_t(num));
 
         head = cdr(head);
@@ -109,7 +102,6 @@ enum_desc(
 
     factory_t* factory = apr_palloc(mp, sizeof(factory_t));
     factory->vt_type = vt_enum;
-    factory->mapping = mapping;
     factory->ctor = ctor;
 
     apr_hash_set(factories, bytes_cstr(norm_ftype, mp), APR_HASH_KEY_STRING, factory);
