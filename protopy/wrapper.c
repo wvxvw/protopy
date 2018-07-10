@@ -311,19 +311,14 @@ void start_progress(parsing_progress_t* progress, size_t nthreads, apr_pool_t* m
     size_t i = 0;
 
     progress->nthreads = nthreads;
-    progress->thds_statuses = malloc(sizeof(bool) * nthreads);
-    progress->thds = malloc(sizeof(void*) * nthreads);
+    progress->thds_statuses = apr_palloc(mp, sizeof(bool) * nthreads);
+    progress->thds = apr_palloc(mp, sizeof(void*) * nthreads);
     
     while (i < nthreads) {
         progress->thds_statuses[i] = false;
         progress->thds[i] = NULL;
         i++;
     }
-}
-
-void finish_progress(parsing_progress_t* progress) {
-    free(progress->thds_statuses);
-    free(progress->thds);
 }
 
 bool all_threads_finished(parsing_progress_t* progress) {
@@ -410,15 +405,14 @@ process_finished_threads(
         proto_file_t* res = thds_args[i]->result;
         apr_pool_t* tmp = thds_args[i]->mp;
         deps = deps_from_imports(thds_args[i]->result->imports, mp);
-        // apr_hash_t* declarations = apr_hash_make(tmp);
-        // list_t* normalized = normalize_messages(thds_args[i]->result, tmp);
-        // collect_declarations(normalized, declarations, tmp);
-        // list_t* parsed = normalize_types(normalized, declarations, deps, tmp);
 
         // We will destroy the pool where this result was allocated
         // but we need to store the result.
         // list_t* result = duplicate(parsed, mp);
         list_t* result = append(res->messages, res->enums, mp);
+        // TODO(olegs): Actually, let's store proto_file_t* in defs
+        // instead.  This way we don't need to store ast_type in enum
+        // / message description.
         apr_hash_set(defs, thds_args[i]->source, APR_HASH_KEY_STRING, result);
         apr_pool_destroy(tmp);
     }
@@ -472,8 +466,6 @@ proto_def_parse_produce(
             apr_sleep(100);
         }
     }
-
-    finish_progress(&progress);
 
     return result;
 }

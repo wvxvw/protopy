@@ -275,6 +275,8 @@ create_descriptors(
     apr_pool_t* const mp) {
 
     apr_hash_t* factories = apr_hash_make(mp);
+    // TODO(olegs): Implemented is_keyword() in a way we don't need
+    // to create this hash-table every time.
     apr_hash_t* keywords = pylist_to_apr_hash(pykeywords, mp);
     apr_hash_index_t* hi;
     void* val;
