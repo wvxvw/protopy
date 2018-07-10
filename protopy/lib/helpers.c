@@ -5,63 +5,138 @@
 #include "helpers.h"
 
 
-static builtin_type_t builtin_types[BUILTIN_TYPES] = {
-    {(const char*)"\0"       , vt_error},
-    {(const char*)"\0"       , vt_error},
-    {(const char*)"bool"     , vt_bool},
-    {(const char*)"bytes"    , vt_bytes},
-    {(const char*)"double"   , vt_double},
-    {(const char*)"fixed32"  , vt_fixed32},
-    {(const char*)"fixed64"  , vt_fixed64},
-    {(const char*)"int32"    , vt_int32},
-    {(const char*)"int64"    , vt_int64},
-    {(const char*)"sfixed32" , vt_sfixed32},
-    {(const char*)"sfixed64" , vt_sfixed64},
-    {(const char*)"sint32"   , vt_sint32},
-    {(const char*)"sint64"   , vt_sint64},
-    {(const char*)"string"   , vt_string},
-    {(const char*)"uint32"   , vt_uint32},
-    {(const char*)"uint64"   , vt_uint64},
+const htkv_t keywords[KEYWORDS_SIZE] = {
+    {924   , "raise"},
+    {7341  , "yield"},
+    {7910  , "assert"},
+    {8661  , "in"},
+    {12943 , "elif"},
+    {17130 , "finally"},
+    {18125 , "True"},
+    {18897 , "try"},
+    {20295 , "class"},
+    {22734 , "or"},
+    {25792 , "and"},
+    {27121 , "not"},
+    {27616 , "as"},
+    {28036 , "False"},
+    {29576 , "def"},
+    {30211 , "break"},
+    {30992 , "pass"},
+    {33867 , "import"},
+    {35197 , "except"},
+    {35870 , "nonlocal"},
+    {41110 , "for"},
+    {41181 , "if"},
+    {41576 , "return"},
+    {47953 , "with"},
+    {49393 , "while"},
+    {51024 , "lambda"},
+    {53954 , "del"},
+    {57929 , "is"},
+    {59064 , "global"},
+    {59227 , "continue"},
+    {60156 , "from"},
+    {60282 , "None"},
+    {61012 , "else"},
 };
 
-vt_type_t vt_builtin_impl(const char* type, size_t offset, size_t tlen) {
-    size_t len = BUILTIN_TYPES;
-    size_t i = len >> 1;
-    size_t pos;
-    size_t step = i;
-    char a, b;
-    builtin_type_t* bt;
+const htkv_t builtin_types[BUILTIN_TYPES] = {
+    {186   , "uint32"},
+    {3915  , "fixed32"},
+    {4712  , "sint64"},
+    {6459  , "int32"},
+    {10481 , "sfixed64"},
+    {12574 , "bool"},
+    {17330 , "bytes"},
+    {21235 , "double"},
+    {34312 , "int64"},
+    {36187 , "sint32"},
+    {36719 , "string"},
+    {36984 , "fixed64"},
+    {40841 , "uint64"},
+    {47042 , "sfixed32"},
+};
 
-    while (step > 0) {
-        bt = &builtin_types[i];
-        pos = 0;
-        do {
-            a = type[pos + offset];
-            b = bt->name[pos];
-            pos++;
-        } while (a == b && pos < tlen);
-        if (pos == tlen) {
-            return bt->value;
+// Copied from: http://www.lammertbies.nl/comm/info/crc-calculation.html
+unsigned short crc16(const unsigned char* data_p, unsigned char length){
+    unsigned char x;
+    unsigned short crc = 0xFFFF;
+
+    while (length--) {
+        x = crc >> 8 ^ *data_p++;
+        x ^= x >> 4;
+        crc = (crc << 8) ^ ((unsigned short)(x << 12)) ^
+              ((unsigned short)(x << 5)) ^ ((unsigned short)x);
+    }
+    return crc;
+}
+
+size_t pow2(size_t v) {
+    v--;
+    v |= v >> 1;
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
+    return v + 1;
+}
+
+size_t index_of(const unsigned char* sub, size_t len, const htkv_t* ht, size_t htlen) {
+    size_t klen = htlen;
+    size_t i = (klen >> 1) | 1;
+    size_t step = pow2(i);
+    size_t nsteps = step << 2;
+    unsigned short crc = crc16(sub, len);
+
+    while (nsteps >>= 1) {
+        const htkv_t* kv = &ht[i];
+        if (kv->crc > crc) {
+            i -= (step > i) ? i : step;
+            step >>= 1;
+            continue;
         }
-        step >>= 1;
-        if (a > b) {
+        if (kv->crc < crc) {
             i += step;
-        } else {
-            i -= step;
+            if (i >= htlen) {
+                i = htlen - 1;
+            }
+            step >>= 1;
+            continue;
         }
-        if (i >= BUILTIN_TYPES) {
-            break;
+        if (kv->crc == crc) {
+            size_t j = 0;
+            while (j < len) {
+                if (sub[j] != kv->str[j]) {
+                    return htlen;
+                }
+                j++;
+            }
+            return i;
         }
     }
-    return vt_default;
+    return htlen;
+}
+
+bool is_keyword(const byte* field_name) {
+    size_t i = index_of(field_name + 2, str_size(field_name), keywords, KEYWORDS_SIZE);
+    return i != KEYWORDS_SIZE;
+}
+
+vt_type_t vt_builtin_impl(const char* type, size_t tlen) {
+    size_t i = index_of((const unsigned char*)type, tlen, builtin_types, BUILTIN_TYPES);
+    if (i == BUILTIN_TYPES) {
+        return vt_default;
+    }
+    return (vt_type_t)i;
 }
 
 vt_type_t vt_builtin(const char* type) {
-    return vt_builtin_impl(type, 0, strlen(type));
+    return vt_builtin_impl(type, strlen(type));
 }
 
 vt_type_t vtb_builtin(const byte* type) {
-    return vt_builtin_impl((const char*)type, 2, str_size(type));
+    return vt_builtin_impl((const char*)(type + 2), str_size(type));
 }
 
 proto_file_t* make_proto_file(apr_pool_t* mp) {

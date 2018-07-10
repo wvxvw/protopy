@@ -14,54 +14,57 @@ typedef unsigned long long uint64_t;
 extern "C" {
 #endif
 
-typedef enum vt_type_t {
-    // varint
-    vt_int32  = 0,
-    vt_int64  = 1,
-    vt_uint32 = 2,
-    vt_uint64 = 3,
-    vt_sint32 = 4,
-    vt_sint64 = 5,
-    vt_bool   = 6,
-    vt_enum   = 7,
-    // 64 bit
-    vt_fixed64  = 8,
-    vt_sfixed64 = 9,
-    vt_double   = 10,
-    // length-delimited
-    vt_string   = 11,
-    vt_bytes    = 12,
-    vt_message  = 13,
-    vt_repeated = 14,
-    // 32 bit
-    vt_fixed32  = 15,
-    vt_sfixed32 = 16,
-    // not exposed to user
-    vt_error   = 17,
-    vt_default = 18,
-    vt_map = 19
-} vt_type_t;
+typedef struct _htkv {
+    unsigned short crc;
+    const char* str;
+} htkv_t;
 
-typedef enum ast_type_t {
-    ast_message = 0,
-    ast_enum = 1,
-    ast_service = 3,
-    ast_import = 4,
-    ast_package = 5,
-    ast_oneof = 6,
-    ast_field = 7,
-    ast_repeated = 8,
-    ast_map = 9
-} ast_type_t;
+#define KEYWORDS_SIZE 33
+
+bool is_keyword(const byte*);
+
+typedef enum vt_type_t {
+    vt_uint32   = 0,
+    vt_fixed32  = 1,
+    vt_sint64   = 2,
+    vt_int32    = 3,
+    vt_sfixed64 = 4,
+    vt_bool     = 5,
+    vt_bytes    = 6,
+    vt_double   = 7,
+    vt_int64    = 8,
+    vt_sint32   = 9,
+    vt_string   = 10,
+    vt_fixed64  = 11,
+    vt_uint64   = 12,
+    vt_sfixed32 = 13,
+
+    // compound types
+    vt_enum     = 14,
+    vt_message  = 15,
+    vt_repeated = 16,
+
+    // extras
+    vt_error    = 17,
+    vt_default  = 18,
+    vt_map      = 19
+} vt_type_t;
 
 vt_type_t vt_builtin(const char*);
 
-typedef struct _builtin_type {
-    const char* name;
-    const vt_type_t value;
-} builtin_type_t;
+#define BUILTIN_TYPES 14
 
-#define BUILTIN_TYPES 16
+typedef enum ast_type_t {
+    ast_message  = 0,
+    ast_enum     = 1,
+    ast_service  = 3,
+    ast_import   = 4,
+    ast_package  = 5,
+    ast_oneof    = 6,
+    ast_field    = 7,
+    ast_repeated = 8,
+    ast_map      = 9
+} ast_type_t;
 
 typedef struct _proto_file_t {
     byte* package;

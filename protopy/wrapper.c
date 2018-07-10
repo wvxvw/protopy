@@ -492,13 +492,12 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     PyObject* parsed_files;
     PyObject* message_ctor;
     PyObject* enum_ctor;
-    PyObject* pykeywords;
     PyObject* mp_capsule;
     char* source;
 
     if (!PyArg_ParseTuple(
             args,
-            "yO!O!OOOO",
+            "yO!O!OOO",
             &source,
             &PyList_Type,
             &source_roots,
@@ -506,7 +505,6 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
             &parsed_files,
             &message_ctor,
             &enum_ctor,
-            &pykeywords,
             &mp_capsule)) {
         return NULL;
     }
@@ -562,7 +560,6 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
         parsed_defs,
         enum_ctor,
         message_ctor,
-        pykeywords,
         mp);
     if (PyErr_Occurred()) {
         return NULL;

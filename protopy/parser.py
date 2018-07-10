@@ -5,7 +5,6 @@ Python interface to Protobuf IML and binary parsing code.
 
 from collections import namedtuple
 from enum import IntEnum
-from keyword import kwlist
 from os import path
 
 from protopy.wrapped import (
@@ -181,7 +180,6 @@ class DefParser:
                 self.files,
                 self.message_ctor,
                 self.enum_ctor,
-                kwlist,
                 self.mp,
             ),
         )

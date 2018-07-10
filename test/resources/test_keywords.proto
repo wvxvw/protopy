@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+message Test {
+    string False = 1;
+    string None = 2;
+    string True = 3;
+    string and = 4;
+    string as = 5;
+    string assert = 6;
+    string break = 7;
+    string class = 8;
+    string continue = 9;
+    string def = 10;
+    string del = 11;
+    string elif = 12;
+    string else = 13;
+    string except = 14;
+    string finally = 15;
+    string for = 16;
+    string from = 17;
+    string global = 18;
+    string if = 19;
+    string import = 20;
+    string in = 21;
+    string is = 22;
+    string lambda = 23;
+    string nonlocal = 24;
+    string not = 25;
+    string or = 26;
+    string pass = 27;
+    string raise = 28;
+    string return = 29;
+    string try = 30;
+    string while = 31;
+    string with = 32;
+    string yield = 33;
+}

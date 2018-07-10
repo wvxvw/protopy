@@ -50,13 +50,11 @@ message_desc(
     const list_t*,
     apr_hash_t* const,
     PyObject*,
-    apr_hash_t* const,
     apr_pool_t* const);
 
 apr_hash_t*
 create_descriptors(
     apr_hash_t* const,
-    PyObject*,
     PyObject*,
     PyObject*,
     apr_pool_t* const);

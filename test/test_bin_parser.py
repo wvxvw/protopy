@@ -596,3 +596,50 @@ def test_dotted():
 
     print('result: {}'.format(result))
     assert result.inner_dotted.string_field == "abcde"
+
+
+def test_keywords():
+    roots, test_proto, content = generate_proto_binary(
+        'test_keywords.proto',
+        b'''
+        False: "1"
+        None: "2"
+        True: "3"
+        and: "4"
+        as: "5"
+        assert: "6"
+        break: "7"
+        class: "8"
+        continue: "9"
+        def: "10"
+        del: "11"
+        elif: "12"
+        else: "13"
+        except: "14"
+        finally: "15"
+        for: "16"
+        from: "17"
+        global: "18"
+        if: "19"
+        import: "20"
+        in: "21"
+        is: "22"
+        lambda: "23"
+        nonlocal: "24"
+        not: "25"
+        or: "26"
+        pass: "27"
+        raise: "28"
+        return: "29"
+        try: "30"
+        while: "31"
+        with: "32"
+        yield: "33"
+        ''',
+    )
+    print('generated proto message: {}'.format(content))
+
+    result = BinParser(roots).parse(test_proto, 'Test', content)
+
+    print('result: {}'.format(result))
+    assert result.pb_yield == "33"

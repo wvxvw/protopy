@@ -129,12 +129,12 @@ add_field_info(
     return info;
 }
 
-void add_pyfield(PyObject* fields, byte* field_name, apr_hash_t* keywords, apr_pool_t* mp) {
+void add_pyfield(PyObject* fields, byte* field_name, apr_pool_t* mp) {
     size_t len = str_size(field_name);
     char* fname;
     PyObject* new_name;
 
-    if (apr_hash_get(keywords, bytes_cstr(field_name, mp), APR_HASH_KEY_STRING)) {
+    if (is_keyword(field_name)) {
         fname = malloc(len + 4);
         memcpy(fname, "pb_", 3);
         memcpy(fname + 3, field_name + 2, len);
@@ -157,7 +157,6 @@ message_desc(
     const list_t* desc,
     apr_hash_t* const factories,
     PyObject* message_ctor,
-    apr_hash_t* const keywords,
     apr_pool_t* const mp) {
 
     byte* norm_ftype = replace_str(ftype, ':', '.', mp);
@@ -184,7 +183,7 @@ message_desc(
             case ast_field:
                 field_type = STR_VAL(cdr(field));
                 add_field_info(field_type, field_num, field_idx, mapping, mp);
-                add_pyfield(fields_list, field_name, keywords, mp);
+                add_pyfield(fields_list, field_name, mp);
                 field_idx++;
                 break;
             case ast_repeated:
@@ -194,7 +193,7 @@ message_desc(
                 info->vt_type = vt_repeated;
                 info->extra_type_info.elt = vt_default;
 
-                add_pyfield(fields_list, field_name, keywords, mp);
+                add_pyfield(fields_list, field_name, mp);
                 field_idx++;
                 break;
             case ast_map:
@@ -207,7 +206,7 @@ message_desc(
                 info->extra_type_info.pair.val = vt_default;
                 // TODO(olegs): Why not store this in field_type?
                 info->extra_type_info.pair.pyval = bytes_cstr(STR_VAL(cdr(kv_type)), mp);
-                add_pyfield(fields_list, field_name, keywords, mp);
+                add_pyfield(fields_list, field_name, mp);
                 field_idx++;
                 break;
             default:
@@ -253,31 +252,14 @@ message_desc(
     apr_hash_set(factories, bytes_cstr(norm_ftype, mp), APR_HASH_KEY_STRING, factory);
 }
 
-apr_hash_t* pylist_to_apr_hash(PyObject* pylist, apr_pool_t* mp) {
-    apr_hash_t* result = apr_hash_make(mp);
-    Py_ssize_t len = PyList_Size(pylist);
-
-    while (len > 0) {
-        len--;
-        PyObject* str = PyList_GetItem(pylist, len);
-        char* key = PyUnicode_AsUTF8(str);
-        apr_hash_set(result, key, APR_HASH_KEY_STRING, (void*)1);
-    }
-    return result;
-}
-
 apr_hash_t*
 create_descriptors(
     apr_hash_t* const descriptions,
     PyObject* enum_ctor,
     PyObject* message_ctor,
-    PyObject* pykeywords,
     apr_pool_t* const mp) {
 
     apr_hash_t* factories = apr_hash_make(mp);
-    // TODO(olegs): Implemented is_keyword() in a way we don't need
-    // to create this hash-table every time.
-    apr_hash_t* keywords = pylist_to_apr_hash(pykeywords, mp);
     apr_hash_index_t* hi;
     void* val;
     const void* key;
@@ -298,7 +280,7 @@ create_descriptors(
                 case 0:
                     tname = STR_VAL(cdr(desc));
                     fields = cdr(cdr(desc));
-                    message_desc(tname, fields, factories, message_ctor, keywords, mp);
+                    message_desc(tname, fields, factories, message_ctor, mp);
                     break;
                 case 1:
                     tname = STR_VAL(cdr(desc));
