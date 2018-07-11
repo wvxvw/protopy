@@ -21,8 +21,8 @@ sys.path = [x for x in sys.path if not x == project_dir]
 
 class BuildWithYacc(build_ext):
 
-    yacc = 'yacc'
-    lex = 'lex'
+    yacc = 'bison', (3, 0, 4),
+    lex = 'flex', (2, 6, 4),
 
     def has_yacc_and_lex(self):
         finder = None
@@ -33,15 +33,26 @@ class BuildWithYacc(build_ext):
 
         result = 1
 
-        for p in (self.yacc, self.lex):
+        for (p, v) in (self.yacc, self.lex):
             try:
                 out = check_output([finder, p]).strip()
                 if not out:
                     logging.warning('Did not find {}'.format(p))
-                result &= bool(out)
+                    result = 0
+                    continue
+                out = check_output([p, '--version']).strip()
+                out = out.split(b'\n')[0].split(b' ').pop().split(b'.')
+                out = tuple(map(int, out))
+                if out < v:
+                    logging.warning(
+                        'Version of {} ({}) is too old, need {}'.format(
+                            p, out, v,
+                        ),
+                    )
+                    result = 0
             except:  # noqa: E722
                 logging.warning('Did not find {}'.format(p))
-                result = False
+                result = 0
         return result
 
     def run_proc_with_setup(self, cwd, env, args):
@@ -59,15 +70,16 @@ class BuildWithYacc(build_ext):
 
     def generate_parser(self):
         yacc_args = [
-            self.yacc,
+            self.yacc[0],
             '-t',
-            '-vd',
-            'protopy.y',
+            '-v',
+            '-d',
             '-o',
             'protopy.tab.c',
+            'protopy.y',
         ]
         lex_args = [
-            self.lex,
+            self.lex[0],
             '-d',
             '--header-file=protopy.lex.h',
             '-o',

@@ -87,47 +87,6 @@ extern int yydebug;
     IDENTIFIER = 297
   };
 #endif
-/* Tokens.  */
-#define TBOOL 258
-#define BOOL_FALSE 259
-#define BOOL_TRUE 260
-#define ENUM 261
-#define EXTENSIONS 262
-#define EXTEND 263
-#define FIXED32 264
-#define FIXED64 265
-#define IMPORT 266
-#define TINT32 267
-#define TINT64 268
-#define MAP 269
-#define MAX 270
-#define MESSAGE 271
-#define ONEOF 272
-#define OPTION 273
-#define TOPTIONAL 274
-#define PACKAGE 275
-#define PUBLIC 276
-#define REPEATED 277
-#define REQUIRED 278
-#define RESERVED 279
-#define RETURNS 280
-#define RPC 281
-#define SERVICE 282
-#define SFIXED32 283
-#define SFIXED64 284
-#define SINT32 285
-#define SINT64 286
-#define STREAM 287
-#define STRING 288
-#define STRING_LITERAL 289
-#define SYNTAX 290
-#define TO 291
-#define TUINT32 292
-#define TUINT64 293
-#define WEAK 294
-#define POSINTEGER 295
-#define NEGINTEGER 296
-#define IDENTIFIER 297
 
 /* Value type.  */
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
@@ -142,7 +101,7 @@ union YYSTYPE
     list_t* object;
     void* nothing;
 
-#line 146 "protopy.tab.h" /* yacc.c:1909  */
+#line 105 "protopy.tab.h" /* yacc.c:1909  */
 };
 
 typedef union YYSTYPE YYSTYPE;
