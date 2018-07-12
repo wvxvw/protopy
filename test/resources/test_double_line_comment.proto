@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+service Service {
+
+    rpc Method (google.protobuf.Empty) returns (MetricsReply) {
+        option (google.api.http) = {
+            // NOTE: Served at /metrics as Plain-Text (to accommodate Prometheus) using a special handling (i.e. hack) in the grpc-gateway rather than the gateway's standard HTTP-JSON marshalling.
+            // get: "/metrics"
+        };
+    }
+}
