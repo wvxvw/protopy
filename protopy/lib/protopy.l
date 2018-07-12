@@ -2,7 +2,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <stddef.h>
-#include "list.h"
+#include <apr_strings.h>
+
 #include "helpers.h"
 #include "protopy.tab.h"
 
@@ -31,20 +32,20 @@
 %%
 
 \"(\\([\\abfnrtv]|x[0-9a-fA-F][0-9a-fA-F]|[0-7][0-7][0-7])|[^"\\])*\" {
-   yylval->string = cstr_bytes(yytext, mp);
+   yylval->string = apr_pstrdup(mp, yytext);
    return STRING_LITERAL;
 }
 '(\\([\\abfnrtv]|x[0-9a-fA-F][0-9a-fA-F]|[0-7][0-7][0-7])|[^'\\])*' {
-   yylval->string = cstr_bytes(yytext, mp);
+   yylval->string = apr_pstrdup(mp, yytext);
    return STRING_LITERAL;
 }
 
 ([1-9][0-9]*|0) {
-  yylval->string = cstr_bytes(yytext, mp);
+  yylval->string = apr_pstrdup(mp, yytext);
   return POSINTEGER;
 }
 ([-][1-9][0-9]*|0) {
-  yylval->string = cstr_bytes(yytext, mp);
+  yylval->string = apr_pstrdup(mp, yytext);
   return NEGINTEGER;
 }
 
@@ -87,7 +88,7 @@ uint64     { return TUINT64; }
 weak       { return WEAK; }
 
 [a-zA-Z_][a-zA-Z0-9_]* {
-    yylval->string = cstr_bytes(yytext, mp);
+    yylval->string = apr_pstrdup(mp, yytext);
     return IDENTIFIER;
 }
 

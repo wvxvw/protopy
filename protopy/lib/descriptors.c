@@ -1,37 +1,21 @@
 #include <Python.h>
 #include <apr_general.h>
 #include <apr_hash.h>
+#include <apr_strings.h>
 
-#include "list.h"
 #include "helpers.h"
 #include "defparser.h"
 #include "descriptors.h"
 #include "pyhelpers.h"
 
-byte* replace_str(const byte* s, byte a, byte b, apr_pool_t* mp) {
-    size_t i = str_size(s) + 2;
-    byte* result = apr_palloc(mp, i * sizeof(byte));
-
-    result[0] = s[0];
-    result[1] = s[1];
-    while (i > 2) {
-        i--;
-        if (s[i] == a) {
-            result[i] = b;
-        } else {
-            result[i] = s[i];
-        }
-    }
-    return result;
-}
 
 void extract_type_name(
-    const byte* tname,
+    const char* tname,
     apr_pool_t* mp,
     char** pname,
     char** package) {
 
-    size_t len = str_size(tname) + 2;
+    size_t len = strlen(tname);
     size_t i = len;
 
     char* extracted_name;
@@ -39,10 +23,10 @@ void extract_type_name(
 
     while (i > 0) {
         i--;
-        if (tname[i] == '.' || tname[i] == ':') {
+        if (tname[i] == '.') {
             extracted_package = apr_palloc(mp, (i - 1) * sizeof(char));
-            memcpy(extracted_package, tname + 2, (i - 2));
-            extracted_package[i - 2] = '\0';
+            memcpy(extracted_package, tname, i);
+            extracted_package[i] = '\0';
 
             extracted_name = apr_palloc(mp, (len - i) * sizeof(char));
             memcpy(extracted_name, tname + i + 1, (len - i - 1));
@@ -52,47 +36,31 @@ void extract_type_name(
             return;
         }
     }
-    *pname = bytes_cstr(tname, mp);
-    *package = dupstr("", mp);
+    *pname = apr_pstrdup(mp, tname);
+    *package = apr_pstrdup(mp, "");
 }
 
 void
 enum_desc(
-    const byte* ftype,
-    const list_t* desc,
+    const proto_enum_t* desc,
     apr_hash_t* const factories,
     PyObject* enum_ctor,
     apr_pool_t* const mp) {
 
-    byte* norm_ftype = replace_str(ftype, ':', '.', mp);
     // TODO(olegs): Maybe check if we already registered this type?
-
-    size_t i = 0;
+    int i = 0;
     PyObject* members = PyDict_New();
-    PyObject* ctor;
 
-    list_t* head = (list_t*)desc;
-    list_t* field;
-
-    while (!null(head)) {
-        field = car(head);
-
-        byte* tname = STR_VAL(field);
-        size_t num = SIZE_VAL(cdr(field));
-        PyObject* member = PyUnicode_FromStringAndSize(
-            (char*)(tname + 2),
-            str_size(tname));
+    while (i < desc->members->nelts) {
+        proto_enum_member_t* field = APR_ARRAY_IDX(desc->members, i, proto_enum_member_t*);
+        PyObject* member = PyUnicode_FromString(field->name);
         
-        PyDict_SetItem(members, member, PyLong_FromSsize_t(num));
-
-        head = cdr(head);
+        PyDict_SetItem(members, member, PyLong_FromSsize_t(field->n));
         i++;
     }
-    ctor = PyObject_CallFunctionObjArgs(
+    PyObject* ctor = PyObject_CallFunctionObjArgs(
         enum_ctor,
-        PyUnicode_FromStringAndSize(
-            (char*)(norm_ftype + 2),
-            str_size(norm_ftype)),
+        PyUnicode_FromString(desc->t),
         members,
         NULL);
     if (PyErr_Occurred()) {
@@ -104,12 +72,12 @@ enum_desc(
     factory->vt_type = vt_enum;
     factory->ctor = ctor;
 
-    apr_hash_set(factories, bytes_cstr(norm_ftype, mp), APR_HASH_KEY_STRING, factory);
+    apr_hash_set(factories, desc->t, APR_HASH_KEY_STRING, factory);
 }
 
 field_info_t*
 add_field_info(
-    byte* field_type,
+    const char* field_type,
     size_t field_num,
     size_t idx,
     apr_hash_t* mapping,
@@ -117,10 +85,7 @@ add_field_info(
 
     field_info_t* info = apr_palloc(mp, sizeof(field_info_t));
     info->n = idx;
-    // field_type and field_num come from recently parsed description
-    // which will be discarded as soon as parsing finishes, this is
-    // why we need to copy them.
-    info->pytype = bytes_cstr(field_type, mp);
+    info->pytype = field_type;
     info->vt_type = vt_default;
 
     size_t* key = apr_palloc(mp, sizeof(size_t));
@@ -129,8 +94,8 @@ add_field_info(
     return info;
 }
 
-void add_pyfield(PyObject* fields, byte* field_name, apr_pool_t* mp) {
-    size_t len = str_size(field_name);
+void add_pyfield(PyObject* fields, const char* field_name, apr_pool_t* mp) {
+    size_t len = strlen(field_name);
     char* fname;
     PyObject* new_name;
 
@@ -153,75 +118,48 @@ void add_pyfield(PyObject* fields, byte* field_name, apr_pool_t* mp) {
 
 void
 message_desc(
-    const byte* ftype,
-    const list_t* desc,
+    const proto_message_t* desc,
     apr_hash_t* const factories,
     PyObject* message_ctor,
     apr_pool_t* const mp) {
 
-    byte* norm_ftype = replace_str(ftype, ':', '.', mp);
     PyObject* fields_list = PyList_New(0);
     apr_hash_t* mapping = apr_hash_make(mp);
-    list_t* head = (list_t*)desc;
-    size_t field_idx = 0;
 
-    list_t* field;
-    size_t field_ast;
-    byte* field_name;
-    byte* field_type;
-    size_t field_num;
-    field_info_t* info;
-    list_t* kv_type;
+    int i = 0;
+    int j = 0;
+    int k = 0;
 
-    while (!null(head)) {
-        field = car(head);
-        field_ast = SIZE_VAL(field);
-        field_name = STR_VAL(cdr(cdr(field)));
-        field_num = SIZE_VAL(cdr(cdr(cdr(field))));
-
-        switch ((ast_type_t)field_ast) {
-            case ast_field:
-                field_type = STR_VAL(cdr(field));
-                add_field_info(field_type, field_num, field_idx, mapping, mp);
-                add_pyfield(fields_list, field_name, mp);
-                field_idx++;
-                break;
-            case ast_repeated:
-                field_type = STR_VAL(cdr(field));
-                info = add_field_info(field_type, field_num, field_idx, mapping, mp);
-
-                info->vt_type = vt_repeated;
-                info->extra_type_info.elt = vt_default;
-
-                add_pyfield(fields_list, field_name, mp);
-                field_idx++;
-                break;
-            case ast_map:
-                kv_type = LIST_VAL(cdr(field));
-                field_type = empty;
-                info = add_field_info(field_type, field_num, field_idx, mapping, mp);
-
-                info->vt_type = vt_map;
-                info->extra_type_info.pair.key = (vt_type_t)SIZE_VAL(kv_type);
-                info->extra_type_info.pair.val = vt_default;
-                // TODO(olegs): Why not store this in field_type?
-                info->extra_type_info.pair.pyval = bytes_cstr(STR_VAL(cdr(kv_type)), mp);
-                add_pyfield(fields_list, field_name, mp);
-                field_idx++;
-                break;
-            default:
-                PyErr_Format(
-                    PyExc_TypeError,
-                    "Unrecognized field type: %i", field_ast);
-                return;
-        }
-        head = cdr(head);
+    while (i < desc->fields->nelts) {
+        proto_field_t* field = APR_ARRAY_IDX(desc->fields, i, proto_field_t*);
+        add_field_info(field->name, field->n, i, mapping, mp);
+        add_pyfield(fields_list, field->name, mp);
+        i++;
+    }
+    while (j < desc->fields->nelts) {
+        proto_field_t* field = APR_ARRAY_IDX(desc->repeated, j, proto_field_t*);
+        field_info_t* info = add_field_info(field->name, field->n, j + i, mapping, mp);
+        info->vt_type = vt_repeated;
+        info->extra_type_info.elt = vt_default;
+        add_pyfield(fields_list, field->name, mp);
+        j++;
+    }
+    while (k < desc->maps->nelts) {
+        proto_map_field_t* map = APR_ARRAY_IDX(desc->repeated, j, proto_map_field_t*);
+        field_info_t* info = add_field_info(map->name, map->n, k + j + i, mapping, mp);
+        info->vt_type = vt_map;
+        info->extra_type_info.pair.key = map->kt;
+        info->extra_type_info.pair.val = vt_default;
+        // TODO(olegs): Why not store this in field_type?
+        info->extra_type_info.pair.pyval = map->vt;
+        add_pyfield(fields_list, map->name, mp);
+        k++;
     }
 
     char* name;
     char* package;
 
-    extract_type_name(norm_ftype, mp, &name, &package);
+    extract_type_name(desc->t, mp, &name, &package);
 
     Py_INCREF(fields_list);
     PyObject* args = PyTuple_New(2);
@@ -249,7 +187,7 @@ message_desc(
     factory->mapping = mapping;
     factory->ctor = ctor;
 
-    apr_hash_set(factories, bytes_cstr(norm_ftype, mp), APR_HASH_KEY_STRING, factory);
+    apr_hash_set(factories, desc->t, APR_HASH_KEY_STRING, factory);
 }
 
 apr_hash_t*
@@ -261,37 +199,29 @@ create_descriptors(
 
     apr_hash_t* factories = apr_hash_make(mp);
     apr_hash_index_t* hi;
-    void* val;
+    proto_file_t* pfile;
     const void* key;
-    list_t* file_desc;
-    list_t* desc;
-    size_t rtype;
-    byte* tname;
-    list_t* fields;
 
     for (hi = apr_hash_first(mp, descriptions); hi; hi = apr_hash_next(hi)) {
-        apr_hash_this(hi, &key, NULL, &val);
-        file_desc = (list_t*)val;
+        apr_hash_this(hi, &key, NULL, (void**)(&pfile));
 
-        while (!null(file_desc)) {
-            desc = LIST_VAL(file_desc);
-            rtype = SIZE_VAL(desc);
-            switch (rtype) {
-                case 0:
-                    tname = STR_VAL(cdr(desc));
-                    fields = cdr(cdr(desc));
-                    message_desc(tname, fields, factories, message_ctor, mp);
-                    break;
-                case 1:
-                    tname = STR_VAL(cdr(desc));
-                    fields = cdr(cdr(desc));
-                    enum_desc(tname, fields, factories, enum_ctor, mp);
-                    break;
-            }
+        int i = 0;
+        while (i < pfile->enums->nelts) {
+            proto_enum_t* e = APR_ARRAY_IDX(pfile->enums, i, proto_enum_t*);
+            enum_desc(e, factories, enum_ctor, mp);
             if (PyErr_Occurred()) {
                 return NULL;
             }
-            file_desc = cdr(file_desc);
+            i++;
+        }
+        i = 0;
+        while (i < pfile->messages->nelts) {
+            proto_message_t* e = APR_ARRAY_IDX(pfile->messages, i, proto_message_t*);
+            message_desc(e, factories, message_ctor, mp);
+            if (PyErr_Occurred()) {
+                return NULL;
+            }
+            i++;
         }
     }
 

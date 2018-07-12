@@ -27,7 +27,6 @@ typedef long long int64_t;
 #include "lib/protopy.lex.h"
 #include "lib/binparser.h"
 #include "lib/defparser.h"
-#include "lib/list.h"
 #include "lib/descriptors.h"
 #include "lib/serializer.h"
 
@@ -342,7 +341,7 @@ start_defparser_thread(
     parse_def_args_t** thds_args,
     size_t i,
     char* source,
-    list_t* roots,
+    apr_array_header_t* roots,
     apr_pool_t* mp) {
 
     parse_def_args_t* def_args = thds_args[i];
@@ -362,17 +361,19 @@ start_defparser_thread(
     apr_thread_create(&progress->thds[i], NULL, parse_one_def, def_args, mp);
 }
 
-list_t* deps_from_imports(list_t* imports, apr_pool_t* mp) {
-    list_t* result = nil;
+apr_array_header_t* deps_from_imports(apr_array_header_t* imports, apr_pool_t* mp) {
+    int i = 0;
+    apr_array_header_t* result = apr_array_make(mp, 0, sizeof(char*));
 
-    while (!null(imports)) {
-        result = ncons_str(nmapconcat(to_bytes, car(imports), "/", mp), result, mp);
-        imports = cdr(imports);
+    while (i < imports->nelts) {
+        apr_array_header_t* elt = APR_ARRAY_IDX(imports, i, apr_array_header_t*);
+        APR_ARRAY_PUSH(result, char*) = apr_array_pstrcat(mp, elt, '/');
+        i++;
     }
     return result;
 }
 
-list_t*
+apr_array_header_t*
 process_finished_threads(
     parsing_progress_t* progress,
     parse_def_args_t** thds_args,
@@ -381,7 +382,7 @@ process_finished_threads(
     apr_pool_t* mp) {
 
     size_t i = finished_thread(progress);
-    list_t* deps = nil;
+    apr_array_header_t* deps = apr_array_make(mp, 0, sizeof(char*));
 
     if (i < progress->nthreads) {
         if (thds_args[i]->error != NULL) {
@@ -397,7 +398,7 @@ process_finished_threads(
                     apr_thread_join(&rv, progress->thds[j]);
                 }
             }
-            return nil;
+            return deps;
         }
         apr_status_t rv;
         apr_thread_join(&rv, progress->thds[i]);
@@ -408,12 +409,8 @@ process_finished_threads(
 
         // We will destroy the pool where this result was allocated
         // but we need to store the result.
-        // list_t* result = duplicate(parsed, mp);
-        list_t* result = append(res->messages, res->enums, mp);
-        // TODO(olegs): Actually, let's store proto_file_t* in defs
-        // instead.  This way we don't need to store ast_type in enum
-        // / message description.
-        apr_hash_set(defs, thds_args[i]->source, APR_HASH_KEY_STRING, result);
+        res = proto_file_copy(res, mp);
+        apr_hash_set(defs, thds_args[i]->source, APR_HASH_KEY_STRING, res);
         apr_pool_destroy(tmp);
     }
     return deps;
@@ -421,8 +418,8 @@ process_finished_threads(
 
 static apr_hash_t*
 proto_def_parse_produce(
-    list_t* sources,
-    list_t* roots,
+    apr_array_header_t* sources,
+    apr_array_header_t* roots,
     size_t nthreads,
     apr_pool_t* mp,
     error_info_t* einfo) {
@@ -439,20 +436,19 @@ proto_def_parse_produce(
 
     start_progress(&progress, nthreads, mp);
 
-    while (!null(sources) || !all_threads_finished(&progress)) {
+    while (!apr_is_empty_array(sources) || !all_threads_finished(&progress)) {
 
         i = available_thread_pos(&progress);
 
-        while (!null(sources) && i < progress.nthreads) {
-            char* source = bytes_cstr(car(sources), mp);
-            sources = cdr(sources);
+        while (!apr_is_empty_array(sources) && i < progress.nthreads) {
+            char* source = apr_array_pop(sources);
             if (!apr_hash_get(result, source, APR_HASH_KEY_STRING)) {
                 apr_hash_set(result, source, APR_HASH_KEY_STRING, (void*)true);
                 start_defparser_thread(&progress, thds_args, i, source, roots, mp);
             }
             i = available_thread_pos(&progress);
         }
-        list_t* extras = process_finished_threads(
+        apr_array_header_t* extras = process_finished_threads(
             &progress,
             thds_args,
             result,
@@ -461,8 +457,8 @@ proto_def_parse_produce(
         if (einfo->message) {
             break;
         }
-        sources = append(sources, extras, mp);
-        if (null(sources) || all_threads_busy(&progress)) {
+        apr_array_cat(sources, extras);
+        if (apr_is_empty_array(sources) || all_threads_busy(&progress)) {
             apr_sleep(100);
         }
     }
@@ -479,10 +475,8 @@ PyObject* aprdict_to_pydict(apr_pool_t* mp, apr_hash_t* ht) {
     for (hi = apr_hash_first(mp, ht); hi; hi = apr_hash_next(hi)) {
         apr_hash_this(hi, &key, NULL, &val);
         PyObject* pykey = PyBytes_FromString((char*)key);
-        PyObject* pyval = list_to_pylist((list_t*)val);
-        PyDict_SetItem(result, pykey, pyval);
+        PyDict_SetItem(result, pykey, Py_True);
         Py_DECREF(pykey);
-        Py_DECREF(pyval);
     }
     return result;
 }
@@ -525,7 +519,7 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
         return NULL;
     }
 
-    list_t* roots = pylist_to_list(source_roots, mp);
+    apr_array_header_t* roots = pylist_to_array(source_roots, mp);
     apr_hash_t* parsed_defs;
 
     error_info_t einfo;
@@ -534,7 +528,8 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
 
     Py_BEGIN_ALLOW_THREADS;
 
-    list_t* sources = cons_str(source, strlen(source), nil, mp);
+    apr_array_header_t* sources = apr_array_make(mp, 1, sizeof(char*));
+    APR_ARRAY_PUSH(sources, char*) = source;
     parsed_defs = proto_def_parse_produce(sources, roots, (size_t)nthreads, mp, &einfo);
 
     Py_END_ALLOW_THREADS;

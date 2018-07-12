@@ -1,5 +1,7 @@
 #include <apr_thread_mutex.h>
 #include <apr_file_info.h>
+#include <apr_tables.h>
+#include <apr_strings.h>
 
 #include "protopy.tab.h"
 
@@ -10,7 +12,6 @@
 #include "protopy.lex.h"
 #include "helpers.h"
 #include "defparser.h"
-#include "list.h"
 
 
 #ifdef _WIN32
@@ -31,7 +32,7 @@ int exists_and_is_regular(apr_finfo_t* finfo, const char* path, apr_pool_t* mp) 
     return 0;
 }
 
-int resolved_source(const char* path, list_t* roots, byte** result, apr_pool_t* mp) {
+int resolved_source(const char* path, apr_array_header_t* roots, char** result, apr_pool_t* mp) {
     apr_finfo_t finfo;
     int retcode = 0;
     
@@ -40,18 +41,17 @@ int resolved_source(const char* path, list_t* roots, byte** result, apr_pool_t* 
             retcode = 2;
             return retcode;
         case 0:
-            *result = cstr_bytes((char*)path, mp);
+            *result = apr_pstrdup(mp, path);
             return retcode;
     }
     
-    byte* combined = NULL;
-    byte* root;
-    byte* path_bytes = cstr_bytes(path, mp);
+    int i = 0;
+    
+    while (i < roots->nelts) {
+        char* root = APR_ARRAY_IDX(roots, i, char*);
+        char* combined = apr_pstrcat(mp, root, "/", path, NULL);
 
-    while (!null(roots)) {
-        root = STR_VAL(roots);
-        combined = join_bytes(root, '/', path_bytes, true, mp);
-        switch (exists_and_is_regular(&finfo, ((char*)combined) + 2, mp)) {
+        switch (exists_and_is_regular(&finfo, combined, mp)) {
             case 2:
                 retcode = 2;
                 return retcode;
@@ -59,7 +59,7 @@ int resolved_source(const char* path, list_t* roots, byte** result, apr_pool_t* 
                 *result = combined;
                 return retcode;
         }
-        roots = cdr(roots);
+        i++;
     }
     retcode = 1;
     return retcode;
@@ -68,7 +68,7 @@ int resolved_source(const char* path, list_t* roots, byte** result, apr_pool_t* 
 void* parse_one_def_cleanup(
     FILE* h,
     apr_thread_t* thd,
-    byte* source,
+    char* source,
     parsing_progress_t* progress,
     parse_def_args_t* args,
     apr_status_t rv) {
@@ -81,8 +81,8 @@ void* parse_one_def_cleanup(
     return NULL;
 }
 
-char* error_message_3(const char* tpl, const char* arg0, list_t* arg1, apr_pool_t* mp) {
-    char* arg1_cstr = str(arg1, mp);
+char* error_message_3(const char* tpl, const char* arg0, apr_array_header_t* arg1, apr_pool_t* mp) {
+    char* arg1_cstr = apr_array_pstrcat(mp, arg1, ',');
     // We use malloc here because this memory is going to be used by
     // Python interpreter after the pool goes away.
     char* result = malloc((strlen(tpl) + strlen(arg0) + strlen(arg1_cstr) + 1) * sizeof(char));
@@ -96,24 +96,32 @@ char* error_message_2(const char* tpl, const char* arg) {
     return result;
 }
 
-char* error_message_1(const char* tpl, byte* arg, apr_pool_t* mp) {
+char* error_message_1(const char* tpl, char* arg, apr_pool_t* mp) {
     if (arg == NULL) {
         char* cstr = "<NULL>";
         char* result = malloc((strlen(tpl) + 7) * sizeof(char));
         sprintf(result, tpl, cstr);
         return result;
     }
-    char* cstr = bytes_cstr(arg, mp);
-    char* result = malloc((strlen(tpl) + str_size(arg) + 1) * sizeof(char));
-    sprintf(result, tpl, cstr);
+    char* result = malloc((strlen(tpl) + strlen(arg) + 1) * sizeof(char));
+    sprintf(result, tpl, arg);
     return result;
+}
+
+char* mdupstr(char* s) {
+    size_t len = strlen(s);
+    char* r = malloc(len * sizeof(char) + 1);
+    if (r) {
+        strcpy(r, s);
+    }
+    return r;
 }
 
 void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     parse_def_args_t* args = iargs;
     parsing_progress_t* progress = args->progress;
     FILE* h = NULL;
-    byte* source = NULL;
+    char* source = NULL;
 
     yyscan_t yyscanner;
     int res = yylex_init(&yyscanner);
@@ -136,8 +144,7 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
             return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
     }
 
-    char* resolved_source = bytes_cstr(source, mp);
-    h = fopen(resolved_source, "rb");
+    h = fopen(source, "rb");
     if (h == NULL) {
         if (source != NULL) {
             args->error = error_message_1("Couldn't open '%s'", source, mp);

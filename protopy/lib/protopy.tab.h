@@ -43,14 +43,13 @@ extern int yydebug;
 #line 9 "protopy.y" /* yacc.c:1909  */
 
 #include <apr_general.h>
-#include "list.h"
 #include "helpers.h"
 
 union YYSTYPE {
     size_t keyword;
     int index;
-    byte* string;
-    list_t* object;
+    char* string;
+    apr_array_header_t* array;
     void* nothing;
 };
 
@@ -78,7 +77,7 @@ extern int yylex(
     void* yyscanner,
     apr_pool_t* mp);
 
-#line 82 "protopy.tab.h" /* yacc.c:1909  */
+#line 81 "protopy.tab.h" /* yacc.c:1909  */
 
 /* Token type.  */
 #ifndef YYTOKENTYPE

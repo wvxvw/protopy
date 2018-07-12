@@ -6,8 +6,8 @@
 #include <apr_general.h>
 #include <apr_thread_proc.h>
 #include <apr_hash.h>
+#include <apr_tables.h>
 
-#include "list.h"
 #include "helpers.h"
 
 #ifdef __cplusplus
@@ -28,7 +28,7 @@ typedef enum error_kind_t {
 
 typedef struct parse_def_args_t {
     const char* source;
-    list_t* roots;
+    apr_array_header_t* roots;
     proto_file_t* result;
     char* error;
     error_kind_t error_kind;
@@ -43,16 +43,6 @@ typedef struct error_info_t {
 } error_info_t;
 
 void* APR_THREAD_FUNC parse_one_def(apr_thread_t*, void*);
-
-list_t* imports(list_t*, apr_pool_t*);
-
-char* unqote(char*);
-
-list_t* normalize_types(list_t*, apr_hash_t*, list_t*, apr_pool_t*);
-
-list_t* normalize_messages(list_t*, apr_pool_t*);
-
-void collect_declarations(list_t*, apr_hash_t*, apr_pool_t*);
 
 #ifdef __cplusplus
 }

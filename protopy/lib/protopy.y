@@ -8,14 +8,13 @@
 
 %code requires {
 #include <apr_general.h>
-#include "list.h"
 #include "helpers.h"
 
 union YYSTYPE {
     size_t keyword;
     int index;
-    byte* string;
-    list_t* object;
+    char* string;
+    apr_array_header_t* array;
     void* nothing;
 };
 
@@ -50,17 +49,12 @@ extern int yylex(
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <apr_strings.h>
 
-#include "helpers.h"
-#include "list.h"
 #include "protopy.tab.h"
 
 void yyerror(YYLTYPE *locp, void* scanner, proto_file_t* pf, char const *msg) {
     fprintf(stderr, "%d/%d: %s\n", locp->first_line, locp->first_column, msg);
-}
-
-list_t* tag(int t, list_t* body, apr_pool_t* mp) {
-    return cons_int(t, 1, body, mp);
 }
 
 %}
@@ -118,8 +112,7 @@ list_t* tag(int t, list_t* body, apr_pool_t* mp) {
                 keyword identifier built_in_type STRING_LITERAL option_name_body_part
                 message_header;
 
-%type <object> string_literal boolean literal type user_type user_type_tail
-               package_name;
+%type <array> type user_type user_type_tail package_name;
 
 %type <nothing> syntax option_def field_options_body assignment package
                 range_end range ranges reserved_strings extend import oneof
@@ -128,13 +121,14 @@ list_t* tag(int t, list_t* body, apr_pool_t* mp) {
                 map_field option_name_suffix option_name enum_fields enum
                 message_field rpc_type enum_field top_level s message_block
                 service_body service_body_part rpc top_levels field oneof_field
-                oneof_fields option_name_body message service message_tail;
+                oneof_fields option_name_body message service message_tail literal
+                string_literal;
 
-%type <index> import_kind field_label key_type positive_int;
+%type <index> import_kind field_label key_type positive_int boolean;
 
 %%
 
-string_literal : STRING_LITERAL { $$ = ncons_str($1, nil, pf->mp); } ;
+string_literal : STRING_LITERAL { $$ = NULL; } ;
 
 import_kind : WEAK { $$ = 1; }
             | PUBLIC { $$ = 2; }
@@ -143,20 +137,21 @@ import_kind : WEAK { $$ = 1; }
 
 import : IMPORT import_kind STRING_LITERAL ';' {
     // TODO(olegs): Imorts need to be a prefix tree.
-    pf->imports = cons(parse_import($3, pf->mp), tlist, pf->imports, pf->mp);
+    APR_ARRAY_PUSH(pf->imports, apr_array_header_t*) = parse_import($3, pf->mp);
 } ;
 
 
 package_name : identifier {
-    $$ = ncons_str($1, nil, pf->mp);
+    $$ = apr_array_make(pf->mp, 1, sizeof(char*));
+    APR_ARRAY_PUSH($$, char*) = $1;
 }
              | package_name '.' identifier {
-    $$ = ncons_str($3, $1, pf->mp);
+    APR_ARRAY_PUSH($1, char*) = $3;
+    $$ = $1;
 } ;
 
 package : PACKAGE package_name ';' {
-    $2 = nreverse($2);
-    pf->package = nmapconcat(to_bytes, $2, ".", pf->mp);
+    pf->package = apr_array_pstrcat(pf->mp, $2, '.');
     $$ = NULL;
 } ;
 
@@ -165,77 +160,82 @@ syntax : SYNTAX '=' string_literal ';' { $$ = NULL; } ;
 
 
 user_type_tail : IDENTIFIER {
-    $$ = ncons_str($1, nil, pf->mp);
+    $$ = apr_array_make(pf->mp, 1, sizeof(char*));
+    APR_ARRAY_PUSH($$, char*) = $1;
 }
           | user_type_tail '.' IDENTIFIER  {
-    $$ = ncons_str($3, $1, pf->mp);
+    APR_ARRAY_PUSH($$, char*) = $3;
+    $$ = $1;
 } ;
 
 user_type : '.' user_type_tail {
-    $$ = nappend($2, cons_str(".", 1, nil, pf->mp));
+    $$ = apr_array_make(pf->mp, 1, sizeof(char*));
+    APR_ARRAY_PUSH($$, char*) = ".";
+    apr_array_cat($$, $2);
 }
           | user_type_tail ;
 
 
-built_in_type : TBOOL    { $$ = cstr_bytes("bool", pf->mp);       }
-              | FIXED32  { $$ = cstr_bytes("fixed32", pf->mp);    }
-              | FIXED64  { $$ = cstr_bytes("fixed64", pf->mp);    }
-              | TINT32   { $$ = cstr_bytes("int32", pf->mp);      }
-              | TINT64   { $$ = cstr_bytes("int64", pf->mp);      }
-              | SFIXED32 { $$ = cstr_bytes("sfixed32", pf->mp);   }
-              | SFIXED64 { $$ = cstr_bytes("sfixed64", pf->mp);   }
-              | SINT32   { $$ = cstr_bytes("sint32", pf->mp);     }
-              | SINT64   { $$ = cstr_bytes("sint64", pf->mp);     }
-              | STRING   { $$ = cstr_bytes("string", pf->mp);     }
-              | TUINT32  { $$ = cstr_bytes("uint32", pf->mp);     }
-              | TUINT64  { $$ = cstr_bytes("uint64", pf->mp);     } ;
+built_in_type : TBOOL    { $$ = apr_pstrdup(pf->mp, "bool");       }
+              | FIXED32  { $$ = apr_pstrdup(pf->mp, "fixed32");    }
+              | FIXED64  { $$ = apr_pstrdup(pf->mp, "fixed64");    }
+              | TINT32   { $$ = apr_pstrdup(pf->mp, "int32");      }
+              | TINT64   { $$ = apr_pstrdup(pf->mp, "int64");      }
+              | SFIXED32 { $$ = apr_pstrdup(pf->mp, "sfixed32");   }
+              | SFIXED64 { $$ = apr_pstrdup(pf->mp, "sfixed64");   }
+              | SINT32   { $$ = apr_pstrdup(pf->mp, "sint32");     }
+              | SINT64   { $$ = apr_pstrdup(pf->mp, "sint64");     }
+              | STRING   { $$ = apr_pstrdup(pf->mp, "string");     }
+              | TUINT32  { $$ = apr_pstrdup(pf->mp, "uint32");     }
+              | TUINT64  { $$ = apr_pstrdup(pf->mp, "uint64");     } ;
 
 
 type : built_in_type {
-    $$ = ncons_str($1, nil, pf->mp);
+    $$ = apr_array_make(pf->mp, 1, sizeof(char*));
+    APR_ARRAY_PUSH($$, char*) = $1;
 }
-     | user_type { $$ = nreverse($$); } ;
+     | user_type ;
 
 
 keyword : built_in_type
-        | ENUM       { $$ = cstr_bytes("enum", pf->mp);       }
-        | EXTENSIONS { $$ = cstr_bytes("extensions", pf->mp); }
-        | IMPORT     { $$ = cstr_bytes("import", pf->mp);     }
-        | MESSAGE    { $$ = cstr_bytes("message", pf->mp);    }
-        | MAP        { $$ = cstr_bytes("map", pf->mp);        }
-        | ONEOF      { $$ = cstr_bytes("oneof", pf->mp);      }
-        | OPTION     { $$ = cstr_bytes("option", pf->mp);     }
-        | TOPTIONAL  { $$ = cstr_bytes("optional", pf->mp);   }
-        | PACKAGE    { $$ = cstr_bytes("package", pf->mp);    }
-        | PUBLIC     { $$ = cstr_bytes("public", pf->mp);     }
-        | REQUIRED   { $$ = cstr_bytes("required", pf->mp);   }
-        | REPEATED   { $$ = cstr_bytes("repeated", pf->mp);   }
-        | RESERVED   { $$ = cstr_bytes("reserved", pf->mp);   }
-        | RETURNS    { $$ = cstr_bytes("returns", pf->mp);    }
-        | RPC        { $$ = cstr_bytes("rpc", pf->mp);        }
-        | SERVICE    { $$ = cstr_bytes("service", pf->mp);    }
-        | STREAM     { $$ = cstr_bytes("stream", pf->mp);     }
-        | SYNTAX     { $$ = cstr_bytes("syntax", pf->mp);     }
-        | TO         { $$ = cstr_bytes("to", pf->mp);         }
-        | WEAK       { $$ = cstr_bytes("weak", pf->mp);       }
-        | MAX        { $$ = cstr_bytes("max", pf->mp);        } ;
+        | ENUM       { $$ = apr_pstrdup(pf->mp, "enum");       }
+        | EXTENSIONS { $$ = apr_pstrdup(pf->mp, "extensions"); }
+        | IMPORT     { $$ = apr_pstrdup(pf->mp, "import");     }
+        | MESSAGE    { $$ = apr_pstrdup(pf->mp, "message");    }
+        | MAP        { $$ = apr_pstrdup(pf->mp, "map");        }
+        | ONEOF      { $$ = apr_pstrdup(pf->mp, "oneof");      }
+        | OPTION     { $$ = apr_pstrdup(pf->mp, "option");     }
+        | TOPTIONAL  { $$ = apr_pstrdup(pf->mp, "optional");   }
+        | PACKAGE    { $$ = apr_pstrdup(pf->mp, "package");    }
+        | PUBLIC     { $$ = apr_pstrdup(pf->mp, "public");     }
+        | REQUIRED   { $$ = apr_pstrdup(pf->mp, "required");   }
+        | REPEATED   { $$ = apr_pstrdup(pf->mp, "repeated");   }
+        | RESERVED   { $$ = apr_pstrdup(pf->mp, "reserved");   }
+        | RETURNS    { $$ = apr_pstrdup(pf->mp, "returns");    }
+        | RPC        { $$ = apr_pstrdup(pf->mp, "rpc");        }
+        | SERVICE    { $$ = apr_pstrdup(pf->mp, "service");    }
+        | STREAM     { $$ = apr_pstrdup(pf->mp, "stream");     }
+        | SYNTAX     { $$ = apr_pstrdup(pf->mp, "syntax");     }
+        | TO         { $$ = apr_pstrdup(pf->mp, "to");         }
+        | WEAK       { $$ = apr_pstrdup(pf->mp, "weak");       }
+        | MAX        { $$ = apr_pstrdup(pf->mp, "max");        } ;
 
 identifier : keyword | IDENTIFIER ;
 
 
-boolean : BOOL_TRUE { $$ = cons_int(1, sizeof(int), nil, pf->mp); }
-        | BOOL_FALSE { $$ = cons_int(0, sizeof(int), nil, pf->mp); };
+boolean : BOOL_TRUE { $$ = 1; }
+        | BOOL_FALSE { $$ = 0; };
 
 
 positive_int : POSINTEGER {
-    $$ = atoi(nbytes_cstr($1));
+    $$ = (int)apr_atoi64($1);
 } ;
 
-literal : NEGINTEGER { $$ = cons_int(atoi(nbytes_cstr($1)), sizeof(int), nil, pf->mp); }
-        | positive_int { $$ = cons_int($1, sizeof(int), nil, pf->mp); }
-        | string_literal
-        | boolean
-        | user_type ;
+literal : NEGINTEGER     { $$ = NULL; }
+        | positive_int   { $$ = NULL; }
+        | string_literal { $$ = NULL; }
+        | boolean        { $$ = NULL; }
+        | user_type      { $$ = NULL; } ;
 
 option_kv : identifier ':' literal { $$ = NULL; }
           | option_name '{' option_kvs '}' { $$ = NULL; } ;
@@ -270,21 +270,17 @@ field_label : REQUIRED  { $$ = 1; }
 
 
 field : field_label type identifier '=' positive_int field_options ';' {
-    byte* tname = qualify_type($2, pf);
-    list_t* pos = cons_int($5, sizeof(int), nil, pf->mp);
-    list_t* idf = ncons_str($3, pos, pf->mp);
-    int ftag = ($1 == 2) ? ast_repeated : ast_field;
-    list_t* field = tag(ftag, ncons_str(tname, idf, pf->mp), pf->mp);
-    pf->current = cons(field, tlist, pf->current, pf->mp);
+    proto_field_t* field = make_proto_field($3, $2, $5, pf);
+    apr_array_header_t* arr = ($1 == 2) ?
+        pf->current_message->repeated :
+        pf->current_message->fields;
+    APR_ARRAY_PUSH(arr, proto_field_t*) = field;
     $$ = NULL;
 } ;
 
 oneof_field : type identifier '=' positive_int field_options ';' {
-    byte* tname = qualify_type($1, pf);
-    list_t* pos = cons_int($4, sizeof(int), nil, pf->mp);
-    list_t* idf = ncons_str($2, pos, pf->mp);
-    list_t* field = tag(ast_field, ncons_str(tname, idf, pf->mp), pf->mp);
-    pf->current = cons(field, tlist, pf->current, pf->mp);
+    APR_ARRAY_PUSH(pf->current_message->fields, proto_field_t*) =
+        make_proto_field($2, $1, $4, pf);
     $$ = NULL;
 } ;
 
@@ -312,11 +308,8 @@ key_type : TINT32   { $$ = vt_int32;    }
 
 map_field : MAP '<' key_type ',' type '>' identifier '='
             positive_int field_options ';' {
-    byte* vtype = nmapconcat(to_bytes, $5, ".", pf->mp);
-    list_t* ftype = cons_int($3, sizeof(int), ncons_str(vtype, nil, pf->mp), pf->mp);
-    list_t* fname = ncons_str($7, cons_int($9, sizeof(int), nil, pf->mp), pf->mp);
-    list_t* field = tag(ast_map, cons(ftype, tlist, fname, pf->mp), pf->mp);
-    pf->current = cons(field, tlist, pf->current, pf->mp);
+    APR_ARRAY_PUSH(pf->current_message->maps, proto_map_field_t*) =
+        make_proto_map_field($7, $3, $5, $9, pf);
     $$ = NULL;
 } ;
 
@@ -366,8 +359,8 @@ enum_value_options_group : %empty { $$ = NULL; }
 
 
 enum_field : identifier '=' positive_int enum_value_options_group {
-    list_t* field = ncons_str($1, cons_int($3, sizeof(int), nil, pf->mp), pf->mp);
-    pf->current = cons(field, tlist, pf->current, pf->mp);
+    APR_ARRAY_PUSH(pf->current_enum->members, proto_enum_member_t*) =
+        make_proto_enum_member($1, $3, pf->mp);
     $$ = NULL;
 }
            | OPTION option_name '=' literal { $$ = NULL; }
@@ -379,16 +372,9 @@ enum_fields : enum_field             { $$ = NULL; }
 
 
 enum : ENUM identifier {
-    pf->scope = ncons_str($2, pf->scope, pf->mp);
-    pf->previous = cons(pf->current, tlist, pf->previous, pf->mp);
-    pf->current = nil;
+    pf->current_enum = make_proto_enum(pf->scope, $2, pf->mp);
 } '{' enum_fields '}' {
-    byte* enum_type = qualify_type(reverse(pf->scope, pf->mp), pf);
-    list_t* enumerator = tag(ast_enum, ncons_str(enum_type, pf->current, pf->mp), pf->mp);
-    pf->enums = cons(enumerator, tlist, pf->enums, pf->mp);
-    pf->current = LIST_VAL(pf->previous);
-    pf->previous = cdr(pf->previous);
-    pf->scope = cdr(pf->scope);
+    APR_ARRAY_PUSH(pf->enums, proto_enum_t*) = pf->current_enum;
     $$ = NULL;
 } ;
 
@@ -422,16 +408,13 @@ message_tail : message_block '}' { $$ = NULL; }
              | '}'               { $$ = NULL; };
 
 message : message_header {
-    pf->scope = ncons_str($1, pf->scope, pf->mp);
-    pf->previous = cons(pf->current, tlist, pf->previous, pf->mp);
-    pf->current = nil;
+    APR_ARRAY_PUSH(pf->scope, char*) = $1;
+    APR_ARRAY_PUSH(pf->previous, proto_message_t*) = pf->current_message;
+    pf->current_message = make_proto_message(pf->scope, pf);
 } message_tail {
-    byte* message_type = qualify_type(reverse(pf->scope, pf->mp), pf);
-    list_t* message = tag(ast_message, ncons_str(message_type, pf->current, pf->mp), pf->mp);
-    pf->messages = cons(message, tlist, pf->messages, pf->mp);
-    pf->current = LIST_VAL(pf->previous);
-    pf->previous = cdr(pf->previous);
-    pf->scope = cdr(pf->scope);
+    APR_ARRAY_PUSH(pf->messages, proto_message_t*) = pf->current_message;
+    pf->current_message = apr_array_pop(pf->previous);
+    apr_array_pop(pf->scope);
 };
 
 

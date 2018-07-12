@@ -4,8 +4,6 @@
 #include <Python.h>
 #include <apr_general.h>
 
-#include "list.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -34,30 +32,7 @@ typedef struct _factory {
     PyObject* ctor;
 } factory_t;
 
-void extract_type_name(const byte*, apr_pool_t*, char**, char**);
-
-void
-enum_desc(
-    const byte*,
-    const list_t*,
-    apr_hash_t* const,
-    PyObject*,
-    apr_pool_t* const);
-
-void
-message_desc(
-    const byte*,
-    const list_t*,
-    apr_hash_t* const,
-    PyObject*,
-    apr_pool_t* const);
-
-apr_hash_t*
-create_descriptors(
-    apr_hash_t* const,
-    PyObject*,
-    PyObject*,
-    apr_pool_t* const);
+apr_hash_t* create_descriptors(apr_hash_t* const, PyObject*, PyObject*, apr_pool_t* const);
 
 #ifdef __cplusplus
 }

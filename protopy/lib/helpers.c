@@ -1,7 +1,8 @@
 #include <stdio.h>
+#include <stdbool.h>
 #include <apr_strings.h>
+#include <apr_tables.h>
 
-#include "list.h"
 #include "helpers.h"
 
 
@@ -118,12 +119,17 @@ size_t index_of(const unsigned char* sub, size_t len, const htkv_t* ht, size_t h
     return htlen;
 }
 
-bool is_keyword(const byte* field_name) {
-    size_t i = index_of(field_name + 2, str_size(field_name), keywords, KEYWORDS_SIZE);
+bool is_keyword(const char* field_name) {
+    size_t i = index_of(
+        (const unsigned char*)field_name,
+        strlen(field_name),
+        keywords,
+        KEYWORDS_SIZE);
     return i != KEYWORDS_SIZE;
 }
 
-vt_type_t vt_builtin_impl(const char* type, size_t tlen) {
+vt_type_t vt_builtin(const char* type) {
+    size_t tlen = strlen(type);
     size_t i = index_of((const unsigned char*)type, tlen, builtin_types, BUILTIN_TYPES);
     if (i == BUILTIN_TYPES) {
         return vt_default;
@@ -131,24 +137,33 @@ vt_type_t vt_builtin_impl(const char* type, size_t tlen) {
     return (vt_type_t)i;
 }
 
-vt_type_t vt_builtin(const char* type) {
-    return vt_builtin_impl(type, strlen(type));
-}
-
-vt_type_t vtb_builtin(const byte* type) {
-    return vt_builtin_impl((const char*)(type + 2), str_size(type));
-}
-
 proto_file_t* make_proto_file(apr_pool_t* mp) {
     proto_file_t* result = apr_palloc(mp, sizeof(proto_file_t));
     result->package = NULL;
-    result->imports = nil;
-    result->messages = nil;
-    result->enums = nil;
-    result->scope = nil;
-    result->current = nil;
-    result->previous = nil;
+    // TODO(olegs): Eventually we can save a bit by making these arrays
+    // of structs, not pointers to structs.
+    result->imports = apr_array_make(mp, 0, sizeof(apr_array_header_t*));
+    result->messages = apr_array_make(mp, 0, sizeof(proto_message_t*));
+    result->enums = apr_array_make(mp, 0, sizeof(proto_message_t*));
+    result->scope = apr_array_make(mp, 0, sizeof(char*));
+    result->current_message = NULL;
+    result->current_enum = NULL;
+    result->previous = apr_array_make(mp, 0, sizeof(proto_message_t*));
     result->mp = mp;
+    return result;
+}
+
+proto_file_t* proto_file_copy(proto_file_t* pf, apr_pool_t* mp) {
+    proto_file_t* result = apr_palloc(mp, sizeof(proto_file_t));
+    result->package = apr_pstrdup(mp, pf->package);
+    result->mp = mp;
+    result->current_message = NULL;
+    result->current_enum = NULL;
+    result->previous = NULL;
+    result->scope = NULL;
+    result->imports = apr_array_copy(mp, pf->imports);
+    result->messages = apr_array_copy(mp, pf->messages);
+    result->enums = apr_array_copy(mp, pf->enums);
     return result;
 }
 
@@ -240,65 +255,138 @@ char* unquote(char* input) {
     return input;
 }
 
-list_t* parse_import(byte* raw, apr_pool_t* mp) {
-    char* rawc = unquote(nbytes_cstr(raw));
+apr_array_header_t* parse_import(char* raw, apr_pool_t* mp) {
+    char* rawc = unquote(raw);
     const char* sep = "/";
     char** state = &rawc;
     char* chunk = apr_strtok(rawc, sep, state);
-    size_t toklen = 0;
-    list_t* head = nil;
-    list_t* result = nil;
+    apr_array_header_t* result = apr_array_make(mp, 0, sizeof(char*));
 
     while (chunk) {
-        toklen = *state - chunk - (**state ? 1 : 0);
-        list_t* cell = apr_palloc(mp, sizeof(list_t));
-        cell->value = cstr_bytes_impl(chunk, toklen, mp);
-        cell->t = tstr;
-        cell->next = nil;
-        if (null(head)) {
-            head = result = cell;
-        } else {
-            head->next = cell;
-            head = cell;
-        }
+        APR_ARRAY_PUSH(result, char*) = chunk;
         chunk = apr_strtok(NULL, sep, state);
     }
     return result;
 }
 
-bool is_imported(list_t* raw_type, proto_file_t* pf) {
-    byte* prefix = STR_VAL(raw_type);
-    list_t* imports = pf->imports;
+bool is_imported(apr_array_header_t* raw_type, proto_file_t* pf) {
+    char* prefix = APR_ARRAY_IDX(raw_type, 0, char*);
+    size_t i = 0;
 
-    while (!null(imports)) {
-        byte* iprefix = STR_VAL(car(imports));
-        if (!bytes_cmp(prefix, iprefix)) {
+    while (i < (size_t)pf->imports->nelts) {
+        apr_array_header_t* import = APR_ARRAY_IDX(pf->imports, i, apr_array_header_t*);
+        char* iprefix = APR_ARRAY_IDX(import, 0, char*);
+        if (!strcmp(prefix, iprefix)) {
             return true;
         }
-        imports = cdr(imports);
+        i++;
     }
     return false;
 }
 
-bool is_dot(byte* first) {
-    if (str_size(first) != 1) {
-        return false;
-    }
-    return first[2] == '.';
+bool is_dot(char* first) {
+    return first[0] == '.' && first[1] == '\0';
 }
 
-byte* qualify_type(list_t* raw_type, proto_file_t* pf) {
-    byte* first = STR_VAL(raw_type);
-    if (null(cdr(raw_type)) && vtb_builtin(first) != vt_default) {
-        return STR_VAL(raw_type);
+char* qualify_type_bytes(apr_array_header_t* raw_type, proto_file_t* pf) {
+    char* first = APR_ARRAY_IDX(raw_type, 0, char*);
+    if (raw_type->nelts == 1 && vt_builtin(first) != vt_default) {
+        return first;
     }
     if (is_dot(first)) {
-        return nmapconcat(to_bytes, cdr(raw_type), ".", pf->mp);
+        return implode_range(raw_type, ".", pf->mp, 1, -1, 1);
     }
     if (!pf->package || is_imported(raw_type, pf)) {
-        return nmapconcat(to_bytes, raw_type, ".", pf->mp);
+        return apr_array_pstrcat(pf->mp, raw_type, '.');
     }
 
-    byte* local_name = nmapconcat(to_bytes, raw_type, ".", pf->mp);
-    return join_bytes(pf->package, '.', local_name, false, pf->mp);
+    char* local_name = apr_array_pstrcat(pf->mp, raw_type, '.');
+    return apr_pstrcat(pf->mp, pf->package, ".", local_name, NULL);
+}
+
+char* qualify_type(apr_array_header_t* raw_type, proto_file_t* pf) {
+    return qualify_type_bytes(raw_type, pf);
+}
+
+proto_field_t*
+make_proto_field(const char* name, apr_array_header_t* type, int n, proto_file_t* pf) {
+    proto_field_t* result = apr_palloc(pf->mp, sizeof(proto_field_t));
+    result->name = name;
+    result->t = qualify_type(type, pf);
+    result->n = n;
+    return result;
+}
+
+proto_map_field_t*
+make_proto_map_field(const char* name, int ktype, apr_array_header_t* vtype, int n, proto_file_t* pf) {
+    proto_map_field_t* result = apr_palloc(pf->mp, sizeof(proto_map_field_t));
+    result->name = name;
+    result->kt = (vt_type_t)ktype;
+    result->vt = qualify_type(vtype, pf);
+    result->n = n;
+    return result;
+}
+
+proto_enum_member_t* make_proto_enum_member(const char* name, int n, apr_pool_t* mp) {
+    proto_enum_member_t* result = apr_palloc(mp, sizeof(proto_enum_member_t));
+    result->name = name;
+    result->n = n;
+    return result;
+}
+
+proto_enum_t* make_proto_enum(apr_array_header_t* scope, const char* tname, apr_pool_t* mp) {
+    proto_enum_t* result = apr_palloc(mp, sizeof(proto_enum_t));
+    result->t = tname;
+    result->members = apr_array_make(mp, 0, sizeof(proto_enum_member_t*));
+    return result;
+}
+
+proto_message_t* make_proto_message(apr_array_header_t* scope, proto_file_t* pf) {
+    proto_message_t* result = apr_palloc(pf->mp, sizeof(proto_message_t));
+    result->t = qualify_type(scope, pf);
+    result->fields = apr_array_make(pf->mp, 0, sizeof(proto_field_t*));
+    result->repeated = apr_array_make(pf->mp, 0, sizeof(proto_field_t*));
+    result->maps = apr_array_make(pf->mp, 0, sizeof(proto_map_field_t*));
+    return result;
+}
+
+char*
+implode_range(
+    apr_array_header_t* chunks,
+    const char* sep,
+    apr_pool_t* mp,
+    size_t from,
+    size_t to,
+    size_t step) {
+    return NULL;
+}
+
+char* implode(apr_array_header_t* chunks, const char* sep, apr_pool_t* mp) {
+    size_t i = 0;
+    size_t len = (size_t)chunks->nelts;
+    size_t total = 0;
+
+    while (i < len) {
+        const char* chunk = APR_ARRAY_IDX(chunks, i, char*);
+        total += strlen(chunk);
+        i++;
+    }
+
+    if (!total) {
+        return NULL;
+    }
+    const char* chunk = APR_ARRAY_IDX(chunks, 0, char*);
+    size_t sep_len = strlen(chunk);
+    char* result = apr_palloc(mp, (1 + total + (len - 1) * sep_len) * sizeof(char));
+    char* dst = apr_cpystrn(result, chunk, strlen(chunk));
+
+    i = 1;
+
+    while (i < len) {
+        chunk = APR_ARRAY_IDX(chunks, i, char*);
+        dst = apr_cpystrn(dst, chunk, strlen(chunk));
+        dst = apr_cpystrn(dst, sep, sep_len);
+        i++;
+    }
+    return result;
 }

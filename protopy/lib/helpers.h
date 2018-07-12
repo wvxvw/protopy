@@ -1,8 +1,9 @@
 #ifndef HELPERS_H_
 #define HELPERS_H_
 
+#include <stdbool.h>
 #include <apr_general.h>
-#include "list.h"
+#include <apr_tables.h>
 
 #ifdef _WIN32
 #define YY_NO_UNISTD_H
@@ -14,14 +15,7 @@ typedef unsigned long long uint64_t;
 extern "C" {
 #endif
 
-typedef struct _htkv {
-    unsigned short crc;
-    const char* str;
-} htkv_t;
-
-#define KEYWORDS_SIZE 33
-
-bool is_keyword(const byte*);
+typedef unsigned char byte;
 
 typedef enum vt_type_t {
     vt_uint32   = 0,
@@ -50,6 +44,67 @@ typedef enum vt_type_t {
     vt_map      = 19
 } vt_type_t;
 
+typedef struct _proto_field {
+    const char* name;
+    const char* t;
+    size_t n;
+} proto_field_t;
+
+typedef struct _proto_enum_member {
+    const char* name;
+    size_t n;
+} proto_enum_member_t;
+
+typedef struct _proto_map_field {
+    const char* name;
+    vt_type_t kt;
+    const char* vt;
+    size_t n;
+} proto_map_field_t;
+
+typedef struct _proto_message {
+    const char* t;
+    apr_array_header_t* fields;
+    apr_array_header_t* repeated;
+    apr_array_header_t* maps;
+} proto_message_t;
+
+typedef struct _proto_enum {
+    const char* t;
+    apr_array_header_t* members;
+} proto_enum_t;
+
+typedef struct _proto_file_t {
+    char* package;
+    apr_array_header_t* imports;
+    apr_array_header_t* messages;
+    apr_array_header_t* enums;
+    apr_array_header_t* scope;
+    proto_message_t* current_message;
+    proto_enum_t* current_enum;
+    apr_array_header_t* previous;
+    apr_pool_t* mp;
+} proto_file_t;
+
+proto_field_t* make_proto_field(const char*, apr_array_header_t*, int, proto_file_t*);
+
+proto_map_field_t* make_proto_map_field(const char*, int, apr_array_header_t*, int, proto_file_t*);
+
+proto_enum_member_t* make_proto_enum_member(const char*, int, apr_pool_t*);
+
+proto_enum_t* make_proto_enum(apr_array_header_t*, const char*, apr_pool_t*);
+
+proto_message_t* make_proto_message(apr_array_header_t*, proto_file_t*);
+
+typedef struct _htkv {
+    unsigned short crc;
+    const char* str;
+} htkv_t;
+
+#define KEYWORDS_SIZE 33
+
+bool is_keyword(const char*);
+
 vt_type_t vt_builtin(const char*);
 
 #define BUILTIN_TYPES 14
@@ -66,24 +121,17 @@ typedef enum ast_type_t {
     ast_map      = 9
 } ast_type_t;
 
-typedef struct _proto_file_t {
-    byte* package;
-    list_t* imports;
-    list_t* messages;
-    list_t* enums;
-    list_t* scope;
-    list_t* current;
-    list_t* previous;
-    apr_pool_t* mp;
-} proto_file_t;
-
 proto_file_t* make_proto_file(apr_pool_t*);
 
-byte* qualify_type(list_t*, proto_file_t*);
+proto_file_t* proto_file_copy(proto_file_t*, apr_pool_t*);
 
-list_t* parse_import(byte*, apr_pool_t*);
+char* qualify_type(apr_array_header_t*, proto_file_t*);
+
+apr_array_header_t* parse_import(char*, apr_pool_t*);
 
 char* unquote(char*);
+
+char* implode_range(apr_array_header_t*, const char*, apr_pool_t*, size_t, size_t, size_t);
 
 #ifdef __cplusplus
 }
