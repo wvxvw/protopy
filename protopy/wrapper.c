@@ -90,8 +90,12 @@ PyMODINIT_FUNC PyInit_wrapped(void) {
     return PyModule_Create(&protopy_module);
 }
 
+
+bool apr_terminated = false;
+
 static PyObject* apr_cleanup(PyObject* self, PyObject* args) {
     apr_terminate();
+    apr_terminated = true;
     Py_RETURN_NONE;
 }
 
@@ -235,7 +239,7 @@ void free_apr_pool(PyObject* capsule) {
         return;
     }
     apr_pool_t* mp = (apr_pool_t*)PyCapsule_GetPointer(capsule, NULL);
-    if (mp) {
+    if (mp && !apr_terminated) {
         apr_pool_destroy(mp);
     }
 }

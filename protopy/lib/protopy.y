@@ -219,7 +219,11 @@ option_kvs : option_kv
            | option_kvs option_kv ;
 
 option_value : literal { $$ = NULL; }
-             | '{' option_kvs '}' { $$ = NULL; } ;
+             | '{' option_kvs '}' { $$ = NULL; }
+             | '{' '}' {
+    /* protoc has a bug where it allows option declaration without value */
+    $$ = NULL;
+ };
 
 
 assignment : option_name '=' option_value { MAYBE_ABORT; $$ = NULL; } ;

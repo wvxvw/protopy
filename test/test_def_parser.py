@@ -129,3 +129,15 @@ def test_block_comment():
     )
     parser = DefParser(roots)
     parser.parse(test_proto)
+
+
+def test_double_line_comment():
+    roots = [
+        pkg_resources.resource_filename(__name__, './resources')
+    ]
+    test_proto = pkg_resources.resource_filename(
+        __name__,
+        './resources/test_double_line_comment.proto',
+    )
+    parser = DefParser(roots)
+    parser.parse(test_proto)
