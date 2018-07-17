@@ -270,17 +270,21 @@ field_label : REQUIRED  { $$ = 1; }
 
 
 field : field_label type identifier '=' positive_int field_options ';' {
-    proto_field_t* field = make_proto_field($3, $2, $5, pf);
-    apr_array_header_t* arr = ($1 == 2) ?
-        pf->current_message->repeated :
-        pf->current_message->fields;
-    APR_ARRAY_PUSH(arr, proto_field_t*) = field;
+    if (pf->need) {
+        proto_field_t* field = make_proto_field($3, $2, $5, pf);
+        apr_array_header_t* arr = ($1 == 2) ?
+            pf->current_message->repeated :
+            pf->current_message->fields;
+        APR_ARRAY_PUSH(arr, proto_field_t*) = field;
+    }
     $$ = NULL;
 } ;
 
 oneof_field : type identifier '=' positive_int field_options ';' {
-    APR_ARRAY_PUSH(pf->current_message->fields, proto_field_t*) =
-        make_proto_field($2, $1, $4, pf);
+    if (pf->need) {
+        APR_ARRAY_PUSH(pf->current_message->fields, proto_field_t*) =
+            make_proto_field($2, $1, $4, pf);
+    }
     $$ = NULL;
 } ;
 
@@ -308,8 +312,10 @@ key_type : TINT32   { $$ = vt_int32;    }
 
 map_field : MAP '<' key_type ',' type '>' identifier '='
             positive_int field_options ';' {
-    APR_ARRAY_PUSH(pf->current_message->maps, proto_map_field_t*) =
-        make_proto_map_field($7, $3, $5, $9, pf);
+    if (pf->need) {
+        APR_ARRAY_PUSH(pf->current_message->maps, proto_map_field_t*) =
+            make_proto_map_field($7, $3, $5, $9, pf);
+    }
     $$ = NULL;
 } ;
 
@@ -372,14 +378,23 @@ enum_fields : enum_field             { $$ = NULL; }
 
 
 enum : ENUM identifier {
-    pf->current_enum = make_proto_enum(pf->scope, $2, pf->mp);
+    if (pf->need) {
+        pf->current_enum = make_proto_enum($2, pf);
+    }
 } '{' enum_fields '}' {
-    APR_ARRAY_PUSH(pf->enums, proto_enum_t*) = pf->current_enum;
+    if (pf->need) {
+        APR_ARRAY_PUSH(pf->enums, proto_enum_t*) = pf->current_enum;
+    }
     $$ = NULL;
 } ;
 
 
-extend : EXTEND user_type '{' message_block '}' { $$ = NULL; }
+extend : EXTEND user_type {
+    pf->need = false;
+} '{' message_block '}' {
+    pf->need = true;
+    $$ = NULL;
+}
 
 
 extensions : EXTENSIONS range { $$ = NULL; } ;
@@ -408,13 +423,18 @@ message_tail : message_block '}' { $$ = NULL; }
              | '}'               { $$ = NULL; };
 
 message : message_header {
-    APR_ARRAY_PUSH(pf->scope, char*) = $1;
-    APR_ARRAY_PUSH(pf->previous, proto_message_t*) = pf->current_message;
-    pf->current_message = make_proto_message(pf->scope, pf);
+    if (pf->need) {
+        APR_ARRAY_PUSH(pf->scope, char*) = $1;
+        APR_ARRAY_PUSH(pf->previous, proto_message_t*) = pf->current_message;
+        pf->current_message = make_proto_message(pf->scope, pf);
+    }
 } message_tail {
-    APR_ARRAY_PUSH(pf->messages, proto_message_t*) = pf->current_message;
-    pf->current_message = apr_array_pop(pf->previous);
-    apr_array_pop(pf->scope);
+    if (pf->need) {
+        APR_ARRAY_PUSH(pf->messages, proto_message_t*) = pf->current_message;
+        proto_message_t** m = apr_array_pop(pf->previous);
+        pf->current_message = *m;
+        apr_array_pop(pf->scope);
+    }
 };
 
 

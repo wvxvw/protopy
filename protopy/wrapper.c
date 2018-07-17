@@ -138,7 +138,10 @@ static PyObject* apr_hash_iterator(PyObject* self, PyObject* args) {
     }
     apr_pool_t* mp = apr_hash_pool_get(ht);
     apr_hash_index_t* hi = apr_hash_first(mp, ht);
-    return PyCapsule_New(hi, NULL, free_apr_hash);
+    if (hi) {
+        return PyCapsule_New(hi, NULL, free_apr_hash);
+    }
+    Py_RETURN_NONE;
 }
 
 static PyObject* apr_hash_get_kv(PyObject* self, PyObject* args) {
@@ -373,6 +376,54 @@ apr_array_header_t* deps_from_imports(apr_array_header_t* imports, apr_pool_t* m
     return result;
 }
 
+void print_messages(proto_file_t* pf) {
+    int i = 0;
+
+    // not all of these are proto-files, some are just placeholders.
+    if ((int)pf == 1) {
+        return;
+    }
+    while (i < pf->messages->nelts) {
+        proto_message_t* m = APR_ARRAY_IDX(pf->messages, i, proto_message_t*);
+        printf("message: %s {\n", m->t);
+        int j = 0;
+        while (j < m->fields->nelts) {
+            proto_field_t* f = APR_ARRAY_IDX(m->fields, j, proto_field_t*);
+            printf("    %s : %s = %zu\n", f->name, f->t, f->n);
+            j++;
+        }
+        printf("}\n");
+        i++;
+    }
+
+    i = 0;
+
+    while (i < pf->enums->nelts) {
+        proto_enum_t* m = APR_ARRAY_IDX(pf->enums, i, proto_enum_t*);
+        printf("enum: %s {\n", m->t);
+        int j = 0;
+        while (j < m->members->nelts) {
+            proto_enum_member_t* f = APR_ARRAY_IDX(m->members, j, proto_enum_member_t*);
+            printf("    %s = %zu\n", f->name, f->n);
+            j++;
+        }
+        printf("}\n");
+        i++;
+    }
+}
+
+void print_defs(apr_hash_t* defs, apr_pool_t* mp) {
+    apr_hash_index_t* hi;
+    proto_file_t* val;
+    const void* key;
+
+    printf("================ print_defs ================\n");
+    for (hi = apr_hash_first(mp, defs); hi; hi = apr_hash_next(hi)) {
+        apr_hash_this(hi, &key, NULL, (void**)&val);
+        print_messages(val);
+    }
+}
+
 apr_array_header_t*
 process_finished_threads(
     parsing_progress_t* progress,
@@ -405,13 +456,14 @@ process_finished_threads(
         progress->thds[i] = NULL;
         proto_file_t* res = thds_args[i]->result;
         apr_pool_t* tmp = thds_args[i]->mp;
-        deps = deps_from_imports(thds_args[i]->result->imports, mp);
+        deps = deps_from_imports(res->imports, mp);
 
         // We will destroy the pool where this result was allocated
         // but we need to store the result.
         res = proto_file_copy(res, mp);
         apr_hash_set(defs, thds_args[i]->source, APR_HASH_KEY_STRING, res);
         apr_pool_destroy(tmp);
+        // print_defs(defs, mp);
     }
     return deps;
 }
@@ -441,10 +493,11 @@ proto_def_parse_produce(
         i = available_thread_pos(&progress);
 
         while (!apr_is_empty_array(sources) && i < progress.nthreads) {
-            char* source = apr_array_pop(sources);
-            if (!apr_hash_get(result, source, APR_HASH_KEY_STRING)) {
-                apr_hash_set(result, source, APR_HASH_KEY_STRING, (void*)true);
-                start_defparser_thread(&progress, thds_args, i, source, roots, mp);
+            char** source = apr_array_pop(sources);
+            
+            if (!apr_hash_get(result, *source, APR_HASH_KEY_STRING)) {
+                apr_hash_set(result, *source, APR_HASH_KEY_STRING, (void*)true);
+                start_defparser_thread(&progress, thds_args, i, *source, roots, mp);
             }
             i = available_thread_pos(&progress);
         }
@@ -528,7 +581,7 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
 
     Py_BEGIN_ALLOW_THREADS;
 
-    apr_array_header_t* sources = apr_array_make(mp, 1, sizeof(char*));
+    apr_array_header_t* sources = apr_array_make(mp, 0, sizeof(char*));
     APR_ARRAY_PUSH(sources, char*) = source;
     parsed_defs = proto_def_parse_produce(sources, roots, (size_t)nthreads, mp, &einfo);
 
@@ -540,6 +593,8 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
                 error_class = PyExc_FileNotFoundError;
                 break;
             case parser_error:
+                // TODO(olegs): use this to set the location of the
+                // syntax error: PyErr_SyntaxLocationObject
                 error_class = PyExc_SyntaxError;
                 break;
             default:

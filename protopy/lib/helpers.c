@@ -150,6 +150,84 @@ proto_file_t* make_proto_file(apr_pool_t* mp) {
     result->current_enum = NULL;
     result->previous = apr_array_make(mp, 0, sizeof(proto_message_t*));
     result->mp = mp;
+    result->need = true;
+    return result;
+}
+
+proto_field_t* make_proto_field_impl(const char* name, const char* type, size_t n, apr_pool_t* mp) {
+    proto_field_t* result = apr_palloc(mp, sizeof(proto_field_t));
+    result->name = name;
+    result->t = type;
+    result->n = n;
+    return result;
+}
+
+proto_map_field_t*
+make_proto_map_field_impl(const char* name, vt_type_t ktype, const char* vtype, int n, apr_pool_t* mp) {
+    proto_map_field_t* result = apr_palloc(mp, sizeof(proto_map_field_t));
+    result->name = name;
+    result->kt = ktype;
+    result->vt = vtype;
+    result->n = n;
+    return result;
+}
+
+proto_message_t* copy_message(proto_message_t* src, apr_pool_t* mp) {
+    proto_message_t* result = apr_palloc(mp, sizeof(proto_message_t));
+    result->t = apr_pstrdup(mp, src->t);
+    result->fields = apr_array_make(mp, src->fields->nelts, sizeof(proto_field_t*));
+    result->repeated = apr_array_make(mp, src->repeated->nelts, sizeof(proto_field_t*));
+    result->maps = apr_array_make(mp, src->maps->nelts, sizeof(proto_map_field_t*));
+
+    int i = 0;
+
+    while (i < src->fields->nelts) {
+        proto_field_t* sfield = APR_ARRAY_IDX(src->fields, i, proto_field_t*);
+        const char* name = apr_pstrdup(mp, sfield->name);
+        const char* type = apr_pstrdup(mp, sfield->t);
+        proto_field_t* dfield = make_proto_field_impl(name, type, sfield->n, mp);
+        APR_ARRAY_PUSH(result->fields, proto_field_t*) = dfield;
+        i++;
+    }
+
+    i = 0;
+
+    while (i < src->repeated->nelts) {
+        proto_field_t* sfield = APR_ARRAY_IDX(src->repeated, i, proto_field_t*);
+        const char* name = apr_pstrdup(mp, sfield->name);
+        const char* type = apr_pstrdup(mp, sfield->t);
+        proto_field_t* dfield = make_proto_field_impl(name, type, sfield->n, mp);
+        APR_ARRAY_PUSH(result->repeated, proto_field_t*) = dfield;
+        i++;
+    }
+
+    i = 0;
+
+    while (i < src->maps->nelts) {
+        proto_map_field_t* sfield = APR_ARRAY_IDX(src->maps, i, proto_map_field_t*);
+        const char* name = apr_pstrdup(mp, sfield->name);
+        const char* vt = apr_pstrdup(mp, sfield->vt);
+        proto_map_field_t* dfield =
+                make_proto_map_field_impl(name, sfield->kt, vt, sfield->n, mp);
+        APR_ARRAY_PUSH(result->maps, proto_map_field_t*) = dfield;
+        i++;
+    }
+    return result;
+}
+
+proto_enum_t* copy_enum(proto_enum_t* src, apr_pool_t* mp) {
+    proto_enum_t* result = apr_palloc(mp, sizeof(proto_enum_t));
+    result->t = apr_pstrdup(mp, src->t);
+    result->members = apr_array_make(mp, src->members->nelts, sizeof(proto_enum_member_t*));
+
+    int i = 0;
+    while (i < src->members->nelts) {
+        proto_enum_member_t* smember = APR_ARRAY_IDX(src->members, i, proto_enum_member_t*);
+        const char* name = apr_pstrdup(mp, smember->name);
+        proto_enum_member_t* dmember = make_proto_enum_member(name, smember->n, mp);
+        APR_ARRAY_PUSH(result->members, proto_enum_member_t*) = dmember;
+        i++;
+    }
     return result;
 }
 
@@ -161,9 +239,33 @@ proto_file_t* proto_file_copy(proto_file_t* pf, apr_pool_t* mp) {
     result->current_enum = NULL;
     result->previous = NULL;
     result->scope = NULL;
-    result->imports = apr_array_copy(mp, pf->imports);
-    result->messages = apr_array_copy(mp, pf->messages);
-    result->enums = apr_array_copy(mp, pf->enums);
+    result->imports = apr_array_make(mp, pf->imports->nelts, sizeof(apr_array_header_t*));
+    result->messages = apr_array_make(mp, pf->messages->nelts, sizeof(apr_array_header_t*));
+    result->enums = apr_array_make(mp, pf->enums->nelts, sizeof(apr_array_header_t*));
+
+    int i = 0;
+
+    while (i < pf->imports->nelts) {
+        APR_ARRAY_PUSH(result->imports, char*) =
+                apr_pstrdup(mp, APR_ARRAY_IDX(pf->imports, i, char*));
+        i++;
+    }
+
+    i = 0;
+
+    while (i < pf->messages->nelts) {
+        APR_ARRAY_PUSH(result->messages, proto_message_t*) =
+                copy_message(APR_ARRAY_IDX(pf->messages, i, proto_message_t*), mp);
+        i++;
+    }
+    
+    i = 0;
+
+    while (i < pf->enums->nelts) {
+        APR_ARRAY_PUSH(result->enums, proto_enum_t*) =
+                copy_enum(APR_ARRAY_IDX(pf->enums, i, proto_enum_t*), mp);
+        i++;
+    }
     return result;
 }
 
@@ -294,7 +396,8 @@ char* qualify_type_bytes(apr_array_header_t* raw_type, proto_file_t* pf) {
         return first;
     }
     if (is_dot(first)) {
-        return implode_range(raw_type, ".", pf->mp, 1, -1, 1);
+        char* dotted = apr_array_pstrcat(pf->mp, raw_type, '.');
+        return dotted + 2;
     }
     if (!pf->package || is_imported(raw_type, pf)) {
         return apr_array_pstrcat(pf->mp, raw_type, '.');
@@ -310,21 +413,12 @@ char* qualify_type(apr_array_header_t* raw_type, proto_file_t* pf) {
 
 proto_field_t*
 make_proto_field(const char* name, apr_array_header_t* type, int n, proto_file_t* pf) {
-    proto_field_t* result = apr_palloc(pf->mp, sizeof(proto_field_t));
-    result->name = name;
-    result->t = qualify_type(type, pf);
-    result->n = n;
-    return result;
+    return make_proto_field_impl(name, qualify_type(type, pf), n, pf->mp);
 }
 
 proto_map_field_t*
 make_proto_map_field(const char* name, int ktype, apr_array_header_t* vtype, int n, proto_file_t* pf) {
-    proto_map_field_t* result = apr_palloc(pf->mp, sizeof(proto_map_field_t));
-    result->name = name;
-    result->kt = (vt_type_t)ktype;
-    result->vt = qualify_type(vtype, pf);
-    result->n = n;
-    return result;
+    return make_proto_map_field_impl(name, (vt_type_t)ktype, qualify_type(vtype, pf), n, pf->mp);
 }
 
 proto_enum_member_t* make_proto_enum_member(const char* name, int n, apr_pool_t* mp) {
@@ -334,10 +428,12 @@ proto_enum_member_t* make_proto_enum_member(const char* name, int n, apr_pool_t*
     return result;
 }
 
-proto_enum_t* make_proto_enum(apr_array_header_t* scope, const char* tname, apr_pool_t* mp) {
-    proto_enum_t* result = apr_palloc(mp, sizeof(proto_enum_t));
-    result->t = tname;
-    result->members = apr_array_make(mp, 0, sizeof(proto_enum_member_t*));
+proto_enum_t* make_proto_enum(const char* type, proto_file_t* pf) {
+    proto_enum_t* result = apr_palloc(pf->mp, sizeof(proto_enum_t));
+    APR_ARRAY_PUSH(pf->scope, char*) = (char*)type;
+    result->t = qualify_type(pf->scope, pf);
+    apr_array_pop(pf->scope);
+    result->members = apr_array_make(pf->mp, 0, sizeof(proto_enum_member_t*));
     return result;
 }
 
@@ -347,46 +443,5 @@ proto_message_t* make_proto_message(apr_array_header_t* scope, proto_file_t* pf)
     result->fields = apr_array_make(pf->mp, 0, sizeof(proto_field_t*));
     result->repeated = apr_array_make(pf->mp, 0, sizeof(proto_field_t*));
     result->maps = apr_array_make(pf->mp, 0, sizeof(proto_map_field_t*));
-    return result;
-}
-
-char*
-implode_range(
-    apr_array_header_t* chunks,
-    const char* sep,
-    apr_pool_t* mp,
-    size_t from,
-    size_t to,
-    size_t step) {
-    return NULL;
-}
-
-char* implode(apr_array_header_t* chunks, const char* sep, apr_pool_t* mp) {
-    size_t i = 0;
-    size_t len = (size_t)chunks->nelts;
-    size_t total = 0;
-
-    while (i < len) {
-        const char* chunk = APR_ARRAY_IDX(chunks, i, char*);
-        total += strlen(chunk);
-        i++;
-    }
-
-    if (!total) {
-        return NULL;
-    }
-    const char* chunk = APR_ARRAY_IDX(chunks, 0, char*);
-    size_t sep_len = strlen(chunk);
-    char* result = apr_palloc(mp, (1 + total + (len - 1) * sep_len) * sizeof(char));
-    char* dst = apr_cpystrn(result, chunk, strlen(chunk));
-
-    i = 1;
-
-    while (i < len) {
-        chunk = APR_ARRAY_IDX(chunks, i, char*);
-        dst = apr_cpystrn(dst, chunk, strlen(chunk));
-        dst = apr_cpystrn(dst, sep, sep_len);
-        i++;
-    }
     return result;
 }

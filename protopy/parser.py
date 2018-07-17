@@ -113,7 +113,7 @@ class DefParser:
                        print('Baz found!')
         '''
         it = apr_hash_iterator(self.defs)
-        while True:
+        while it:
             k, v = apr_hash_get_kv(it)
             if k is not None:
                 yield k, v

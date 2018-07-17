@@ -83,6 +83,7 @@ typedef struct _proto_file_t {
     proto_message_t* current_message;
     proto_enum_t* current_enum;
     apr_array_header_t* previous;
+    bool need;
     apr_pool_t* mp;
 } proto_file_t;
 
@@ -92,7 +93,7 @@ proto_map_field_t* make_proto_map_field(const char*, int, apr_array_header_t*, i
 
 proto_enum_member_t* make_proto_enum_member(const char*, int, apr_pool_t*);
 
-proto_enum_t* make_proto_enum(apr_array_header_t*, const char*, apr_pool_t*);
+proto_enum_t* make_proto_enum(const char*, proto_file_t*);
 
 proto_message_t* make_proto_message(apr_array_header_t*, proto_file_t*);
 

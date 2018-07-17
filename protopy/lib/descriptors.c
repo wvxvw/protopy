@@ -96,18 +96,16 @@ add_field_info(
 
 void add_pyfield(PyObject* fields, const char* field_name, apr_pool_t* mp) {
     size_t len = strlen(field_name);
-    char* fname;
     PyObject* new_name;
 
     if (is_keyword(field_name)) {
-        fname = malloc(len + 4);
+        char* fname = malloc(len + 4);
         memcpy(fname, "pb_", 3);
-        memcpy(fname + 3, field_name + 2, len);
+        memcpy(fname + 3, field_name, len);
         fname[len + 3] = '\0';
         new_name = PyUnicode_FromString(fname);
     } else {
-        fname = (char*)(field_name + 2);
-        new_name = PyUnicode_FromStringAndSize(fname, len);
+        new_name = PyUnicode_FromStringAndSize(field_name, len);
     }
     // TODO(olegs): Here and in message_desc: revisit the Py_INCREF()
     // calls and make sure they are actually needed (I think they
@@ -132,21 +130,22 @@ message_desc(
 
     while (i < desc->fields->nelts) {
         proto_field_t* field = APR_ARRAY_IDX(desc->fields, i, proto_field_t*);
-        add_field_info(field->name, field->n, i, mapping, mp);
+        add_field_info(field->t, field->n, i, mapping, mp);
         add_pyfield(fields_list, field->name, mp);
         i++;
     }
-    while (j < desc->fields->nelts) {
+    while (j < desc->repeated->nelts) {
         proto_field_t* field = APR_ARRAY_IDX(desc->repeated, j, proto_field_t*);
-        field_info_t* info = add_field_info(field->name, field->n, j + i, mapping, mp);
+        field_info_t* info = add_field_info(field->t, field->n, j + i, mapping, mp);
         info->vt_type = vt_repeated;
         info->extra_type_info.elt = vt_default;
         add_pyfield(fields_list, field->name, mp);
         j++;
     }
     while (k < desc->maps->nelts) {
-        proto_map_field_t* map = APR_ARRAY_IDX(desc->repeated, j, proto_map_field_t*);
-        field_info_t* info = add_field_info(map->name, map->n, k + j + i, mapping, mp);
+        proto_map_field_t* map = APR_ARRAY_IDX(desc->maps, k, proto_map_field_t*);
+        const char* empty = apr_pstrdup(mp, "");
+        field_info_t* info = add_field_info(empty, map->n, k + j + i, mapping, mp);
         info->vt_type = vt_map;
         info->extra_type_info.pair.key = map->kt;
         info->extra_type_info.pair.val = vt_default;
@@ -169,12 +168,17 @@ message_desc(
     PyTuple_SetItem(args, 1, fields_list);
     PyObject* ctor = PyObject_Call(message_ctor, args, NULL);
     Py_DECREF(args);
+
     if (!ctor) {
+        PyObject *t, *v, *tb;
+
+        PyErr_Fetch(&t, &v, &tb);
         PyErr_Format(
             PyExc_TypeError,
-            "Couldn't create constructor of %A, %s",
+            "Couldn't create constructor for %s, using %A\ncause: %A",
+            name,
             message_ctor,
-            name);
+            v);
         return;
     }
     PyObject_SetAttrString(
