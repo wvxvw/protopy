@@ -108,15 +108,6 @@ char* error_message_1(const char* tpl, char* arg, apr_pool_t* mp) {
     return result;
 }
 
-char* mdupstr(char* s) {
-    size_t len = strlen(s);
-    char* r = malloc(len * sizeof(char) + 1);
-    if (r) {
-        strcpy(r, s);
-    }
-    return r;
-}
-
 void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     parse_def_args_t* args = iargs;
     parsing_progress_t* progress = args->progress;

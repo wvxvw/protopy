@@ -134,6 +134,8 @@ char* unquote(char*);
 
 char* implode_range(apr_array_header_t*, const char*, apr_pool_t*, size_t, size_t, size_t);
 
+char* mdupstr(const char*);
+
 #ifdef __cplusplus
 }
 #endif

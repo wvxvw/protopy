@@ -53,14 +53,14 @@ enum_desc(
 
     while (i < desc->members->nelts) {
         proto_enum_member_t* field = APR_ARRAY_IDX(desc->members, i, proto_enum_member_t*);
-        PyObject* member = PyUnicode_FromString(field->name);
+        PyObject* member = PyUnicode_FromString(mdupstr(field->name));
         
         PyDict_SetItem(members, member, PyLong_FromSsize_t(field->n));
         i++;
     }
     PyObject* ctor = PyObject_CallFunctionObjArgs(
         enum_ctor,
-        PyUnicode_FromString(desc->t),
+        PyUnicode_FromString(mdupstr(desc->t)),
         members,
         NULL);
     if (PyErr_Occurred()) {
@@ -103,9 +103,9 @@ void add_pyfield(PyObject* fields, const char* field_name, apr_pool_t* mp) {
         memcpy(fname, "pb_", 3);
         memcpy(fname + 3, field_name, len);
         fname[len + 3] = '\0';
-        new_name = PyUnicode_FromString(fname);
+        new_name = PyUnicode_FromString(mdupstr(fname));
     } else {
-        new_name = PyUnicode_FromStringAndSize(field_name, len);
+        new_name = PyUnicode_FromStringAndSize(mdupstr(field_name), len);
     }
     // TODO(olegs): Here and in message_desc: revisit the Py_INCREF()
     // calls and make sure they are actually needed (I think they
@@ -162,7 +162,7 @@ message_desc(
 
     Py_INCREF(fields_list);
     PyObject* args = PyTuple_New(2);
-    PyObject* arg1 = PyUnicode_FromString(name);
+    PyObject* arg1 = PyUnicode_FromString(mdupstr(name));
     Py_INCREF(arg1);
     PyTuple_SetItem(args, 0, arg1);
     PyTuple_SetItem(args, 1, fields_list);

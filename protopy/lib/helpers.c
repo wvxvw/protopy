@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <apr_strings.h>
 #include <apr_tables.h>
@@ -444,4 +445,13 @@ proto_message_t* make_proto_message(apr_array_header_t* scope, proto_file_t* pf)
     result->repeated = apr_array_make(pf->mp, 0, sizeof(proto_field_t*));
     result->maps = apr_array_make(pf->mp, 0, sizeof(proto_map_field_t*));
     return result;
+}
+
+char* mdupstr(const char* s) {
+    size_t len = strlen(s);
+    char* r = malloc(len * sizeof(char) + 1);
+    if (r) {
+        strcpy(r, s);
+    }
+    return r;
 }
