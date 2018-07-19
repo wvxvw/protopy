@@ -463,7 +463,7 @@ process_finished_threads(
         res = proto_file_copy(res, mp);
         apr_hash_set(defs, thds_args[i]->source, APR_HASH_KEY_STRING, res);
         apr_pool_destroy(tmp);
-        // print_defs(defs, mp);
+        print_defs(defs, mp);
     }
     return deps;
 }
