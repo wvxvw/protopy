@@ -204,10 +204,13 @@ class DefParser:
                 if apr_hash_find(self._files, path.join(r, source), 1):
                     return
 
+        self.parse_many([source])
+
+    def parse_many(self, sources):
         apr_update_hash(
             self._defs,
             proto_def_parse(
-                source,
+                [ensure_bytes(s) for s in sources],
                 self.roots,
                 self._files,
                 self.message_ctor,

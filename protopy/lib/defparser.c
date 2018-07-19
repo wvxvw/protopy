@@ -49,8 +49,8 @@ int resolved_source(const char* path, apr_array_header_t* roots, char** result, 
     
     while (i < roots->nelts) {
         char* root = APR_ARRAY_IDX(roots, i, char*);
-        char* combined = apr_pstrcat(mp, root, "/", path, NULL);
-
+        char* combined;
+        apr_filepath_merge(&combined, root, path, 0, mp);
         switch (exists_and_is_regular(&finfo, combined, mp)) {
             case 2:
                 retcode = 2;
@@ -68,7 +68,6 @@ int resolved_source(const char* path, apr_array_header_t* roots, char** result, 
 void* parse_one_def_cleanup(
     FILE* h,
     apr_thread_t* thd,
-    char* source,
     parsing_progress_t* progress,
     parse_def_args_t* args,
     apr_status_t rv) {
@@ -119,20 +118,20 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     if (res) {
         args->error = mdupstr("Couldn't initialize scanner");
         args->error_kind = memory_error;
-        return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
+        return parse_one_def_cleanup(h, thd, progress, args, !APR_SUCCESS);
     }
     apr_pool_t* mp = args->mp;
     switch (resolved_source(args->source, args->roots, &source, mp)) {
         case 2:
             args->error = error_message_2("Must be regular file '%s'", args->source);
             args->error_kind = fs_error;
-            return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
+            return parse_one_def_cleanup(h, thd, progress, args, !APR_SUCCESS);
         case 1:
             args->error = error_message_3(
                 "Couldn't find '%s' in '%s'",
                 args->source, args->roots, mp);
             args->error_kind = fs_error;
-            return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
+            return parse_one_def_cleanup(h, thd, progress, args, !APR_SUCCESS);
     }
 
     h = fopen(source, "rb");
@@ -145,7 +144,7 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
                 args->source, args->roots, mp);
         }
         args->error_kind = fs_error;
-        return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
+        return parse_one_def_cleanup(h, thd, progress, args, !APR_SUCCESS);
     }
 
     // yydebug = 1;
@@ -179,8 +178,8 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     if (status != 0) {
         args->error = error_message_1("Couldn't parse '%s'", source, mp);
         args->error_kind = parser_error;
-        return parse_one_def_cleanup(h, thd, source, progress, args, !APR_SUCCESS);
+        return parse_one_def_cleanup(h, thd, progress, args, !APR_SUCCESS);
     }
 
-    return parse_one_def_cleanup(h, thd, source, progress, args, APR_SUCCESS);
+    return parse_one_def_cleanup(h, thd, progress, args, APR_SUCCESS);
 }

@@ -20,6 +20,7 @@ typedef long long int64_t;
 #include <apr_thread_proc.h>
 #include <apr_time.h>
 #include <apr_hash.h>
+#include <apr_strings.h>
 
 #include "lib/helpers.h"
 #include "lib/pyhelpers.h"
@@ -259,11 +260,31 @@ void print_defs(apr_hash_t* defs, apr_pool_t* mp) {
     }
 }
 
+const char* unrooted(apr_array_header_t* roots, const char* source) {
+    int i = 0;
+    while (i < roots->nelts) {
+        const char* root = APR_ARRAY_IDX(roots, i, const char*);
+        if (strlen(source) > strlen(root)) {
+            size_t j = 0;
+            while (source[j] == root[j]) {
+                j++;
+            }
+            if (root[j] == '\0') {
+                return source + j + 1;
+            }
+
+        }
+        i++;
+    }
+    return source;
+}
+
 apr_array_header_t*
 process_finished_threads(
     parsing_progress_t* progress,
     parse_def_args_t** thds_args,
     apr_hash_t* defs,
+    apr_array_header_t* roots,
     error_info_t* einfo,
     apr_pool_t* mp) {
 
@@ -296,11 +317,25 @@ process_finished_threads(
         // We will destroy the pool where this result was allocated
         // but we need to store the result.
         res = proto_file_copy(res, mp);
-        apr_hash_set(defs, thds_args[i]->source, APR_HASH_KEY_STRING, res);
+        const char* ur = unrooted(roots, thds_args[i]->source);
+        apr_hash_set(defs, ur, APR_HASH_KEY_STRING, res);
         apr_pool_destroy(tmp);
         // print_defs(defs, mp);
     }
     return deps;
+}
+
+void print_files(apr_hash_t* defs, apr_pool_t* mp) {
+    apr_hash_index_t* hi;
+    void* val;
+    const char* key;
+
+    printf("================ print_files start ================\n");
+    for (hi = apr_hash_first(mp, defs); hi; hi = apr_hash_next(hi)) {
+        apr_hash_this(hi, (void*)&key, NULL, &val);
+        printf("parsed file: %s\n", key);
+    }
+    printf("================ print_files end ================\n");
 }
 
 static apr_hash_t*
@@ -329,11 +364,10 @@ proto_def_parse_produce(
 
         while (!apr_is_empty_array(sources) && i < progress.nthreads) {
             char** source = apr_array_pop(sources);
+            const char* ur = unrooted(roots, *source);
 
-            // TODO(olegs): We need a better check for already parsed sources,
-            // some sources will have root prefix appended to them.
-            if (!apr_hash_get(result, *source, APR_HASH_KEY_STRING)) {
-                apr_hash_set(result, *source, APR_HASH_KEY_STRING, (void*)true);
+            if (!apr_hash_get(result, ur, APR_HASH_KEY_STRING)) {
+                apr_hash_set(result, ur, APR_HASH_KEY_STRING, (void*)true);
                 start_defparser_thread(&progress, thds_args, i, *source, roots, mp);
                 i = available_thread_pos(&progress);
             }
@@ -342,6 +376,7 @@ proto_def_parse_produce(
             &progress,
             thds_args,
             result,
+            roots,
             einfo,
             mp);
         if (einfo->message) {
@@ -362,12 +397,13 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     PyObject* message_ctor;
     PyObject* enum_ctor;
     PyObject* mp_capsule;
-    char* source;
+    PyObject* sources;
 
     if (!PyArg_ParseTuple(
             args,
-            "yO!OOOO",
-            &source,
+            "O!O!OOOO",
+            &PyList_Type,
+            &sources,
             &PyList_Type,
             &source_roots,
             &parsed_files_capsule,
@@ -404,12 +440,12 @@ static PyObject* proto_def_parse(PyObject* self, PyObject* args) {
     einfo.message = NULL;
     PyObject* error_class;
 
+    apr_array_header_t* sources_arr = pylist_to_array(sources, mp);
+
     Py_BEGIN_ALLOW_THREADS;
 
-    apr_array_header_t* sources = apr_array_make(mp, 0, sizeof(char*));
-    APR_ARRAY_PUSH(sources, char*) = source;
     parsed_defs = proto_def_parse_produce(
-        sources,
+        sources_arr,
         roots,
         (size_t)nthreads,
         parsed_files,
