@@ -92,12 +92,12 @@ class DefParser:
         self.enum_ctor = enum_ctor
         self.message_ctor = message_ctor
         self.roots = list(set([ensure_bytes(r) for r in roots]))
-        self.files = {}
         if mp:
             self.mp = mp
         else:
             self.mp = make_apr_pool()
-        self.defs = make_apr_hash(self.mp)
+        self._files = make_apr_hash(self.mp)
+        self._defs = make_apr_hash(self.mp)
 
     def definitions(self):
         '''
@@ -112,11 +112,35 @@ class DefParser:
                    if k == b'foo.bar.Baz':
                        print('Baz found!')
         '''
-        it = apr_hash_iterator(self.defs)
+        it = apr_hash_iterator(self._defs)
         while it:
-            k, v = apr_hash_get_kv(it)
+            k, v = apr_hash_get_kv(it, 0)
             if k is not None:
                 yield k, v
+            else:
+                break
+
+    def files(self):
+        '''
+        Returns an iterator that looks at every parsed file and returns
+        definitions found in that file.  The result is a tuple of
+        messages and enums.
+
+        Example:
+
+            .. code-block:: python
+
+               for k, v in parser.files():
+                   if k == b'foo/bar/Baz.proto':
+                       print('Baz found!')
+        '''
+        it = apr_hash_iterator(self._files)
+        while it:
+            k, v = apr_hash_get_kv(it, 1)
+            if k is not None:
+                yield k, v
+            else:
+                break
 
     def find_definition(self, definition):
         '''
@@ -126,7 +150,15 @@ class DefParser:
 
         :param definition: The name of Protobuf type.
         '''
-        return apr_hash_find(self.defs, ensure_bytes(definition))
+        return apr_hash_find(self._defs, ensure_bytes(definition), 0)
+
+    def find_file(self, file):
+        '''
+        Returns definitions declared in ``file``.
+
+        :param file: The file already parsed by this parser.
+        '''
+        return apr_hash_find(self._files, ensure_bytes(file), 1)
 
     def update_definition(self, definition, new):
         '''
@@ -153,7 +185,7 @@ class DefParser:
                    return {'replaced': original(*args)}
                parser.update_definition(b'Wrapper', replacement)
         '''
-        apr_hash_replace(self.defs, ensure_bytes(definition), new)
+        apr_hash_replace(self._defs, ensure_bytes(definition), new)
 
     def parse(self, source, force=False):
         '''
@@ -166,18 +198,18 @@ class DefParser:
         '''
         source = ensure_bytes(source)
         if not force:
-            if source in self.files:
+            if apr_hash_find(self._files, source, 1):
                 return
             for r in self.roots:
-                if path.join(r, source) in self.files:
+                if apr_hash_find(self._files, path.join(r, source), 1):
                     return
 
         apr_update_hash(
-            self.defs,
+            self._defs,
             proto_def_parse(
                 source,
                 self.roots,
-                self.files,
+                self._files,
                 self.message_ctor,
                 self.enum_ctor,
                 self.mp,
@@ -217,7 +249,7 @@ class BinParser:
             message = str(message).encode('utf-8')
         self.state = make_state(
             message,
-            self.def_parser.defs,
+            self.def_parser._defs,
             self.mp,
         )
         result = proto_parse(buf, self.state)

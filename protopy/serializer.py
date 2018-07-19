@@ -59,6 +59,6 @@ class Serializer:
         return proto_serialize(
             message,
             ptype,
-            self.parser.def_parser.defs,
+            self.parser.def_parser._defs,
             mmap.PAGESIZE,
         )

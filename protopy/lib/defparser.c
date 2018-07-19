@@ -161,6 +161,7 @@ void* APR_THREAD_FUNC parse_one_def(apr_thread_t* thd, void* iargs) {
     int status;
     yypstate* ps = yypstate_new();
     args->result = make_proto_file(mp);
+    printf("parsing: %s on thread %zu\n", source, args->thread_id);
 
     do {
         status = yypush_parse(

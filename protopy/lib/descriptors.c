@@ -24,7 +24,7 @@ void extract_type_name(
     while (i > 0) {
         i--;
         if (tname[i] == '.') {
-            extracted_package = apr_palloc(mp, (i - 1) * sizeof(char));
+            extracted_package = apr_palloc(mp, (i + 1) * sizeof(char));
             memcpy(extracted_package, tname, i);
             extracted_package[i] = '\0';
 

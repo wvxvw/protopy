@@ -43,7 +43,7 @@ def test_imported_oneof():
     parser.parse(test_proto)
 
     found = False
-    for f, p in parser.files.items():
+    for f, p in parser.files():
         if b'test_imported_oneof.proto' in f:
             found = True
     assert found

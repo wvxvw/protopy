@@ -166,6 +166,7 @@ setup(
                 'protopy/lib/protopy.lex.c',
                 'protopy/lib/protopy.tab.c',
                 'protopy/lib/pyhelpers.c',
+                'protopy/lib/apr_adaptor.c',
                 'protopy/wrapper.c',
             ],
             include_dirs=[apr_lib],

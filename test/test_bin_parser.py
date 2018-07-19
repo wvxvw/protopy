@@ -592,6 +592,7 @@ def test_dotted():
     for f, p in parser.def_parser.definitions():
         print('{} => {}'.format(f, p))
 
+    print('all definitions parsed')
     result = parser.parse(test_proto, 'Test', content)
 
     print('result: {}'.format(result))
