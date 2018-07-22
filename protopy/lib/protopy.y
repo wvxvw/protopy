@@ -479,6 +479,9 @@ top_levels : %empty               { $$ = NULL; }
            | top_levels top_level { $$ = NULL; } ;
 
 
-s : syntax top_levels { $$ = NULL; } ;
+s : syntax top_levels {
+    qualify_types(pf);
+    $$ = NULL;
+} ;
 
 %%

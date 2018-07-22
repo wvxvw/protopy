@@ -203,6 +203,9 @@ class DefParser:
             for r in self.roots:
                 if apr_hash_find(self._files, path.join(r, source), 1):
                     return
+                rpath = path.relpath(source, r)
+                if apr_hash_find(self._files, rpath, 1):
+                    return
 
         self.parse_many([source])
 

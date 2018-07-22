@@ -560,6 +560,7 @@ def test_replace_method():
 
     result = parser.parse(test_proto, 'Wrapper', content)
     print('result after: {}'.format(result))
+    print('new def: {}'.format(parser.def_parser.find_definition('Wrapper')))
     assert result['replaced'].wrapped_type == 'Wrapped'
 
 

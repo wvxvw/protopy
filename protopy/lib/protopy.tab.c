@@ -2638,12 +2638,15 @@ yyreduce:
 
   case 169:
 #line 482 "protopy.y" /* yacc.c:1646  */
-    { (yyval.nothing) = NULL; }
-#line 2643 "protopy.tab.c" /* yacc.c:1646  */
+    {
+    qualify_types(pf);
+    (yyval.nothing) = NULL;
+}
+#line 2646 "protopy.tab.c" /* yacc.c:1646  */
     break;
 
 
-#line 2647 "protopy.tab.c" /* yacc.c:1646  */
+#line 2650 "protopy.tab.c" /* yacc.c:1646  */
       default: break;
     }
   /* User semantic actions sometimes alter yychar, and that requires
@@ -2881,5 +2884,5 @@ yypushreturn:
 #endif
   return yyresult;
 }
-#line 484 "protopy.y" /* yacc.c:1906  */
+#line 487 "protopy.y" /* yacc.c:1906  */
 

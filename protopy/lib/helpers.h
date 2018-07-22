@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <apr_general.h>
 #include <apr_tables.h>
+#include <apr_hash.h>
 
 #ifdef _WIN32
 #define YY_NO_UNISTD_H
@@ -84,6 +85,7 @@ typedef struct _proto_file_t {
     proto_enum_t* current_enum;
     apr_array_header_t* previous;
     bool need;
+    apr_hash_t* defs;
     apr_pool_t* mp;
 } proto_file_t;
 
@@ -127,6 +129,8 @@ proto_file_t* make_proto_file(apr_pool_t*);
 proto_file_t* proto_file_copy(proto_file_t*, apr_pool_t*);
 
 char* qualify_type(apr_array_header_t*, proto_file_t*);
+
+void qualify_types(proto_file_t*);
 
 apr_array_header_t* parse_import(char*, apr_pool_t*);
 

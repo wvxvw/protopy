@@ -43,7 +43,7 @@ PyObject* protofile_to_ptytpe(void* val) {
 
     i = 0;
     while (i < pf->enums->nelts) {
-        proto_enum_t* m = APR_ARRAY_IDX(pf->messages, i, proto_enum_t*);
+        proto_enum_t* m = APR_ARRAY_IDX(pf->enums, i, proto_enum_t*);
         PyList_Append(messages, PyBytes_FromString(mdupstr(m->t)));
         i++;
     }

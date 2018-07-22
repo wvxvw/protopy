@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <apr_strings.h>
 #include <apr_tables.h>
+#include <apr_hash.h>
+#include <apr_cstr.h>
 
 #include "helpers.h"
 
@@ -152,6 +154,7 @@ proto_file_t* make_proto_file(apr_pool_t* mp) {
     result->previous = apr_array_make(mp, 0, sizeof(proto_message_t*));
     result->mp = mp;
     result->need = true;
+    result->defs = apr_hash_make(mp);
     return result;
 }
 
@@ -374,9 +377,9 @@ apr_array_header_t* parse_import(char* raw, apr_pool_t* mp) {
 
 bool is_imported(apr_array_header_t* raw_type, proto_file_t* pf) {
     char* prefix = APR_ARRAY_IDX(raw_type, 0, char*);
-    size_t i = 0;
+    int i = 0;
 
-    while (i < (size_t)pf->imports->nelts) {
+    while (i < pf->imports->nelts) {
         apr_array_header_t* import = APR_ARRAY_IDX(pf->imports, i, apr_array_header_t*);
         char* iprefix = APR_ARRAY_IDX(import, 0, char*);
         if (!strcmp(prefix, iprefix)) {
@@ -387,39 +390,44 @@ bool is_imported(apr_array_header_t* raw_type, proto_file_t* pf) {
     return false;
 }
 
-bool is_dot(char* first) {
+bool is_dot(const char* first) {
     return first[0] == '.' && first[1] == '\0';
 }
 
-char* qualify_type_bytes(apr_array_header_t* raw_type, proto_file_t* pf) {
+char* qualify_type(apr_array_header_t* raw_type, proto_file_t* pf) {
     char* first = APR_ARRAY_IDX(raw_type, 0, char*);
+    char* result;
     if (raw_type->nelts == 1 && vt_builtin(first) != vt_default) {
-        return first;
+        result = first;
+        goto cleanup;
     }
     if (is_dot(first)) {
         char* dotted = apr_array_pstrcat(pf->mp, raw_type, '.');
-        return dotted + 2;
+        result = dotted + 2;
+        goto cleanup;
     }
     if (!pf->package || is_imported(raw_type, pf)) {
-        return apr_array_pstrcat(pf->mp, raw_type, '.');
+        result = apr_array_pstrcat(pf->mp, raw_type, '.');
+        goto cleanup;
     }
 
     char* local_name = apr_array_pstrcat(pf->mp, raw_type, '.');
-    return apr_pstrcat(pf->mp, pf->package, ".", local_name, NULL);
-}
-
-char* qualify_type(apr_array_header_t* raw_type, proto_file_t* pf) {
-    return qualify_type_bytes(raw_type, pf);
+    result = apr_pstrcat(pf->mp, pf->package, ".", local_name, NULL);
+cleanup:
+    apr_hash_set(pf->defs, result, APR_HASH_KEY_STRING, (const void*)1);
+    return result;
 }
 
 proto_field_t*
 make_proto_field(const char* name, apr_array_header_t* type, int n, proto_file_t* pf) {
-    return make_proto_field_impl(name, qualify_type(type, pf), n, pf->mp);
+    char* t = apr_array_pstrcat(pf->mp, type, '.');
+    return make_proto_field_impl(name, t, n, pf->mp);
 }
 
 proto_map_field_t*
 make_proto_map_field(const char* name, int ktype, apr_array_header_t* vtype, int n, proto_file_t* pf) {
-    return make_proto_map_field_impl(name, (vt_type_t)ktype, qualify_type(vtype, pf), n, pf->mp);
+    char* t = apr_array_pstrcat(pf->mp, vtype, '.');
+    return make_proto_map_field_impl(name, (vt_type_t)ktype, t, n, pf->mp);
 }
 
 proto_enum_member_t* make_proto_enum_member(const char* name, int n, apr_pool_t* mp) {
@@ -445,6 +453,102 @@ proto_message_t* make_proto_message(apr_array_header_t* scope, proto_file_t* pf)
     result->repeated = apr_array_make(pf->mp, 0, sizeof(proto_field_t*));
     result->maps = apr_array_make(pf->mp, 0, sizeof(proto_map_field_t*));
     return result;
+}
+
+const char* packaged_type(const char* prefix, const char* t, proto_file_t* pf) {
+    if (pf->package) {
+        return apr_pstrcat(pf->mp, pf->package, ".", prefix, ".", t, NULL);
+    }
+    return apr_pstrcat(pf->mp, prefix, ".", t, NULL);
+}
+
+const char* qualify_field_type(const char* mt, const char* t, proto_file_t* pf) {
+    if (vt_builtin(t) != vt_default) {
+        return t;
+    }
+    if (t[0] == '.') {
+        return t + 2;
+    }
+    const char* name = mt;
+    if (pf->package) {
+        name = mt + strlen(pf->package);
+    }
+    apr_array_header_t* chunks = apr_cstr_split(name, ".", 0, pf->mp);
+
+    int i = 0;
+    const char* prefix = APR_ARRAY_IDX(chunks, 0, const char*);
+    const char* maybe_type = packaged_type(prefix, t, pf);
+
+    do {
+        if (apr_hash_get(pf->defs, maybe_type, APR_HASH_KEY_STRING)) {
+            return maybe_type;
+        }
+        const char* suffix = APR_ARRAY_IDX(chunks, i, const char*);
+        prefix = apr_pstrcat(pf->mp, prefix, ".", suffix, NULL);
+        maybe_type = packaged_type(prefix, t, pf);
+        i++;
+    } while (i < chunks->nelts);
+
+    apr_hash_index_t* hi;
+    void* val;
+    const char* key;
+    size_t len = strlen(mt);
+
+    for (hi = apr_hash_first(pf->mp, pf->defs); hi; hi = apr_hash_next(hi)) {
+        apr_hash_this(hi, (const void**)(&key), NULL, &val);
+        if (!strncmp(key, mt, len)) {
+            if (key[len] == '.' && !strcmp(key + len + 1, t)) {
+                return key;
+            }
+        }
+    }
+    if (pf->package) {
+        maybe_type = apr_pstrcat(pf->mp, pf->package, ".", t, NULL);
+        if (apr_hash_get(pf->defs, maybe_type, APR_HASH_KEY_STRING)) {
+            return maybe_type;
+        }
+        chunks = apr_cstr_split(t, ".", 0, pf->mp);
+        if (!is_imported(chunks, pf)) {
+            return maybe_type;
+        }
+    }
+    return t;
+}
+
+void qualify_fields(proto_message_t* m, proto_file_t* pf) {
+    int i = 0;
+
+    while (i < m->fields->nelts) {
+        proto_field_t* f = APR_ARRAY_IDX(m->fields, i, proto_field_t*);
+        f->t = qualify_field_type(m->t, f->t, pf);
+        i++;
+    }
+
+    i = 0;
+
+    while (i < m->repeated->nelts) {
+        proto_field_t* f = APR_ARRAY_IDX(m->repeated, i, proto_field_t*);
+        f->t = qualify_field_type(m->t, f->t, pf);
+        i++;
+    }
+
+    i = 0;
+
+    while (i < m->maps->nelts) {
+        proto_map_field_t* f = APR_ARRAY_IDX(m->maps, i, proto_map_field_t*);
+        f->vt = qualify_field_type(m->t, f->vt, pf);
+        i++;
+    }
+}
+
+void qualify_types(proto_file_t* pf) {
+    int i = 0;
+
+    while (i < pf->messages->nelts) {
+        proto_message_t* m = APR_ARRAY_IDX(pf->messages, i, proto_message_t*);
+        qualify_fields(m, pf);
+        i++;
+    }
 }
 
 char* mdupstr(const char* s) {
