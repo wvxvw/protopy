@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+message TicTacToeError {
+    oneof error_kind {
+        InvalidMove invalid_move = 1;
+        BoardFull board_full = 2;
+    }
+}
+
+message TicTacToeCell {
+    oneof value {
+        bool x = 1;
+        bool o = 2;
+        bool unset = 3;
+    }
+}
+
+message TicTacToeBoard {
+    repeated TicTacToeCell cells = 1;
+    uint64 session = 2;
+}
+
+message TicTacToe {
+    oneof payload {
+        TicTacToeError error = 1;
+        TicTacToeBoard board = 2;
+    }
+}

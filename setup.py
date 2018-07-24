@@ -143,7 +143,7 @@ setup(
     description='Parser for Google Protobuf',
     author='Oleg Sivokon',
     author_email='olegs@traiana.com',
-    url='TBD',
+    url='https://github.com/wvxvw-traiana/protopy',
     license='PROPRIETARY',
     scripts=['bin/protopy'],
     package_data=package_data,
