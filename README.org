@@ -21,7 +21,7 @@
   Python 3 is and possibly future version will be supported.
 
   Unfortunately, =protoc=, the official implementation of Protocol
-  Buffers accepts a lot more than the sepcification allows, in
+  Buffers accepts a lot more than the specification allows, in
   particular, it accepts virtually any Protobuf v2 syntax in Protobuf
   v3 source files.  This implementation tries to match this behavior.
 
@@ -40,6 +40,51 @@
    doesn't make much sense.  This is why this implementation doesn't
    create descriptors and Python sources doing the deserialization.
    All you need is to point the parser to the Protobuf source files.
+
+** Some other differences
+   - Options are parsed but ignored.  Options are needed for =protoc=
+     plugins to do pre- or post-processing on generated sources.
+     =protopy= works in a very different way, so that none of =protoc=
+     plugins would even make sense here.
+   - Options on fields (such as =[default true]= on =bool= fields) are
+     ignored.  The behavior of fields that weren't sent over the wire
+     is different: they will be always set to =None=.  There's no
+     concept of default values.  This is as intended.
+   - Fields sent over the wire, which are not in the description are
+     silently ignored by =protoc= generated code, but result in errors
+     in =protopy=.  In general, I found the later to be a saner
+     approach.  In the future, I might consider making this
+     configurable.
+   - =protopy= doesn't attempt to find errors in your definitions.  It
+     may allow things that aren't valid for =protoc=.  If you want a
+     better error reporting, =protoc= is still a better tool.  One
+     particular difference here is how definitions get resolved to
+     their full names.  It is technically possible to create an
+     ambiguous name using Protobuf IDL: this is because it is not
+     possible to tell which part of the name represents the package
+     and which part represents the local name.  Thus:
+     : foo.bar.baz
+     : ^   ^--- local name: "bar.baz"
+     : ^------- package: "foo"
+     or
+     : foo.bar.baz
+     : ^       ^-- local name: "baz"
+     : ^---------- package: "foo.bar"
+     =protoc= will actually alert you when you have this kind of
+     conflict.  =protopy= will use whichever definition it encountered
+     last.
+   - Zeroth enumeration values: my reading of documentation is that
+     #+BEGIN_SRC protobuf
+       enum Foo {
+           BAR = 0;
+           BAZ = 1;
+       }
+     #+END_SRC
+     Shouldn't be even valid.  But =protoc= accepts this.  =protopy=
+     makes no distinction between zeroth member of an enum and other
+     indices, but since =protoc= assigns a special meaning to zeroth
+     member, in order to write portable definitions, you might want
+     to avoid using it.
 
 ** GRPC
    I have no plans supporting this feature, =service= and =rpc=
@@ -66,9 +111,9 @@
      more junk files in =lib=.
    - [X] Few more exotic types need testing: very long varints and floats,
      I think they don't parse correctly.
-   - [ ] =defparser= is kind of a mess, it can be reorganized and
+   - [X] =defparser= is kind of a mess, it can be reorganized and
      cleaned up a bit.
-   - [ ] ints in =list= could be encoded into pointers instead of
+   - [X] ints in =list= could be encoded into pointers instead of
      allocating extra memory.
    - [X] =cons= may have an alternative version, where it doesn't
      allocate more memory, but uses the the =value= as is.
@@ -76,6 +121,11 @@
    - [X] Some code in =protopy.y= never releases memory / could
      allocate less.
      /Irrelevant since using APR pools/.
+   - [ ] Serializer needs work, a lot of functionality there repeats,
+     and may be consolidated.
+   - [ ] It seems like there's a bug with scheduling of parsing files,
+     somehow very few threads get scheduled when reading files in
+     bulks.
 
 ** Medium priority
    Keep this number low
