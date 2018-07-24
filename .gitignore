@@ -9,3 +9,4 @@ __pycache__
 *.o
 *.output
 examples/tictactoe/build/
+examples/tictactoe/dist/

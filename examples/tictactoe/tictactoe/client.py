@@ -46,12 +46,10 @@ class TicTacToeClient:
         payload = self.serializer.serialize(message, 'TicTacToe')
         self.writer.write(payload)
         await self.writer.drain()
-        print('sent request')
 
         data = b''
         while True:
             chunk = await self.reader.read(self.buffsize)
-            print('received {} bytes'.format(len(chunk)))
             data += chunk
             try:
                 message = self.parser.parse(self.proto_def, 'TicTacToe', data)
@@ -59,7 +57,6 @@ class TicTacToeClient:
                 print('what happened: {}'.format(e))
             else:
                 break
-            print('received: {} = {}'.format(data, message))
         if message.error:
             raise Exception('protocol error: {}'.format(message.error))
         self.board = message.board
@@ -73,6 +70,7 @@ class TicTacToeClient:
         self.reader = reader
         self.writer = writer
         await self.exchange()
+        print(self.board_str())
 
     async def move(self, x, y):
         self.board.cells[y * 3 + x] = self.cell_ctor(
@@ -82,8 +80,7 @@ class TicTacToeClient:
         )
         print(self.board_str())
         await self.exchange()
-
-        # writer.close()
+        print(self.board_str())
 
 
 client = TicTacToeClient()
