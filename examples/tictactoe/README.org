@@ -1,0 +1,104 @@
+* Discussion
+  This project contains source code for tic-tac-toe game.  It is meant
+  as an example of using [[https://github.com/wvxvw-traiana/protopy][protopy]] library: an alternative
+  implementation of [[https://developers.google.com/protocol-buffers/][Google's Protocol Buffers]].
+
+** Running
+   1. Create a virtual environment, for example:
+      #+BEGIN_SRC sh
+        virtualenv .venv
+      #+END_SRC
+   2. Activate it:
+      #+BEGIN_SRC sh
+        . ./.venv/bin/activate
+      #+END_SRC
+   3. Install the project:
+      #+BEGIN_SRC sh
+        python setup.py install
+      #+END_SRC
+   4. Start the server:
+      #+BEGIN_SRC sh
+        tictactoe-server
+      #+END_SRC
+      The server will run in foreground.  You will need to either send
+      it to background or open another terminal for step 4.
+   5. Start the client:
+      #+BEGIN_SRC sh
+        tictactoe-client
+      #+END_SRC
+   6. Now you can interact with the game by providing =X= and =Y=
+      coordinates on the tic-tac-toe board.
+
+** Project structure
+   Few things require special attention:
+
+   1. =setup.py= needs to take care of also including =*.proto= files.
+      #+BEGIN_SRC python
+        from setuptools import setup
+
+        setup(
+            ...
+            # You need to explicitly include Proto definitions
+            package_data={'tictactoe/etc': ['etc/tictactoe.proto']},
+            data_files=[('tictactoe/etc', ['etc/tictactoe.proto'])],
+            ...
+            # You need to tell it where to download the protopy package
+            dependency_links=[
+                'https://github.com/wvxvw-traiana/protopy/releases/download/'
+                'v0.0.3/protopy-0.0.3-cp36-cp36m-linux_x86_64.whl',
+                'https://github.com/wvxvw-traiana/protopy/releases/download/'
+                'v0.0.3/protopy-0.0.3-cp36-cp36m-win_amd64.whl'
+            ],
+            install_requires=[
+                'protopy >= 0.0.3',
+            ],
+        )
+      #+END_SRC
+      
+      You will also need to help =setuptools= to find the =protopy=
+      package (it's not on PyPi yet).
+
+   2. Working with Protobuf requires some acrobatics.  In particular
+      because it is not possible to know ahead of time the length of
+      the message being sent.  The code that reads the message from
+      socket, file, memory etc. may never be confident that the whole
+      message was received.  In this example, I simply happen to know
+      that messages being exchanged are small and will be most likely
+      received in a single go.  More robust code would use some
+      external to Protobuf procedure to ensure that the entire message
+      was received (for example, you could prepend the length of the
+      message to the message).
+
+   3. The use of =oneof= field is exactly equivalent to declaring
+      multiple optional fields.  The reason for it is the fact that
+      the information about =oneof= field's name isn't stored anywhere
+      in the parse, and Python's very flexible type system would not
+      allow inferring the correct field to serialize the value to.
+      You could, probably, do something like the code below, but
+      trying to do this in the parser would make it a lot less
+      efficient, and so I decided against it:
+
+      #+BEGIN_SRC python
+        >>> from collections import namedtuple
+        >>> OneOfExample = namedtuple('OneOfExample', ['a', 'b', 'c'])
+        >>> @property
+        ... def oneof(self):
+        ...     atts = 'a', 'b', 'c'
+        ...     for a in atts:
+        ...         x = getattr(self, a)
+        ...         if x is not None:
+        ...             return x
+        ...     raise Exception('At least one of {} must be set'.format(atts))
+        ... 
+        >>> OneOfExample.oneof = oneof
+        >>> oneof_test = OneOfExample(a=None, b=42, c=None)
+        >>> oneof_test.oneof
+        42
+      #+END_SRC
+
+      Another argument against this being part of the parser is the
+      fact that after retrieving the value of a property in such way
+      in most cases you would still need to figure out which one of
+      the possible choices did you get.  There may be legitimate
+      cases, where generic code may be able to handle multiple types,
+      but those seem to be exceedingly rare.
