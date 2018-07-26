@@ -15,6 +15,7 @@ setup(
     license='PROPRIETARY',
     scripts=['bin/protopy-performance'],
     install_requires=[
+        'protopy >= 0.0.3',
         'mnemonicode >= 1.4.4',
     ],
 )

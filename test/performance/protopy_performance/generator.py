@@ -10,6 +10,9 @@ from hashlib import md5
 from itertools import chain
 from argparse import ArgumentParser
 
+from protopy.parser import DefParser
+from protopy.serializer import Serializer
+
 
 class Node:
 
@@ -73,10 +76,11 @@ class Node:
         return '_'.join(r for r in raw.split('-') if r)
 
     def rint(self):
-        return self.ratio.r.randint(
+        self.ratio.previous = self.ratio.r.randint(
             self.ratio.previous + 1,
-            self.ratio.previous + 100,
+            self.ratio.previous + 10,
         )
+        return self.ratio.previous
 
     def rkeytype(self):
         return self.ratio.r.choice(self.keytypes)
@@ -246,6 +250,39 @@ class MessageNode(Node):
         return ''
 
 
+class AllMessagesNode(Node):
+
+    template = '''
+    // Special message to help with content generation
+    message AllMessages {
+    $fields
+    }
+    '''
+
+    def __init__(self, ctx, ratio):
+        super().__init__(ctx, ratio, AllMessagesNode.template, 0)
+        self.sfields = []
+        self.fields = []
+
+    def render(self):
+        for d in self.ctx.in_scope():
+            f = FieldNode(self.ctx, self.ratio, self.indent, '')
+            f.vars['tname'] = d
+            self.fields.append(f)
+            self.sfields.append(self.pad(str(f)))
+        self.vars['fields'] = '\n'.join(self.sfields)
+        return super().render()
+
+    def bin(self, serializer, r):
+        parser = serializer.parser
+        cdef = parser.find_definition(b'AllMessages')
+        vals = {
+            f.name: f.bin(serializer, r)
+            for f in self.fields
+        }
+        return cdef(**vals)
+
+
 class EnumNode(Node):
 
     template = '''
@@ -404,10 +441,27 @@ class ProtoGenerator:
     def __init__(self, seed=None):
         self.ratio = Ratio(seed)
         self.ctx = TypeContext()
+        self.defs = DefsNode(self.ctx, self.ratio, 0, toplevel=True)
+        self.cache = None
+        self.all = AllMessagesNode(self.ctx, self.ratio)
+        self.parser = None
+        self.serializer = None
 
     def render(self):
-        defs = DefsNode(self.ctx, self.ratio, 0, toplevel=True)
-        return '\n\n'.join(map(str, [self.ratio, self.header, defs.render()]))
+        if not self.cache:
+            self.cache = '\n\n'.join(map(
+                str,
+                [self.ratio, self.header, self.defs, self.all],
+            ))
+        return self.cache
+
+    def payload(self, seed=None):
+        result = []
+        r = Random()
+        r.seed(seed)
+        self.render()
+
+        return self.all.bin(self.serializer, r)
 
 
 if __name__ == '__main__':
@@ -418,8 +472,35 @@ if __name__ == '__main__':
         help='Seed to use when generating Proto file',
         required=True,
     )
+    parser.add_argument(
+        '-o', '--output',
+        type=str,
+        help='Protobuf IDL file to save output to',
+        required=True,
+    )
+    parser.add_argument(
+        '-b', '--binary',
+        type=str,
+        help='''
+        Protobuf binary file mask to save output to.
+
+        Use '%d' in the mask where you want the the number assigned to
+        this file during generation to appear.  See also
+        `--num-binaries'.
+        ''',
+        required=False,
+        default='',
+    )
+    parser.add_argument(
+        '-n', '--num-binaries',
+        type=int,
+        help='How many binary outputs to produce.',
+        required=False,
+        default=1,
+    )
     args = parser.parse_args()
     generator = ProtoGenerator(args.seed)
-    for line in generator.render().split('\n'):
-        if line.strip():
-            print(line)
+    with open(args.output, 'w') as o:
+        for line in generator.render().split('\n'):
+            if line.strip():
+                print(line, file=o)
