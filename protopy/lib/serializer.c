@@ -10,12 +10,15 @@
 // TODO(olegs): Maybe this can be replaced by APR arrays
 void resize_buffer(wbuffer_t* buf, size_t n) {
     byte* old = buf->buf;
+    size_t new_cap;
     if (n > buf->cap) {
-        buf->buf = apr_palloc(buf->mp, buf->len + n);
+        new_cap = buf->len + n;
     } else {
-        buf->buf = apr_palloc(buf->mp, buf->cap * 2);
+        new_cap = buf->cap * 2;
     }
-    memcpy(buf->buf, old, buf->len);
+    buf->buf = apr_palloc(buf->mp, new_cap);
+    memmove(buf->buf, old, buf->len);
+    buf->cap = new_cap;
 }
 
 void serialize_varint_impl(wbuffer_t* buf, unsigned long long vu) {
@@ -61,7 +64,7 @@ void serialize_varint(wbuffer_t* buf, PyObject* message, bool sign) {
         }
         vu = (unsigned long long)v;
     } else {
-        vu = PyLong_AsUnsignedLongLong(converted);
+        vu = PyLong_AsUnsignedLongLongMask(converted);
     }
     Py_DECREF(converted);
     serialize_varint_impl(buf, vu);
@@ -114,7 +117,7 @@ void serialize_length_delimited_impl(wbuffer_t* buf, const unsigned char* bytes,
     serialize_varint_impl(buf, (unsigned long long)len);
 
     if (buf->len + len >= buf->cap) {
-        resize_buffer(buf, buf->len + len - buf->cap);
+        resize_buffer(buf, buf->len + len);
     }
     memcpy(buf->buf + buf->len, bytes, len);
     buf->len += len;
@@ -124,6 +127,11 @@ void serialize_length_delimited(wbuffer_t* buf, PyObject* message) {
     char* bytes;
 
     if (PyUnicode_Check(message)) {
+        // This may error if message is a unicode, but cannot be
+        // encoded as UTF-8.  Trying to implement some default policy
+        // would incur a significant slowdown in average case.  So, we
+        // expect users to supply only Unicode strings which can be
+        // encoded as UTF-8.
         bytes = PyUnicode_AsUTF8(message);
     } else if (PyBytes_Check(message)) {
         bytes = PyBytes_AsString(message);
@@ -134,6 +142,9 @@ void serialize_length_delimited(wbuffer_t* buf, PyObject* message) {
         }
         Py_DECREF(uo);
         bytes = PyUnicode_AsUTF8(uo);
+    }
+    if (PyErr_Occurred()) {
+        return;
     }
     size_t len = strlen(bytes);
     serialize_length_delimited_impl(buf, (unsigned char*)bytes, len);
@@ -207,8 +218,9 @@ void proto_serialize_builtin(
             break;
         default:
             PyErr_Format(
-                PyExc_NotImplementedError,
-                "Message serialization is not implemented yet.");
+                PyExc_TypeError,
+                "%A (vt_type: %d) is not a Protobuf built-in type.",
+                message, vt);
     }
 }
 
@@ -250,7 +262,7 @@ void
 serialize_map(
     wbuffer_t* buf,
     PyObject* message,
-    byte wt,
+    wiretype_t wt,
     field_info_t* info,
     apr_hash_t* defs) {
 
@@ -283,7 +295,7 @@ serialize_map(
     const char* key = info->extra_type_info.pair.pyval;
     factory_t* f = NULL;
 
-    if (vvt == vt_default || vvt == vt_message) {
+    if (vvt == vt_default || vvt == vt_message || vvt == vt_enum) {
         f = apr_hash_get(defs, key, APR_HASH_KEY_STRING);
         if (!f) {
             PyErr_Format(
@@ -291,12 +303,14 @@ serialize_map(
                 "Don't know how to serialize %A as %s", message, key);
             return;
         }
-        if (f->vt_type != vt_message) {
+        if (f->vt_type != vt_message && f->vt_type != vt_enum) {
             PyErr_Format(
                 PyExc_TypeError,
-                "Expected %A to be a message", message);
+                "Expected %A to be a message or enum of type %s",
+                message, key);
             return;
         }
+        vvt = f->vt_type;
     }
 
     Py_ssize_t len = PyMapping_Size(message);
@@ -345,14 +359,16 @@ void
 serialize_repeated(
     wbuffer_t* buf,
     PyObject* message,
-    byte wt,
+    wiretype_t wt,
     field_info_t* info,
     apr_hash_t* defs) {
 
     if (!PySequence_Check(message)) {
         PyErr_Format(
             PyExc_TypeError,
-            "%A must implement sequence protocol", message);
+            "%A must implement sequence protocol (should be of type %s)",
+            message,
+            info->pytype);
         return;
     }
     Py_ssize_t len = PySequence_Size(message);
@@ -367,26 +383,31 @@ serialize_repeated(
         buf->mp
     };
 
-    if (vt == vt_default || vt == vt_string || vt == vt_bytes) {
-        const char* key = info->pytype;
-        factory_t* f = NULL;
+    const char* key = info->pytype;
+    factory_t* f = apr_hash_get(defs, key, APR_HASH_KEY_STRING);
 
-        if (vt == vt_default) {
-            f = apr_hash_get(defs, key, APR_HASH_KEY_STRING);
+    if (vt == vt_default) {
+        if (info->extra_type_info.elt != vt_default) {
+            vt = info->extra_type_info.elt;
+        } else {
             if (!f) {
                 PyErr_Format(
                     PyExc_TypeError,
                     "Don't know how to serialize %A as %s", message, key);
                 return;
             }
+            vt = f->vt_type;
         }
+    }
+
+    if (vt == vt_message || vt == vt_string || vt == vt_bytes) {
         for (i = 0; i < len; i++) {
             PyObject* pval = PySequence_GetItem(message, i);
             if (pval == Py_None) {
                 continue;
             }
             serialize_varint_impl(buf, (unsigned long long)wt);
-            if (vt == vt_default) {
+            if (vt == vt_message) {
                 serialize_message(&subbuf, pval, f, defs, key);
                 serialize_length_delimited_impl(buf, subbuf.buf, subbuf.len);
                 subbuf.len = 0;
@@ -407,7 +428,7 @@ serialize_repeated(
 void
 serialize_submessage(
     wbuffer_t* const buf,
-    byte wt,
+    wiretype_t wt,
     PyObject* pval,
     const char* pytype,
     apr_hash_t* defs) {
@@ -439,7 +460,11 @@ void serialize_message(
     // it allows us to call __getitem__ on these object in order to get the
     // value we need to encode.
     if (!PySequence_Check(message)) {
-        PyErr_Format(PyExc_TypeError, "%A must implement sequence protocol", message);
+        PyErr_Format(
+            PyExc_TypeError,
+            "%A must implement sequence protocol (should be of type %s)",
+            message,
+            pytype);
         return;
     }
 
@@ -480,7 +505,7 @@ void serialize_message(
                 }
                 info->vt_type = vt;
             }
-            byte wt = field_and_type(vt, *field);
+            wiretype_t wt = field_and_type(vt, *field);
             switch (vt) {
                 case vt_repeated:
                     serialize_repeated(buf, pval, wt, info, defs);
@@ -497,9 +522,6 @@ void serialize_message(
                     break;
             }
             if (PyErr_Occurred()) {
-                if (pval) {
-                    Py_DECREF(pval);
-                }
                 return;
             }
         } else {
@@ -508,11 +530,7 @@ void serialize_message(
                 "Don't know how to serialize field %d of %A",
                 i,
                 message);
-            Py_DECREF(pval);
             return;
-        }
-        if (pval) {
-            Py_DECREF(pval);
         }
     }
 }
@@ -578,6 +596,7 @@ PyObject* proto_serialize(PyObject* self, PyObject* args) {
         PyErr_SetString(PyExc_TypeError, "Couldn't create memory pool");
         return NULL;
     }
+
     wbuffer_t buf;
     buf.buf = apr_palloc(mp, buf_size * sizeof(byte));
     buf.cap = buf_size;
@@ -590,7 +609,9 @@ PyObject* proto_serialize(PyObject* self, PyObject* args) {
         apr_pool_destroy(mp);
         return NULL;
     }
-    PyObject* result = PyBytes_FromStringAndSize((char*)buf.buf, buf.len);
+    char* res = malloc(buf.len * sizeof(char));
+    memcpy(res, buf.buf, buf.len);
+    PyObject* result = PyBytes_FromStringAndSize(res, buf.len);
     apr_pool_destroy(mp);
     return result;
 }

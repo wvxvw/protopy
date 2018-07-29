@@ -10,3 +10,5 @@ __pycache__
 *.output
 examples/tictactoe/build/
 examples/tictactoe/dist/
+test/performance/build
+test/performance/dist

@@ -8,10 +8,53 @@ from string import Template
 from mnemonicode import mnformat
 from hashlib import md5
 from itertools import chain
-from argparse import ArgumentParser
+from os import path
 
-from protopy.parser import DefParser
+from protopy.parser import BinParser
 from protopy.serializer import Serializer
+
+
+def gen_string(parser, r):
+    result = []
+    for c in range(r.randint(0, 1000)):
+        u = chr(r.randint(0, sys.maxunicode))
+        try:
+            u.encode('utf-8')
+            result.append()
+        except:                 # noqa E722
+            pass
+    return ''.join(result)
+
+
+def gen_bytes(parser, r):
+    result = []
+    for c in range(r.randint(0, 1000)):
+        result.append(r.randint(0, 0xFF))
+    return bytes(result)
+
+
+def gen_int32(parser, r):
+    return r.randint(-80000000, 0x7FFFFFFF)
+
+
+def gen_posint32(parser, r):
+    return r.randint(0, 0xFFFFFFFF)
+
+
+def gen_int64(parser, r):
+    return r.randint(-8000000000000000, 0x7FFFFFFFFFFFFFFF)
+
+
+def gen_posint64(parser, r):
+    return r.randint(0, 0xFFFFFFFFFFFFFFFF)
+
+
+def gen_float(parser, r):
+    return r.uniform(sys.float_info.min, sys.float_info.max)
+
+
+def gen_bool(parser, r):
+    return r.random() > 0.5
 
 
 class Node:
@@ -23,6 +66,23 @@ class Node:
     ]
 
     builtins = keytypes + ['bytes', 'double']
+
+    generators = {
+        'string': gen_string,
+        'bytes': gen_bytes,
+        'int32': gen_int32,
+        'uint32': gen_posint32,
+        'sint32': gen_int32,
+        'int64': gen_int64,
+        'uint64': gen_posint64,
+        'sint64': gen_int64,
+        'double': gen_float,
+        'fixed32': gen_posint32,
+        'fixed64': gen_posint64,
+        'sfixed32': gen_int32,
+        'sfixed64': gen_int64,
+        'bool': gen_bool,
+    }
 
     def __init__(self, ctx, ratio, tpl, indent):
         if tpl:
@@ -59,10 +119,10 @@ class Node:
         x = self.ratio.r.randint(3, 6)
         return mnformat(m.digest()[:x])
 
-    def rtname_create(self, ctx):
+    def rtname_create(self, ctx, v):
         raw = self.next_name()
         n = ''.join(r.capitalize() for r in raw.split('-') if r)
-        return ctx.put(n)
+        return ctx.put(n, v)
 
     def rtname_get(self, ctx):
         return self.ratio.r.choice(list(ctx.in_scope()))
@@ -116,17 +176,53 @@ class MemberNode(Node):
         self.vars['name'] = self.name
         self.vars['n'] = self.n
 
+    def bin(self, parser, r):
+        return self.vars['n']
+
 
 class RepeatedNode(FieldNode):
 
     def __init__(self, ctx, ratio, indent):
         super().__init__(ctx, ratio, indent, 'repeated ')
+        self.recurring = False
+
+    def bin(self, parser, r):
+        if self.recurring:
+            return {self.vars['fname']: []}
+        gen = None
+        is_builtin = True
+        if self.vars['tname'] in self.builtins:
+            gen = self.generators[self.vars['tname']]
+        else:
+            is_builtin = False
+            gen = self.ctx.find(self.vars['tname']).bin
+        # gen(parser, r) for _ in range(r.randint(1, 1000))
+        self.recurring = True
+        result = {
+            self.vars['fname']: [
+                gen(parser, r) for _ in range(3)
+            ]
+        }
+        self.recurring = False
+        return result
 
 
 class SimpleNode(FieldNode):
 
     def __init__(self, ctx, ratio, indent):
         super().__init__(ctx, ratio, indent, '')
+        self.recurring = False
+
+    def bin(self, parser, r):
+        if self.recurring:
+            return {self.vars['fname']: None}
+        t = self.ctx.find(self.vars['tname'])
+        if isinstance(t, EnumNode) or t.can_recur:
+            self.recurring = True
+            result = {self.vars['fname']: t.bin(parser, r)}
+            self.recurring = False
+            return result
+        return {}
 
 
 class BuiltinNode(FieldNode):
@@ -135,13 +231,39 @@ class BuiltinNode(FieldNode):
         super().__init__(ctx, ratio, indent, '')
         self.vars['tname'] = self.builtin_type()
 
+    def bin(self, parser, r):
+        return {
+            self.vars['fname']: self.generators[self.vars['tname']](parser, r),
+        }
+
 
 class MapNode(FieldNode):
 
     def __init__(self, ctx, ratio, indent):
         super().__init__(ctx, ratio, indent, 'map ')
-        tname = self.vars['tname']
-        self.vars['tname'] = '<{}, {}>'.format(self.rkeytype(), tname)
+        self.tname = self.vars['tname']
+        self.keytype = self.rkeytype()
+        self.vars['tname'] = '<{}, {}>'.format(self.keytype, self.tname)
+        self.recurring = False
+
+    def bin(self, parser, r):
+        if self.recurring:
+            return {self.vars['fname']: {}}
+        kgen = self.generators[self.keytype]
+        vgen = None
+        if self.tname in self.builtins:
+            vgen = self.generators[self.tname]
+        else:
+            vgen = self.ctx.find(self.tname).bin
+        self.recurring = True
+        result = {
+            self.vars['fname']: {
+                kgen(parser, r): vgen(parser, r)
+                for _ in range(r.randint(1, 10000))
+            }
+        }
+        self.recurring = False
+        return result
 
 
 class OneOfFieldsNode(Node):
@@ -150,11 +272,20 @@ class OneOfFieldsNode(Node):
         super().__init__(ctx, ratio, None, indent)
 
     def render(self):
-        nodes = [
+        self.nodes = [
             d(self.ctx, self.ratio, self.indent + 1)
             for d in self.ratio.gen_oneof_fields(self.ctx, self.indent + 1)
         ]
-        return '\n'.join(self.pad(n.render()) for n in nodes)
+        return '\n'.join(self.pad(n.render()) for n in self.nodes)
+
+    def bin(self, parser, r):
+        result = {}
+        for n in self.nodes:
+            result[n.vars['fname']] = None
+
+        n = r.choice(self.nodes)
+        result.update(n.bin(parser, r))
+        return result
 
 
 class OneofNode(Node):
@@ -173,11 +304,17 @@ class OneofNode(Node):
             self.ratio,
             self.indent,
         )
+        self.can_recur = self.ratio.can_recur(self.indent + 1)
 
     def render(self):
-        if self.ratio.can_recur(self.indent + 1):
+        if self.can_recur:
             return super().render()
         return ''
+
+    def bin(self, parser, r):
+        if self.can_recur:
+            return self.vars['fields'].bin(parser, r)
+        return {}
 
 
 class FieldsNode(Node):
@@ -186,11 +323,17 @@ class FieldsNode(Node):
         super().__init__(ctx, ratio, None, indent)
 
     def render(self):
-        nodes = [
+        self.nodes = [
             d(self.ctx, self.ratio, self.indent + 1)
             for d in self.ratio.gen_fields(self.ctx, self.indent + 1)
         ]
-        return '\n'.join(self.pad(n.render()) for n in nodes)
+        return '\n'.join(self.pad(n.render()) for n in self.nodes)
+
+    def bin(self, parser, r):
+        result = {}
+        for n in self.nodes:
+            result.update(n.bin(parser, r))
+        return result
 
 
 class MembersNode(Node):
@@ -199,12 +342,16 @@ class MembersNode(Node):
         super().__init__(ctx, ratio, None, indent)
 
     def render(self):
-        nodes = [MemberNode(self.ctx, self.ratio, self.indent + 1)]
-        nodes += [
+        self.nodes = [MemberNode(self.ctx, self.ratio, self.indent + 1)]
+        self.nodes[0].vars['n'] = 0
+        self.nodes += [
             MemberNode(self.ctx, self.ratio, self.indent + 1)
             for _ in self.ratio.members(self.indent + 1)
         ]
-        return '\n'.join(self.pad(n.render()) for n in nodes)
+        return '\n'.join(self.pad(n.render()) for n in self.nodes)
+
+    def bin(self, parser, r):
+        return r.choice(self.nodes).bin(parser, r)
 
 
 class DefsNode(Node):
@@ -214,13 +361,20 @@ class DefsNode(Node):
         self.toplevel = toplevel
 
     def render(self):
-        nodes = [
+        self.nodes = [
             d(self.ctx, self.ratio, self.indent + 1)
             for d in self.ratio.gen_defs(self.ctx, self.indent + 1)
         ]
         if self.toplevel:
-            return '\n'.join(n.render() for n in nodes)
-        return '\n'.join(self.pad(n.render()) for n in nodes)
+            return '\n'.join(n.render() for n in self.nodes)
+        return '\n'.join(self.pad(n.render()) for n in self.nodes)
+
+    def bin(self, parser, r):
+        return reduce(
+            lambda a, b: a + b,
+            (n.bin(parser, r) for n in self.nodes),
+            [],
+        )
 
 
 class MessageNode(Node):
@@ -235,19 +389,32 @@ class MessageNode(Node):
     def __init__(self, ctx, ratio, indent):
         super().__init__(ctx, ratio, MessageNode.template, indent)
         self.ratio.previous = 0
-        self.name = self.rtname_create(self.ctx)
-        child_ctx = TypeContext(self.ctx)
-        child_ctx.name = self.name
-        self.fields = FieldsNode(child_ctx, self.ratio, self.indent)
-        self.defs = DefsNode(child_ctx, self.ratio, self.indent)
-        self.vars['name'] = self.name
-        self.vars['fields'] = self.fields
-        self.vars['defs'] = self.defs
+        self.can_recur = self.ratio.can_recur(self.indent + 1)
+        if self.can_recur:
+            self.name = self.rtname_create(self.ctx, self)
+            child_ctx = TypeContext(self.ctx)
+            child_ctx.name = self.name
+            self.fields = FieldsNode(child_ctx, self.ratio, self.indent)
+            self.defs = DefsNode(child_ctx, self.ratio, self.indent)
+            self.vars['name'] = self.name
+            self.vars['fields'] = self.fields
+            self.vars['defs'] = self.defs
 
     def render(self):
-        if self.ratio.can_recur(self.indent + 1):
+        if self.can_recur:
             return super().render()
         return ''
+
+    def bin(self, parser, r):
+        if self.can_recur:
+            tname = '.'.join(
+                x for x in self.ctx.prefix() + [self.vars['name']] if x
+            )
+            d = parser.find_definition(tname)
+            # import pdb
+            # pdb.set_trace()
+            return d(**self.fields.bin(parser, r))
+        return None
 
 
 class AllMessagesNode(Node):
@@ -266,20 +433,19 @@ class AllMessagesNode(Node):
 
     def render(self):
         for d in self.ctx.in_scope():
-            f = FieldNode(self.ctx, self.ratio, self.indent, '')
+            f = SimpleNode(self.ctx, self.ratio, self.indent)
             f.vars['tname'] = d
             self.fields.append(f)
             self.sfields.append(self.pad(str(f)))
         self.vars['fields'] = '\n'.join(self.sfields)
         return super().render()
 
-    def bin(self, serializer, r):
-        parser = serializer.parser
+    def bin(self, parser, r):
+        parser = parser
         cdef = parser.find_definition(b'AllMessages')
-        vals = {
-            f.name: f.bin(serializer, r)
-            for f in self.fields
-        }
+        vals = {}
+        for f in self.fields:
+            vals.update(f.bin(parser, r))
         return cdef(**vals)
 
 
@@ -294,10 +460,13 @@ class EnumNode(Node):
     def __init__(self, ctx, ratio, indent):
         super().__init__(ctx, ratio, EnumNode.template, indent)
         self.ratio.previous = 0
-        self.name = self.rtname_create(ctx)
+        self.name = self.rtname_create(ctx, self)
         self.members = MembersNode(self.ctx, self.ratio, self.indent)
         self.vars['name'] = self.name
         self.vars['members'] = self.members
+
+    def bin(self, parser, r):
+        return self.members.bin(parser, r)
 
 
 class Ratio:
@@ -412,7 +581,7 @@ class TypeContext:
 
     def __init__(self, ctx=None):
         self.parent = ctx
-        self.defs = []
+        self.defs = {}
         self.name = ''
 
     def in_scope(self):
@@ -421,12 +590,28 @@ class TypeContext:
         return self.defs
 
     def format_defs(self):
-        for d in self.defs:
+        for d in self.defs.keys():
             yield '.'.join(self.prefix() + [d])
 
-    def put(self, d):
-        self.defs.append(d)
+    def put(self, d, v):
+        self.defs[d] = v
         return d
+
+    def find(self, d):
+        if self.parent:
+            if d[0] == '.':
+                d = d[1:]
+            sep = d.rfind('.')
+            if sep > -1:
+                dh, dt = d[:sep], d[sep + 1:]
+                maybe = self.defs.get(dt, None)
+                if maybe and self.parent.find(dh):
+                    return maybe
+                else:
+                    return self.parent.find(d)
+            maybe = self.defs.get(d, None)
+            return maybe or self.parent.find(d)
+        return self.defs[d]
 
     def prefix(self):
         if self.parent:
@@ -455,52 +640,20 @@ class ProtoGenerator:
             ))
         return self.cache
 
-    def payload(self, seed=None):
-        result = []
-        r = Random()
-        r.seed(seed)
-        self.render()
-
-        return self.all.bin(self.serializer, r)
-
-
-if __name__ == '__main__':
-    parser = ArgumentParser()
-    parser.add_argument(
-        '-s', '--seed',
-        type=int,
-        help='Seed to use when generating Proto file',
-        required=True,
-    )
-    parser.add_argument(
-        '-o', '--output',
-        type=str,
-        help='Protobuf IDL file to save output to',
-        required=True,
-    )
-    parser.add_argument(
-        '-b', '--binary',
-        type=str,
-        help='''
-        Protobuf binary file mask to save output to.
-
-        Use '%d' in the mask where you want the the number assigned to
-        this file during generation to appear.  See also
-        `--num-binaries'.
-        ''',
-        required=False,
-        default='',
-    )
-    parser.add_argument(
-        '-n', '--num-binaries',
-        type=int,
-        help='How many binary outputs to produce.',
-        required=False,
-        default=1,
-    )
-    args = parser.parse_args()
-    generator = ProtoGenerator(args.seed)
-    with open(args.output, 'w') as o:
-        for line in generator.render().split('\n'):
-            if line.strip():
-                print(line, file=o)
+    def bin(self, proto, seeds=None, mask='proto-%d.bin', nbinaries=1):
+        root = path.dirname(proto)
+        self.parser = BinParser([root])
+        self.serializer = Serializer(self.parser)
+        self.parser.def_parser.parse(path.basename(proto))
+        if not seeds:
+            seeds = [x + y for x, y in enumerate([0xdeadbeef] * nbinaries)]
+        for i in range(nbinaries):
+            r = Random()
+            seed = seeds[i % len(seeds)]
+            r.seed(seed)
+            with open(mask % i, 'wb') as b:
+                tree = self.all.bin(self.parser.def_parser, r)
+                payload = self.serializer.serialize(tree, b'AllMessages')
+                # parsed = self.parser.parse(proto, b'AllMessages', payload)
+                # print('parsed: {}'.format(parsed))
+                b.write(payload)
