@@ -41,6 +41,11 @@ class TicTacToeClient:
         vals = [masks[x] for x in self.board.cells]
         return tpl.format(*vals)
 
+    def what_error(self, error):
+        for e in error:
+            if e:
+                return e
+
     async def exchange(self):
         message = self.message_ctor(board=self.board, error=None)
         payload = self.serializer.serialize(message, 'TicTacToe')
@@ -58,7 +63,9 @@ class TicTacToeClient:
             else:
                 break
         if message.error:
-            raise Exception('protocol error: {}'.format(message.error))
+            raise Exception('protocol error: {}'.format(
+                self.what_error(message.error),
+            ))
         self.board = message.board
 
     async def connect(self, loop):

@@ -1,9 +1,22 @@
 syntax = "proto3";
 
+message InvalidMove {
+    string text = 1;
+}
+
+message BoardFull {
+    string text = 1;
+}
+
+message SessionLost {
+    string text = 1;
+}
+
 message TicTacToeError {
     oneof error_kind {
         InvalidMove invalid_move = 1;
         BoardFull board_full = 2;
+        SessionLost session_lost = 3;
     }
 }
 
