@@ -4,7 +4,27 @@
 #include <apr_strings.h>
 #include <apr_tables.h>
 #include <apr_hash.h>
+#include <apr_version.h>
+#if (APR_MAJOR_VERSION < 2) || (APR_MINOR_VERSION < 6)
+#define XSTR(x) STR(x)
+#define STR(x) #x
+#pragma message "APR version is too low: " XSTR(APR_VERSION_STRING)
+#pragma message "Please update to at least 1.6.0"
+apr_array_header_t* apr_cstr_split(const char* whole, const char* sep, int ignore, apr_pool_t* mp) {
+    char* cpy = apr_pstrdup(mp, whole);
+    char** state = &cpy;
+    char* chunk = apr_strtok(cpy, sep, state);
+    apr_array_header_t* result = apr_array_make(mp, 0, sizeof(char*));
+
+    while (chunk) {
+        APR_ARRAY_PUSH(result, char*) = chunk;
+        chunk = apr_strtok(NULL, sep, state);
+    }
+    return result;
+}
+#else
 #include <apr_cstr.h>
+#endif
 
 #include "helpers.h"
 
