@@ -5,7 +5,7 @@
 #include <apr_tables.h>
 #include <apr_hash.h>
 #include <apr_version.h>
-#if (APR_MAJOR_VERSION < 2) || (APR_MINOR_VERSION < 6)
+#if (APR_MAJOR_VERSION < 1) || (APR_MINOR_VERSION < 6)
 #define XSTR(x) STR(x)
 #define STR(x) #x
 #pragma message "APR version is too low: " XSTR(APR_VERSION_STRING)

@@ -139,7 +139,7 @@ setup(
     },
     packages=['protopy'],
     name='protopy',
-    version='0.0.3',
+    version='0.0.4',
     description='Parser for Google Protobuf',
     author='Oleg Sivokon',
     author_email='olegs@traiana.com',
