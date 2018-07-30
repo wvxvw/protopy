@@ -5,27 +5,6 @@
 #include <apr_tables.h>
 #include <apr_hash.h>
 #include <apr_version.h>
-#if (APR_MAJOR_VERSION < 1) || (APR_MINOR_VERSION < 6)
-#define XSTR(x) STR(x)
-#define STR(x) #x
-#pragma message "APR version is too low: " XSTR(APR_VERSION_STRING)
-#pragma message "Please update to at least 1.6.0"
-apr_array_header_t* apr_cstr_split(const char* whole, const char* sep, int ignore, apr_pool_t* mp) {
-    char* cpy = apr_pstrdup(mp, whole);
-    char** state = &cpy;
-    char* chunk = apr_strtok(cpy, sep, state);
-    apr_array_header_t* result = apr_array_make(mp, 0, sizeof(char*));
-
-    while (chunk) {
-        APR_ARRAY_PUSH(result, char*) = chunk;
-        chunk = apr_strtok(NULL, sep, state);
-    }
-    return result;
-}
-#else
-#include <apr_cstr.h>
-#endif
-
 #include "helpers.h"
 
 
@@ -480,6 +459,21 @@ const char* packaged_type(const char* prefix, const char* t, proto_file_t* pf) {
         return apr_pstrcat(pf->mp, pf->package, ".", prefix, ".", t, NULL);
     }
     return apr_pstrcat(pf->mp, prefix, ".", t, NULL);
+}
+
+// TODO(olegs): In the future, when apr-1.6.0 or newer is installed everywhere
+// we can remove this.
+apr_array_header_t* apr_cstr_split(const char* whole, const char* sep, int ignore, apr_pool_t* mp) {
+    char* cpy = apr_pstrdup(mp, whole);
+    char** state = &cpy;
+    char* chunk = apr_strtok(cpy, sep, state);
+    apr_array_header_t* result = apr_array_make(mp, 0, sizeof(char*));
+
+    while (chunk) {
+        APR_ARRAY_PUSH(result, char*) = chunk;
+        chunk = apr_strtok(NULL, sep, state);
+    }
+    return result;
 }
 
 const char* qualify_field_type(const char* mt, const char* t, proto_file_t* pf) {
