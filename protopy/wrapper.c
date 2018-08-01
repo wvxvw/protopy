@@ -47,6 +47,8 @@ static char apr_hash_iterator_docstring[] = "Create new iterator for APR hash ta
 static char apr_hash_get_docstring[] = "Fetch next pair from APR hash table";
 static char apr_hash_replace_docstring[] = "Replace or add a value to APR hash table ";
 static char proto_serialize_docstring[] = "Serialize Python object to Protobuf";
+static char proto_describe_type_docstring[] =
+        "Describe the fiels of the Python constructor of Protobuf type";
 
 static PyObject* proto_parse(PyObject*, PyObject*);
 static PyObject* proto_def_parse(PyObject*, PyObject*);
@@ -66,6 +68,7 @@ static PyMethodDef module_methods[] = {
     {"apr_hash_get_kv", apr_hash_get_kv, METH_VARARGS, apr_hash_get_docstring},
     {"apr_hash_replace", apr_hash_replace, METH_VARARGS, apr_hash_replace_docstring},
     {"proto_serialize", proto_serialize, METH_VARARGS, proto_serialize_docstring},
+    {"describe_type", proto_describe_type, METH_VARARGS, proto_describe_type_docstring},
     {NULL, NULL, 0, NULL}
 };
 

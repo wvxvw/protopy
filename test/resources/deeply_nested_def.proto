@@ -107,7 +107,6 @@ message TopLevel {
         SecondLevel4 g = 6;
     }
 
-    FirstLevel h = 7;
     int32 j = 8;
 
     bool k = 9;

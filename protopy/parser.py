@@ -4,8 +4,9 @@ Python interface to Protobuf IML and binary parsing code.
 '''
 
 from collections import namedtuple
-from enum import IntEnum
+from enum import IntEnum, EnumMeta
 from os import path
+from functools import partial
 
 from protopy.wrapped import (
     proto_def_parse,
@@ -19,6 +20,7 @@ from protopy.wrapped import (
     make_apr_hash,
     apr_hash_iterator,
     apr_hash_get_kv,
+    describe_type,
 )
 
 
@@ -53,6 +55,122 @@ def simple_enum(name, fields):
         return inverse[n]
 
     return ctor
+
+
+def ensure_posint32(v):
+    tmp = int(v)
+    if tmp < 0:
+        tmp = 0
+    elif tmp > 0xFFFFFFFF:
+        tmp = 0xFFFFFFFF
+    return tmp
+
+
+def ensure_posint64(v):
+    tmp = int(v)
+    if tmp < 0:
+        tmp = 0
+    elif tmp > 0xFFFFFFFFFFFFFFFF:
+        tmp = 0xFFFFFFFFFFFFFFFF
+    return tmp
+
+
+def ensure_int32(v):
+    tmp = int(v)
+    if tmp > 0x7FFFFFFF:
+        tmp = 0x7FFFFFFF
+    elif tmp < -0x80000000:
+        tmp = -0x80000000
+    return tmp
+
+
+def ensure_int64(v):
+    tmp = int(v)
+    if tmp > 0x7FFFFFFFFFFFFFFF:
+        tmp = 0x7FFFFFFFFFFFFFFF
+    elif tmp < -0x8000000000000000:
+        tmp = -0x8000000000000000
+    return tmp
+
+
+def ensure_enum(ctor, val):
+    if val is None:
+        return ctor(value=0)
+    return ctor(value=int(val))
+
+
+def simple_builder(ctor, val):
+    if val:
+        return ctor(**val)
+    return ctor()
+
+
+def list_builder(ctor, elts):
+    return [ctor(y) for y in elts]
+
+
+def map_builder(kctor, vctor, mapping):
+    return {
+        kctor(ky): vctor(vy) for ky, vy in mapping.items()
+    }
+
+
+class Builder:
+
+    ktypes = [
+        'uint32',
+        'fixed32',
+        'sint64',
+        'int32',
+        'sfixed64',
+        'bool',
+        'int64',
+        'sint32',
+        'string',
+        'fixed64',
+        'uint64',
+        'sfixed32',
+    ]
+
+    builtins = {
+        'uint32': ensure_posint32,
+        'fixed32': ensure_posint32,
+        'sint64': ensure_int64,
+        'int32': ensure_int32,
+        'sfixed64': ensure_int64,
+        'bool': bool,
+        'bytes': ensure_bytes,
+        'double': float,
+        'int64': ensure_int64,
+        'sint32': ensure_int64,
+        'string': str,
+        'fixed64': ensure_int64,
+        'uint64': ensure_posint64,
+        'sfixed32': ensure_int32,
+    }
+
+    def __init__(self, parser):
+        self.parser = parser
+
+    def simple(self, tname):
+        ctor = self.builtins.get(tname, None)
+        if ctor is None:
+            cdef = self.parser.find_definition(tname)
+            if cdef is None:
+                raise TypeError('No definition for {}'.format(tname))
+            if isinstance(cdef, EnumMeta):
+                return partial(ensure_enum, cdef)
+            return partial(simple_builder, cdef)
+        return ctor
+
+    def list_of(self, tname):
+        ctor = self.simple(tname)
+        return partial(list_builder, ctor)
+
+    def map_of(self, kindex, vname):
+        vctor = self.simple(vname)
+        kctor = self.builtins[self.ktypes.index(kindex)]
+        return partial(map_builder, vctor, kctor)
 
 
 class DefParser:
@@ -186,6 +304,35 @@ class DefParser:
                parser.update_definition(b'Wrapper', replacement)
         '''
         apr_hash_replace(self._defs, ensure_bytes(definition), new)
+
+    def describe_type(self, tname):
+        '''
+        Iterate over all constructor arguments of ``tname`` type and
+        produce factory functions suitable for converting Python types
+        to the mapped Protobuf type.
+
+        :param tname: The full name of the type whose description is
+            needed.
+        '''
+        tname = ensure_bytes(tname)
+        args = describe_type(tname, self._defs, self.mp)
+        if not args:
+            # This is an enum
+            return {'value': ensure_int32}
+        result = {}
+        fields = self.find_definition(tname)._fields
+        builder = Builder(self)
+
+        for i, f in enumerate(fields):
+            k = args[i]
+            if type(k) is tuple:
+                if len(k) == 1:
+                    result[f] = builder.list_of(k[0])
+                else:
+                    result[f] = builder.map_of(k[0], k[1])
+            else:
+                result[f] = builder.simple(k)
+        return result
 
     def parse(self, source, force=False):
         '''

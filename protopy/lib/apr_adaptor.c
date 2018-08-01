@@ -20,6 +20,68 @@ PyObject* factory_to_pytype(void* val) {
     return NULL;
 }
 
+PyObject* proto_describe_type(PyObject* self, PyObject* args) {
+    const char* tname;
+    PyObject* fcapsule;
+    PyObject* mcapsule;
+
+    if (!PyArg_ParseTuple(args, "yOO", &tname, &fcapsule, &mcapsule)) {
+        return NULL;
+    }
+
+    apr_hash_t* factories = (apr_hash_t*)PyCapsule_GetPointer(fcapsule, NULL);
+    if (!factories) {
+        PyErr_Format(PyExc_ValueError, "Missing factories");
+        return NULL;
+    }
+
+    apr_pool_t* mp = (apr_pool_t*)PyCapsule_GetPointer(mcapsule, NULL);
+    if (!factories) {
+        PyErr_Format(PyExc_ValueError, "Missing memory pool");
+        return NULL;
+    }
+
+    PyObject* result = PyDict_New();
+    factory_t* f = apr_hash_get(factories, tname, APR_HASH_KEY_STRING);
+
+    if (!f) {
+        return NULL;
+    }
+
+    if (f->vt_type == vt_enum) {
+        return result;
+    }
+
+    apr_hash_index_t* hi;
+    field_info_t* info;
+    const size_t* key;
+
+    for (hi = apr_hash_first(mp, f->mapping); hi; hi = apr_hash_next(hi)) {
+        apr_hash_this(hi, (const void**)&key, NULL, (void*)(&info));
+        PyObject* pykey = PyLong_FromSsize_t((Py_ssize_t)info->n);
+        PyObject* pyval;
+        if (info->vt_type == vt_repeated) {
+            PyObject* inner = PyUnicode_FromString(info->pytype);
+            pyval = PyTuple_New(1);
+            Py_INCREF(inner);
+            PyTuple_SetItem(pyval, 0, inner);
+        } else if (info->vt_type == vt_map) {
+            PyObject* vtype = PyUnicode_FromString(info->extra_type_info.pair.pyval);
+            PyObject* ktype = PyLong_FromSsize_t((Py_ssize_t)info->extra_type_info.pair.key);
+            pyval = PyTuple_New(2);
+            Py_INCREF(vtype);
+            Py_INCREF(ktype);
+            PyTuple_SetItem(pyval, 0, ktype);
+            PyTuple_SetItem(pyval, 1, vtype);
+        } else {
+            pyval = PyUnicode_FromString(info->pytype);
+        }
+        PyDict_SetItem(result, pykey, pyval);
+        Py_DECREF(pykey);
+    }
+    return result;
+}
+
 PyObject* protofile_to_ptytpe(void* val) {
     proto_file_t* pf = val;
     if (!pf) {

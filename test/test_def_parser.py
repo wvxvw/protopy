@@ -138,3 +138,64 @@ def test_double_line_comment():
     )
     parser = DefParser(roots)
     parser.parse(test_proto)
+
+
+def test_describe_type():
+    roots = [
+        pkg_resources.resource_filename(__name__, './resources')
+    ]
+    test_proto = pkg_resources.resource_filename(
+        __name__,
+        './resources/deeply_nested_def.proto',
+    )
+    parser = DefParser(roots)
+    parser.parse(test_proto)
+
+    raw = {
+        'a': 'foo',
+        'b': 'bar',
+        'j': 1234567,
+        'k': True,
+
+        'd': {
+            'a': {
+                'a': 2,
+                'b': 'spam',
+                'c': 'egg',
+                'd': False,
+            },
+            'b': {
+                'a': 0,
+                'b': 'ham-bar',
+                'c': 'bar-ham',
+                'd': True,
+            },
+            'c': False,
+        },
+        'e': {
+            'b': 1,
+            'c': {
+                'a': 'foo-spam',
+                'b': 'spam-foo',
+            },
+        },
+        'f': {
+            'd': 1,
+        },
+        'g': {
+            'b': 0,
+            'c': {
+                'a': -123456,
+            },
+        },
+    }
+
+    values = {}
+
+    for k, v in parser.describe_type('TopLevel').items():
+        print('k: {}, v: {}'.format(k, v))
+        values[k] = v(raw.get(k, None))
+
+    ptype = parser.find_definition('TopLevel')
+    result = ptype(**values)
+    print(result)

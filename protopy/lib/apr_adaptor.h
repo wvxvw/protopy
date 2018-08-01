@@ -17,6 +17,7 @@ PyObject* apr_hash_iterator(PyObject*, PyObject*);
 PyObject* apr_hash_get_kv(PyObject*, PyObject*);
 PyObject* apr_hash_replace(PyObject*, PyObject*);
 PyObject* aprdict_to_pydict(apr_pool_t*, apr_hash_t*);
+PyObject* proto_describe_type(PyObject*, PyObject*);
 void free_apr_hash(PyObject*);
 
 extern bool apr_terminated;
