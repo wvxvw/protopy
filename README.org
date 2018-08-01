@@ -134,3 +134,9 @@
    #+END_SRC
 
    Right now it's 11315, I would like to get in under 10K.
+* License
+  Finally, I was able to put this project under a free license.
+
+  This project is licensed under LGPL v3.  It relies on Apache
+  Portable Runtime library, which is licensed under Apache 2.0 license
+  (find the license text under [[lib]] directory.)

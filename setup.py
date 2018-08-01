@@ -144,7 +144,7 @@ setup(
     author='Oleg Sivokon',
     author_email='olegs@traiana.com',
     url='https://github.com/wvxvw-traiana/protopy',
-    license='PROPRIETARY',
+    license='LGPL v3',
     scripts=['bin/protopy'],
     package_data=package_data,
     data_files=data_files,
