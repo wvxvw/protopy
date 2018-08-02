@@ -80,11 +80,14 @@
            BAZ = 1;
        }
      #+END_SRC
-     Shouldn't be even valid.  But =protoc= accepts this.  =protopy=
-     makes no distinction between zeroth member of an enum and other
-     indices, but since =protoc= assigns a special meaning to zeroth
-     member, in order to write portable definitions, you might want
-     to avoid using it.
+     Shouldn't be even valid.  But =protoc= accepts this.  Actually,
+     it requires enums to have at least one member, and at least one
+     member whose value is zero.  =protopy= makes no distinction
+     between zeroth member of an enum and other indices, but since
+     =protoc= assigns a special meaning to zeroth member: it will use
+     that as a default, if no value is given for the field, you should
+     always have zeroth member of every enumeration to stay
+     compatible.
 
 ** GRPC
    I have no plans supporting this feature, =service= and =rpc=
