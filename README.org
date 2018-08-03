@@ -96,6 +96,112 @@
 ** Benchmarks
    Planned, but haven't been done yet.
 
+** Serializing
+   The approach taken by the library differs from how =protobuf=
+   module works.  =protobuf= is designed in a way, perhaps, suitable
+   for C++ or Java language, but it is foreign to Python on a
+   conceptual level.  Python's actual type-system is /structural/ in
+   its heart.  This means that types in Python are defined in terms of
+   type operations like addition and multiplication on the basic
+   constituents.  Thus, given:
+   #+BEGIN_SRC python
+     from collections import namedtuple
+
+     class Foo:
+         def __init__(self, x, y):
+             self.x = x
+             self.y = y
+
+     Bar = namedtuple('Bar', 'x, y')
+
+     def baz(arg):
+         print('arg: {} {}'.format(arg.x, arg.y))
+   #+END_SRC
+
+   =Foo(1, True)= is of the same type as =Bar(1, True)= from a
+   standpoint of =baz=.
+
+   This is while Java type system is /nominative/ in its heart.  Types
+   are almost never considered the same, unless they are defined to be
+   interchangeable intentionally in the source of the program.
+
+   Since serialization operates on a multi-program level, there is no
+   real way for environments like Java or C++ to ensure type
+   correctness of serialized data.  And this is why, I believe, the
+   approach taken by this library is better.  =protopy.Serializer=
+   doesn't try to establish that the serialized object belongs to a
+   specific class.  The requirements for object to be serialized as a
+   particular message are that it responds to the very broadly defined
+   protocols.  In particular, in order for the object to be serialized
+   as a message, it needs to be iterable.  The iteration must provide
+   mapping between field values and their desired keys.
+
+   Similarly, if the field is encoded as =repeatable= its value must
+   implement [[https://docs.python.org/3/c-api/sequence.html][sequence protocol]].  If it maps to a =map= field, then it
+   must implement [[https://docs.python.org/3/c-api/mapping.html][mapping protocol]].  Atomic values must implement
+   corresponding protocols too.  I.e. if a field is to be encoded as
+   =int32=, then it should be either an integer, or an object whose
+   class inherits from integer, or it must define =__int__()= method.
+   If it is meant to be encoded as a string, it must define
+   =__str__()= and so on.
+
+   This also means that, unlike in =protobuf= package, there are no
+   special message classes that implement =MessageToString()= or
+   =MessageFromString()= methods etc.  I believe that this is a bad
+   way to go about serialization: it encourages boilerplate code that
+   translates between domain objects into objects whose only purpose
+   is to be accepted by serializer before they are discarded.  This is
+   just wasteful.
+
+   Unlike when using =protobuf= package, =protopy= can serialize
+   atomic values s.a. integers and strings.  This removes the need for
+   proprietary extensions s.a. [[https://github.com/google/protobuf/blob/master/src/google/protobuf/wrappers.proto#L107][=goolge.protobuf.wrappers.StringValue=]].
+   
+** Customizing (de)serialization
+   Sometimes you may encounter Protobuf messages with special
+   serialization behavior.  For example, the =StringValue= mentioned
+   above is intended to map to a =str= instances in Python.  =protopy=
+   doesn't do this translation automatically.  Instead, it allows you
+   to substitute known message types with your own constructors.
+
+   For example, you could do this:
+
+   #+BEGIN_SRC python
+     content = ...
+     parser = BinParser(['.'])
+
+     result = parser.parse('test.proto', 'Wrapper', content)
+     original = parser.def_parser.find_definition(b'Wrapper')
+
+     class Replacement:
+
+         def __init__(self, original):
+             self.original = original
+
+         def replacement(self, *args):
+             return {'replaced': self.original(*args)}
+
+     rp = Replacement(original)
+     parser.def_parser.update_definition(b'Wrapper', rp.replacement)
+
+     result = parser.parse('test.proto', 'Wrapper', content)
+     assert result['replaced'].wrapped_type == 'Wrapped'
+   #+END_SRC
+   
+   However, you should be extremely careful when doing this.  The
+   above example will prevent you from serializing the resulting
+   message back into it's binary form.
+
+** Speedups
+   Python enumerators are very complex and slow.  Yet, enumerations
+   are one of the basic building blocks of Protobuf definitions.
+   =DefParser= allows you to customize the way enumerations are
+   instantiated when binary payload is read.  In particular, there's
+   even a helper procedure, that you can substitute in place of the
+   default enumeration factory: =protopy.parser.simple_enum= in order
+   to speed up parsing.  Note that this function will make enumerators
+   impossible to serialize back.
+
 * Progress
   Many parts of the code are still of prototype quality, however, the
   interface is more or less stable.
