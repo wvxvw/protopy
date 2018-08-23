@@ -6,7 +6,7 @@ from os import path
 from time import time
 from importlib import import_module
 
-from protopy.parser import BinParser, simple_enum
+from protopy.parser import BinParser, simple_enum, simple_message
 
 
 class Runner:
@@ -19,6 +19,7 @@ class Runner:
             times=100,
             threads=1,
             optimize_enum_ctor=True,
+            optimize_message_ctor=True,
     ):
         self.idl = idl
         self.pyidl = pyidl
@@ -29,6 +30,8 @@ class Runner:
         self.protopy_parser = BinParser([path.dirname(self.idl)])
         if optimize_enum_ctor:
             self.protopy_parser.def_parser.enum_ctor = simple_enum
+        if optimize_message_ctor:
+            self.protopy_parser.def_parser.message_ctor = simple_message
         self.protopy_parser.def_parser.parse(path.basename(self.idl))
         sys.path.insert(0, path.dirname(self.pyidl))
         self.pdef = import_module(

@@ -3,7 +3,7 @@
 Python interface to Protobuf IML and binary parsing code.
 '''
 
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 from enum import IntEnum, EnumMeta
 from os import path
 from functools import partial
@@ -31,6 +31,38 @@ def ensure_bytes(s):
     if isinstance(s, bytes):
         return s
     return str(s).encode('utf-8')
+
+
+def _asdict(self):
+    return OrderedDict(zip(self._fields, self))
+
+
+def _simple_new(cls, *args, **kwargs):
+    i = 0
+    a = [None] * len(cls._fields)
+    alen = min(len(cls._fields), len(args))
+    while i < alen:
+        a[i] = args[i]
+        i += 1
+    remaining = cls._fields[alen:]
+    for k, v in kwargs.items():
+        idx = remaining.index(k)
+        a[alen + idx] = v
+    return tuple.__new__(cls, a)
+
+
+def _simple_getattr(self, name):
+    return self[self._fields.index(name)]
+
+
+def simple_message(name, fields):
+    return type(name, (tuple,), {
+        '__slots__': (),
+        '_fields': fields,
+        '_asdict': _asdict,
+        '__new__': _simple_new,
+        '__getattr__': _simple_getattr,
+    })
 
 
 def simple_enum(name, fields):
