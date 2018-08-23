@@ -6,12 +6,20 @@ from os import path
 from time import time
 from importlib import import_module
 
-from protopy.parser import BinParser
+from protopy.parser import BinParser, simple_enum
 
 
 class Runner:
 
-    def __init__(self, idl, pyidl, bins, times=100, threads=1):
+    def __init__(
+            self,
+            idl,
+            pyidl,
+            bins,
+            times=100,
+            threads=1,
+            optimize_enum_ctor=True,
+    ):
         self.idl = idl
         self.pyidl = pyidl
         self.bins = bins
@@ -19,6 +27,8 @@ class Runner:
         self.times = times
 
         self.protopy_parser = BinParser([path.dirname(self.idl)])
+        if optimize_enum_ctor:
+            self.protopy_parser.def_parser.enum_ctor = simple_enum
         self.protopy_parser.def_parser.parse(path.basename(self.idl))
         sys.path.insert(0, path.dirname(self.pyidl))
         self.pdef = import_module(
