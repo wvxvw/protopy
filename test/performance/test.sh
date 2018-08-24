@@ -2,6 +2,8 @@
 
 set -xe
 
+export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=cpp
+
 perfgen -s 234 -o ./234_test.proto -n 10 -b '234_%d.bin'
 protoc -I. --python_out=. ./234_test.proto
 perfrunner -n 1 -f ./234_test.proto -b ./234_0.bin -p ./234_test_pb2.py -e -m
