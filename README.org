@@ -178,7 +178,35 @@
    definitions are accepted by the parser but result in empty nodes.
 
 ** Benchmarks
-   Planned, but haven't been done yet.
+   Performance is in the gutter...  C++ rocks, Python sucks.
+   I finally more or less finished generator and performance tester.
+   Here's what I've learned:
+   
+   I assumed there will be no difference between using Python
+   data-structures and C++ data-structures to store the contents of
+   the messages.  I've never been so wrong.
+
+   Here's how Google's Protobuf for Python does it: they parse the
+   messages into C++ structs, and expose accessors to Python, so,
+   whenever Python side of the code wants to know the value in that
+   struct, they convert it on-demand.
+
+   =protopy= code parses everything into Python tuples, dictionaries
+   enums and lists.  So, what's the bottom line?  =protopy= code is
+   *3-8* times slower than =protobuf=.
+
+   It is still about 10 times faster than =protobuf= pure Python
+   implementation.  The speed will also depend a lot on the structure
+   of your messages.  Smaller messages with less nested messages will
+   be parsed faster by =protopy= than =protobuf=.  Messages with a lot
+   of nesting, long lists and especially hash-tables will tend to
+   parse faster by =protobuf=.
+
+   I'm considering rewriting the parser to use a C struct for storing
+   message data rather than using Python's data-structures, but it
+   will be a long process.
+
+   You can find benchmark project in [[test/performance]].
 
 ** Serializing
    The approach taken by the library differs from how =protobuf=
