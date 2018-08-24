@@ -124,7 +124,7 @@ void serialize_length_delimited_impl(wbuffer_t* buf, const unsigned char* bytes,
 }
 
 void serialize_length_delimited(wbuffer_t* buf, PyObject* message) {
-    char* bytes;
+    const char* bytes;
 
     if (PyUnicode_Check(message)) {
         // This may error if message is a unicode, but cannot be

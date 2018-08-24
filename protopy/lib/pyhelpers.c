@@ -17,7 +17,7 @@ void print_obj(const char* template, PyObject* obj) {
         PyErr_Clear();
         return;
     }
-    char* bytes = PyUnicode_AsUTF8(unicode);
+    const char* bytes = PyUnicode_AsUTF8(unicode);
     printf(template, bytes);
     Py_DECREF(unicode);
 }

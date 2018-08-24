@@ -2,9 +2,9 @@
 #define yyHEADER_H 1
 #define yyIN_HEADER 1
 
-#line 6 "protopy.lex.h"
+#line 5 "protopy.lex.h"
 
-#line 8 "protopy.lex.h"
+#line 7 "protopy.lex.h"
 
 #define  YY_INT_ALIGNED short int
 
@@ -636,6 +636,6 @@ extern int yylex \
 #line 100 "protopy.l"
 
 
-#line 640 "protopy.lex.h"
+#line 639 "protopy.lex.h"
 #undef yyIN_HEADER
 #endif /* yyHEADER_H */

@@ -8,6 +8,8 @@ from importlib import import_module
 
 from protopy.parser import BinParser, simple_enum, simple_message
 
+# import yep
+
 
 class Runner:
 
@@ -43,6 +45,7 @@ class Runner:
         io_time, parse_time = 0, 0
         size = 0
 
+        # yep.start()
         for _ in range(self.times):
             for b in self.bins:
                 with open(b, 'rb') as payload:
@@ -60,6 +63,7 @@ class Runner:
                     parse_time += step
                     start = step + start
 
+        # yep.stop()
         print('Protopy:')
         print('========')
         print('Bytes processed: {}'.format(size))

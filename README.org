@@ -208,6 +208,10 @@
 
    You can find benchmark project in [[test/performance]].
 
+*** Good news
+    Well, not so bad news: on Python 3.7, =protopy= is only about half
+    as slow as C++ code.
+
 ** Serializing
    The approach taken by the library differs from how =protobuf=
    module works.  =protobuf= is designed in a way, perhaps, suitable

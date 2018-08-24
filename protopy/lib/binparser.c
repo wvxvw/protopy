@@ -76,7 +76,7 @@ PyObject* make_state(PyObject* self, PyObject* args) {
     return PyCapsule_New(state, NULL, free_state);
 }
 
-size_t state_read(parse_state_t* const state, const unsigned char** buf, size_t n) {
+inline size_t state_read(parse_state_t* const state, const unsigned char** buf, size_t n) {
     *buf = &state->in[state->pos];
     if (state->len >= state->pos + (int64_t)n) {
         state->pos += (int64_t)n;
