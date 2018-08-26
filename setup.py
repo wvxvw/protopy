@@ -167,6 +167,7 @@ setup(
                 'protopy/lib/protopy.tab.c',
                 'protopy/lib/pyhelpers.c',
                 'protopy/lib/apr_adaptor.c',
+                'protopy/lib/message.c',
                 'protopy/wrapper.c',
             ],
             include_dirs=[apr_lib],

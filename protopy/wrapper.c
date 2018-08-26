@@ -31,6 +31,7 @@ typedef long long int64_t;
 #include "lib/descriptors.h"
 #include "lib/serializer.h"
 #include "lib/apr_adaptor.h"
+#include "lib/message.h"
 
 
 static char module_docstring[] = "Protobuf decoder and encoder.";
@@ -49,6 +50,8 @@ static char apr_hash_replace_docstring[] = "Replace or add a value to APR hash t
 static char proto_serialize_docstring[] = "Serialize Python object to Protobuf";
 static char proto_describe_type_docstring[] =
         "Describe the fiels of the Python constructor of Protobuf type";
+static char proto_message_from_bytes_docstring[] =
+        "For testing only, parse message from bytes";
 
 static PyObject* proto_parse(PyObject*, PyObject*);
 static PyObject* proto_def_parse(PyObject*, PyObject*);
@@ -69,6 +72,7 @@ static PyMethodDef module_methods[] = {
     {"apr_hash_replace", apr_hash_replace, METH_VARARGS, apr_hash_replace_docstring},
     {"proto_serialize", proto_serialize, METH_VARARGS, proto_serialize_docstring},
     {"describe_type", proto_describe_type, METH_VARARGS, proto_describe_type_docstring},
+    {"message_from_bytes", proto_message_from_bytes, METH_VARARGS, proto_message_from_bytes_docstring},
     {NULL, NULL, 0, NULL}
 };
 
@@ -84,7 +88,16 @@ PyMODINIT_FUNC PyInit_wrapped(void);
 PyMODINIT_FUNC PyInit_wrapped(void) {
     Py_Initialize();
     apr_initialize();
-    return PyModule_Create(&protopy_module);
+    if (PyType_Ready(proto_message_type) < 0) {
+        return NULL;
+    }
+    PyObject* m = PyModule_Create(&protopy_module);
+    if (!m) {
+        return NULL;
+    }
+    Py_INCREF(proto_message_type);
+    PyModule_AddObject(m, "ProtoMessage", (PyObject*)proto_message_type);
+    return m;
 }
 
 static PyObject* apr_cleanup(PyObject* self, PyObject* args) {
