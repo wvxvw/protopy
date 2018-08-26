@@ -130,6 +130,7 @@ bool is_keyword(const char* field_name) {
     return i != KEYWORDS_SIZE;
 }
 
+// TODO(olegs): It seems like apr_hash_get() would be faster than this :(
 vt_type_t vt_builtin(const char* type) {
     size_t tlen = strlen(type);
     size_t i = index_of((const unsigned char*)type, tlen, builtin_types, BUILTIN_TYPES);

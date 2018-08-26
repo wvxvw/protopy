@@ -170,7 +170,9 @@ size_t parse_varint(parse_state_t* const state, const field_info_t* const info) 
         state->out = low;
     }
     if (sign) {
-        state->out = PyNumber_Negative(state->out);
+        PyObject* neg = PyNumber_Negative(state->out);
+        Py_DECREF(state->out);
+        state->out = neg;
     }
     if (info->vt_type == vt_enum) {
         factory_t* factory = apr_hash_get(
