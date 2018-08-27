@@ -6,6 +6,7 @@
 
 #include "helpers.h"
 #include "descriptors.h"
+#include "message.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -65,6 +66,8 @@ PyObject* make_state(PyObject*, PyObject*);
 PyObject* state_ready(PyObject*, PyObject*);
 
 void resolve_type(parse_state_t* const, const char*, vt_type_t*);
+
+void proto_parse_message(pymessage_t*);
 
 #ifdef __cplusplus
 }

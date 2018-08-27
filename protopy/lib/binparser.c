@@ -674,3 +674,12 @@ PyObject* parse_repeated(parse_state_t* const state, const field_info_t* const i
     }
     return result;
 }
+
+void proto_parse_message(pymessage_t* m) {
+    m->payload->t = true;
+    const char* foo = "foo";
+    proto_fields_t* fifo = malloc(sizeof(proto_fields_t));
+    fifo->n = 42;
+    fifo->layout = &foo;
+    m->payload->val.fields = *fifo;
+}

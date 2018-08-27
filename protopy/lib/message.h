@@ -6,6 +6,7 @@
 #include <apr_strings.h>
 
 #include "helpers.h"
+#include "descriptors.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,11 +42,24 @@ typedef union _proto_value {
     message_t* vmessage;
     repteated_message_t* vrepeated;
     map_message_t* vmap;
+    str_t vdefault;
 } proto_value_t;
 
+typedef struct _proto_fields {
+    size_t n;
+    char** layout;
+    proto_value_t* payload;
+    field_info_t* fields;
+} proto_fields_t;
+
+typedef union _proto_payload {
+    proto_fields_t fields;
+    str_t bytes;
+} proto_payload_t;
+
 typedef struct _message {
-    vt_type_t t;
-    proto_value_t val;
+    bool t;
+    proto_payload_t val;
 } message_t;
 
 typedef struct _repteated_message {
@@ -63,10 +77,12 @@ typedef struct _map_message {
 typedef struct _pymessage {
     PyObject_HEAD;
     message_t* payload;
+    factory_t* factory;
+    PyObject* parser;
 } pymessage_t;
 
 
-PyObject* proto_message_from_bytes(PyObject* parser, PyObject* bytes);
+PyObject* proto_message_from_bytes(PyObject*, PyObject*);
 
 extern PyTypeObject* proto_message_type;
 

@@ -3,24 +3,48 @@
 #include <apr_strings.h>
 
 #include "message.h"
+#include "binparser.h"
 
 static PyObject* proto_message_getattr(PyObject* obj, PyObject* att_name) {
-    Py_RETURN_NONE;
+    PyObject* result = PyObject_GenericGetAttr(obj, att_name);
+    if (result) {
+        return result;
+    }
+    if (!PyErr_ExceptionMatches(PyExc_AttributeError)) {
+        return NULL;
+    }
+    PyErr_Clear();
+    pymessage_t* m = (pymessage_t*)obj;
+
+    if (!m->payload->t) {
+        proto_parse_message(m);
+    }
+    // PyObject* result;
+    // switch (m->payload->t) {
+    //     case vt_uint32:
+    //         result = PyLong_FromUnsignedLong(m->payload->val.uint32);
+    //         break;
+    // }
+    
+    PyErr_Format(
+        PyExc_AttributeError,
+        "field %A is not defined", att_name);
+    return NULL;
 }
 
 static void proto_message_free(PyObject* message) {
-
+    pymessage_t* m = (pymessage_t*)message;
+    free(m->payload);
+    Py_DECREF(m->parser);
 }
 
 static PyObject* proto_message_repr(PyObject* message) {
     pymessage_t* m = (pymessage_t*)message;
 
-    switch (m->payload->t) {
-        case vt_uint32:
-            return PyUnicode_FromFormat("%d", m->payload->val.vuint32);
-        default:
-            Py_RETURN_NOTIMPLEMENTED;
+    if (!m->payload->t) {
+        proto_parse_message(m);
     }
+    Py_RETURN_NOTIMPLEMENTED;
 }
 
 static PySequenceMethods _proto_message_as_seq = {
@@ -74,12 +98,25 @@ static PyTypeObject _proto_message_type = {
 
 PyTypeObject* proto_message_type = &_proto_message_type;
 
-PyObject* proto_message_from_bytes(PyObject* parser, PyObject* bytes) {
+PyObject* proto_message_from_bytes(PyObject* self, PyObject* args) {
+    PyObject* parser;
+    const char* ptype;
+    Py_buffer bytes;
+    if (!PyArg_ParseTuple(args, "Oyy*", &parser, &ptype, &bytes)) {
+        return NULL;
+    }
     PyObject* result = proto_message_type->tp_alloc(proto_message_type, 0);
     Py_INCREF(result);
     message_t* m = malloc(sizeof(message_t));
-    m->t = vt_uint32;
-    m->val.vuint32 = 42;
+    m->t = false;
+    str_t* unparsed = malloc(sizeof(str_t));
+    char* s = malloc(bytes.len * sizeof(char));
+    memcpy(s, bytes.buf, bytes.len * sizeof(char));
+    unparsed->s = s;
+    unparsed->n = bytes.len;
+    m->val.bytes = *unparsed;
     ((pymessage_t*)result)->payload = m;
+    ((pymessage_t*)result)->parser = parser;
+    Py_INCREF(parser);
     return result;
 }
