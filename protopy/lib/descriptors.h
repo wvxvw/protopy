@@ -29,6 +29,7 @@ typedef struct _field_info {
 typedef struct _factory {
     vt_type_t vt_type;
     apr_hash_t* mapping;
+    const char* pytype;
     PyObject* ctor;
 } factory_t;
 

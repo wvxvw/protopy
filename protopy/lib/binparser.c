@@ -675,11 +675,108 @@ PyObject* parse_repeated(parse_state_t* const state, const field_info_t* const i
     return result;
 }
 
-void proto_parse_message(pymessage_t* m) {
+field_info_t* proto_parse_field_key(parse_state_t* const state, size_t* wiretype) {
+
+    uint64_t value[2] = { 0, 0 };
+
+    parse_varint_impl(state, value);
+    *wiretype = (size_t)(value[0] & 7);
+    state->field = (size_t)(value[0] >> 3);
+
+    field_info_t* info = apr_hash_get(state->factory->mapping, &state->field, sizeof(size_t));
+
+    if (!info) {
+        PyErr_Format(
+            PyExc_TypeError,
+            "Don't know how to parse field %zu of %s",
+            state->field,
+            state->pytype);
+        return NULL;
+    }
+    if (info->vt_type == vt_default) {
+        resolve_type(state, info->pytype, &info->vt_type);
+    } else if (info->vt_type == vt_repeated) {
+        resolve_type(state, info->pytype, &info->extra_type_info.elt);
+    } else if (info->vt_type == vt_map) {
+        resolve_type(
+            state,
+            info->extra_type_info.pair.pyval,
+            &info->extra_type_info.pair.val);
+    }
+    if (info->vt_type == vt_error) {
+        return NULL;
+    }
+    return info;
+}
+
+bool proto_parse_fields(parse_state_t* const state, const proto_fields_t* const pinfo) {
+    int64_t i;
+    size_t wiretype = 0;
+    field_info_t* info = NULL;
+
+    while (state->pos < state->len) {
+        i = state->pos;
+        info = proto_parse_field_key(state, &wiretype);
+        if (!info) {
+            break;
+        }
+        printf("parsing field: %s / %zu, wiretype: %zu\n", info->pytype, info->n, wiretype);
+        if (i == state->pos) {
+            PyErr_Format(
+                PyExc_ValueError,
+                "Input ends unexpectedly: key not followed by value");
+            break;
+        }
+        switch (wiretype) {
+            case 0:
+                parse_varint(state, info);
+                break;
+            case 1:
+                parse_fixed_64(state, info);
+                break;
+            case 2:
+                parse_length_delimited(state, info);
+                break;
+            case 3:
+                parse_start_group(state, info);
+                break;
+            case 4:
+                parse_end_group(state, info);
+                break;
+            case 5:
+                parse_fixed_32(state, info);
+                break;
+            case 6:
+            case 7:
+                PyErr_SetString(
+                    PyExc_NotImplementedError,
+                    "Invalid encoding, wire_type 6 and 7 are not defined");
+        }
+    }
+    if (PyErr_Occurred()) {
+        return false;
+    }
+    return true;
+}
+
+bool proto_parse_message(pymessage_t* m) {
     m->payload->t = true;
-    const char* foo = "foo";
     proto_fields_t* fifo = malloc(sizeof(proto_fields_t));
-    fifo->n = 42;
-    fifo->layout = &foo;
+    parse_state_t state = {
+        0,  // pos
+        m->payload->val.bytes.n,  // len
+        0,                    // field
+        (const unsigned char*)m->payload->val.bytes.s,  // in
+        m->mapping,
+        apr_hash_pool_get(m->mapping),
+        m->factory,
+        0,  // this should go
+        0,  // this should go
+    };
+    if (!proto_parse_fields(&state, fifo)) {
+        free(fifo);
+        return false;
+    }
     m->payload->val.fields = *fifo;
+    return true;
 }

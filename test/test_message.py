@@ -13,5 +13,5 @@ def test_basic_native_message():
     )
     parser = DefParser(roots)
     parser.parse(test_proto)
-    message = message_from_bytes(parser, b'Test', b'123')
+    message = message_from_bytes(parser, b'Test', content)
     print('message: {}'.format(message.test_whatever))

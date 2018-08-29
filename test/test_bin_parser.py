@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+
+import pkg_resources
+
 from protopy.parser import BinParser, simple_enum
 
 from support import generate_proto_binary

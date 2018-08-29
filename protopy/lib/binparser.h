@@ -30,6 +30,7 @@ typedef struct {
     const unsigned char* in;
     apr_hash_t* factories;
     apr_pool_t* mp;
+    // TODO(olegs): let factory store its pytype
     factory_t* factory;
     const char* pytype;
     PyObject* out;
@@ -67,7 +68,7 @@ PyObject* state_ready(PyObject*, PyObject*);
 
 void resolve_type(parse_state_t* const, const char*, vt_type_t*);
 
-void proto_parse_message(pymessage_t*);
+bool proto_parse_message(pymessage_t*);
 
 #ifdef __cplusplus
 }

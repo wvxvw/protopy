@@ -64,12 +64,14 @@ enum_desc(
         members,
         NULL);
     if (PyErr_Occurred()) {
+        Py_DECREF(members);
         return;
     }
     Py_INCREF(ctor);
 
     factory_t* factory = apr_palloc(mp, sizeof(factory_t));
     factory->vt_type = vt_enum;
+    factory->pytype = desc->t;
     factory->ctor = ctor;
 
     apr_hash_set(factories, desc->t, APR_HASH_KEY_STRING, factory);
@@ -188,6 +190,7 @@ message_desc(
 
     factory_t* factory = apr_palloc(mp, sizeof(factory_t));
     factory->vt_type = vt_message;
+    factory->pytype = desc->t;
     factory->mapping = mapping;
     factory->ctor = ctor;
 

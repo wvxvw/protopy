@@ -4,6 +4,7 @@
 #include <Python.h>
 #include <apr_general.h>
 #include <apr_strings.h>
+#include <apr_hash.h>
 
 #include "helpers.h"
 #include "descriptors.h"
@@ -46,10 +47,9 @@ typedef union _proto_value {
 } proto_value_t;
 
 typedef struct _proto_fields {
-    size_t n;
-    char** layout;
-    proto_value_t* payload;
-    field_info_t* fields;
+    apr_array_header_t* /* of proto_value_t */ payload;
+    apr_array_header_t* /* of field_info_t */ fields;
+    apr_hash_t* mapping;
 } proto_fields_t;
 
 typedef union _proto_payload {
@@ -78,6 +78,14 @@ typedef struct _pymessage {
     PyObject_HEAD;
     message_t* payload;
     factory_t* factory;
+    apr_hash_t* mapping;
+    // Wee need this to prevent Python from freeing the parser which
+    // parsed this message.  If this parser is freed, there go also
+    // the memory pools used to allocate this message.  Maybe, in the
+    // future, we'll have some way of detecting the situation when the
+    // parser is no longer used by Python and re-allocate all the
+    // still existing messages in a new pool, but this seems extremely
+    // complicated.
     PyObject* parser;
 } pymessage_t;
 

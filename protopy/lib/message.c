@@ -115,8 +115,31 @@ PyObject* proto_message_from_bytes(PyObject* self, PyObject* args) {
     unparsed->s = s;
     unparsed->n = bytes.len;
     m->val.bytes = *unparsed;
-    ((pymessage_t*)result)->payload = m;
-    ((pymessage_t*)result)->parser = parser;
+    pymessage_t* pym = (pymessage_t*)result;
+    pym->payload = m;
+    pym->parser = parser;
+
+    PyObject* defs_capsule = PyObject_GetAttrString(parser, "_defs");
+    if (!defs_capsule) {
+        Py_DECREF(result);
+        return NULL;
+    }
+
+    apr_hash_t* mapping = (apr_hash_t*)PyCapsule_GetPointer(defs_capsule, NULL);
+    if (!mapping) {
+        Py_DECREF(result);
+        PyErr_Format(PyExc_ValueError, "Missing factories");
+        return NULL;
+    }
+    pym->mapping = mapping;
+
+    factory_t* factory = apr_hash_get(mapping, ptype, APR_HASH_KEY_STRING);
+    if (!factory) {
+        Py_DECREF(result);
+        PyErr_Format(PyExc_TypeError, "Unknown type: %s", ptype);
+        return NULL;
+    }
+    pym->factory = factory;
     Py_INCREF(parser);
     return result;
 }
